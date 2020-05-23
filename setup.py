@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='MMLL',
-    version='0.1.0',
+    version='0.2.0',
     description='Package for interacting with MMLL',
     author='angelnaviavazquez',
     author_email='navia@ing.uc3m.es',
