@@ -110,12 +110,17 @@ class MasterNode(Common_to_all_objects):
 
         if self.pom == 1:
             from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master
-            self.MasterCommon = POM1_CommonML_Master(self.workers_addresses, self.platform, self.comms, self.logger, self.verbose)
+            self.MasterCommon = POM1_CommonML_Master(self.workers_addresses, self.comms, self.logger, self.verbose)
             self.display('MasterNode: Created CommonML_Master, POM = %d' % self.pom)
 
             if model_type == 'Kmeans':
                 from MMLL.models.POM1.Kmeans.Kmeans import Kmeans_Master
-                self.MasterMLmodel = Kmeans_Master(self.master_address, self.workers_addresses, self.platform, self.comms, self.logger, self.verbose, NC=self.NC, Nmaxiter=self.Nmaxiter, tolerance=self.tolerance)
+                self.MasterMLmodel = Kmeans_Master(self.comms, self.logger, self.verbose, NC=self.NC, Nmaxiter=self.Nmaxiter, tolerance=self.tolerance)
+                self.display('MasterNode: Created %s model, POM = %d' % (model_type, self.pom))
+
+            elif model_type == 'NN':
+                from MMLL.models.POM1.NeuralNetworks.neural_network import NN_Master
+                self.MasterMLmodel = NN_Master(self.comms, self.logger, self.verbose, model_architecture=self.model_architecture, Nmaxiter=self.Nmaxiter, learning_rate=self.learning_rate, Xval_b=self.Xval_b, yval=self.yval, Xtest_b=self.Xtst_b, ytest=self.ytst)
                 self.display('MasterNode: Created %s model, POM = %d' % (model_type, self.pom))
  
         if self.pom == 2:
@@ -285,7 +290,7 @@ class MasterNode(Common_to_all_objects):
                 print('\nError: In POMs 2 and 3 the model is owner by the workers, not the master. Nothing to save.')
                 return
             if output_filename_model is None:
-                output_filename_model = '../results/models/POM' + str(self.pom) + '_' + self.model_type + '_' + self.dataset_name + '_model.pkl'
+                output_filename_model = './POM' + str(self.pom) + '_' + self.model_type + '_' + self.dataset_name + '_model.pkl'
             with open(output_filename_model, 'wb') as f:
                 pickle.dump(self.MasterMLmodel.model, f)
             print('Model saved at %s' % output_filename_model)
@@ -324,7 +329,7 @@ class MasterNode(Common_to_all_objects):
         try:
             self.NPval = Xval.shape[0]
             self.NI = Xval.shape[1]                # Number of inputs
-            self.yval = yval.reshape((-1, 1))
+            self.yval = yval
             self.Xval_b = Xval
 
             if self.Xval_b.shape[0] != self.yval.shape[0] and yval is not None:
@@ -356,7 +361,7 @@ class MasterNode(Common_to_all_objects):
         try:
             self.NPtst = Xtst.shape[0]
             self.NI = Xtst.shape[1]                # Number of inputs
-            self.ytst = ytst.reshape((-1, 1))
+            self.ytst = ytst
             self.Xtst_b = Xtst
 
             if self.Xtst_b.shape[0] != self.ytst.shape[0]  and ytst is not None:

@@ -46,7 +46,6 @@ class Comms_master:
         self.commsffl = commsffl
         workers = self.commsffl.get_participants()
         self.workers_ids = list(workers.keys())
-        print(self.workers_ids)
 
     def send(self, message, destiny):
 
@@ -98,6 +97,13 @@ class Comms_master:
             raise
         return message
 
+
+    def receive_poms_123(self, timeout=10):
+        with self.commsffl:
+            packet = self.commsffl.receive(timeout)            
+        return packet
+
+
 class Comms_worker:
     """
     """
@@ -140,3 +146,9 @@ class Comms_worker:
                 message = None
             raise
         return message
+
+
+    def receive_poms_123(self, timeout=10):
+        with self.commsffl:
+            packet = self.commsffl.receive(timeout)            
+        return packet

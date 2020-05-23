@@ -73,7 +73,7 @@ class WorkerNode(Common_to_all_objects):
         try:
             self.NPtr = Xtr.shape[0]
             self.NI = Xtr.shape[1]                # Number of inputs
-            self.ytr = ytr.reshape((-1, 1))
+            self.ytr = ytr
             self.Xtr_b = Xtr
 
             if self.Xtr_b.shape[0] != self.ytr.shape[0] and ytr is not None:
@@ -108,7 +108,7 @@ class WorkerNode(Common_to_all_objects):
         try:
             self.NPval = Xval.shape[0]
             self.NI = Xval.shape[1]                # Number of inputs
-            self.yval = yval.reshape((-1, 1))
+            self.yval = yval
             self.Xval_b = Xval
 
             if self.Xval_b.shape[0] != self.yval.shape[0] and yval is not None:
@@ -140,7 +140,7 @@ class WorkerNode(Common_to_all_objects):
         try:
             self.NPtst = Xtst.shape[0]
             self.NI = Xtst.shape[1]                # Number of inputs
-            self.ytst = ytst.reshape((-1, 1))
+            self.ytst = ytst
             self.Xtst_b = Xtst
             if self.Xtst_b.shape[0] != self.ytst.shape[0]  and ytst is not None:
                 self.display('ERROR: different number of patterns in Xtst and ytst (%s vs %s)' % (str(self.Xval_b.shape[0]), str(self.yval.shape[0])))
@@ -172,7 +172,11 @@ class WorkerNode(Common_to_all_objects):
         if self.pom == 1:
             if model_type == 'Kmeans':
                 from MMLL.models.POM1.Kmeans.Kmeans import Kmeans_Worker
-                self.workerMLmodel = Kmeans_Worker(self.master_address, self.worker_address, self.platform, self.comms, self.logger,  self.verbose, self.Xtr_b)
+                self.workerMLmodel = Kmeans_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b)
+
+            elif model_type == 'NN':
+                from MMLL.models.POM1.NeuralNetworks.neural_network import NN_Worker
+                self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
 
             self.display('WorkerNode %s: Created %s model under POM %d' % (str(self.worker_address), model_type, self.pom))
 
