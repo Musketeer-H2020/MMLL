@@ -3,7 +3,7 @@
 Worker node object
 '''
 
-__author__ = "Angel Navia-Vázquez"
+__author__ = "Angel Navia-Vázquez, Marcos Fernández"
 __date__ = "May 2020"
 
 import numpy as np
@@ -54,7 +54,7 @@ class WorkerNode(Common_to_all_objects):
         self.model_type = None          # ML model to be used, to be defined later
         self.display('WorkerNode %s: Loading comms' % str(self.worker_address))
         self.display('WorkerNode %s: Loading Data Connector' % str(self.worker_address))
-        self.display('WorkerNode %s: Innitiated' % str(self.worker_address))
+        self.display('WorkerNode %s: Initiated' % str(self.worker_address))
 
 
 
@@ -258,7 +258,6 @@ class WorkerNode(Common_to_all_objects):
             self.workerCommonML.terminate = False
             while not (self.workerMLmodel.terminate or self.workerCommonML.terminate):  # The worker can be terminated from the MLmodel or CommonML
                 # We receive one packet, it could be for Common or MLmodel
-
                 packet, sender = self.workerCommonML.CheckNewPacket_worker()
                 if packet is not None:
                     try:
@@ -283,7 +282,7 @@ class WorkerNode(Common_to_all_objects):
         None
         """
         if not self.workerMLmodel.is_trained:
-            print('\nError: Model not trained yet')
+            self.display('WorkerNode: Error -  Model not trained yet')
             return None
         else:
             return self.workerMLmodel.model
@@ -300,10 +299,18 @@ class WorkerNode(Common_to_all_objects):
         """
 
         if not self.workerMLmodel.is_trained:
-            print('\nError: Model not trained yet, nothing to save.')
+            self.display('WorkerNode: Error - Model not trained yet, nothing to save.')
         else:
+            '''
             if output_filename_model is None:
-                output_filename_model = '../results/models/POM' + str(self.pom) + '_' + self.model_type + '_' + self.dataset_name + '_worker_model.pkl'
-            with open(output_filename_model, 'wb') as f:
-                pickle.dump(self.workerMLmodel.model, f)
-            print('Model saved at %s' % output_filename_model)
+                output_filename_model = './POM' + str(self.pom) + '_' + self.model_type + '_' + self.dataset_name + '_worker_model.pkl'
+            '''
+            try:
+                with open(output_filename_model, 'wb') as f:
+                    pickle.dump(self.workerMLmodel.model, f)
+            except:
+                output_filename_model = './POM' + str(self.pom) + '_' + self.model_type + '_' + self.dataset_name + '_model.pkl'
+                with open(output_filename_model, 'wb') as f:
+                    pickle.dump(self.workerMLmodel.model, f)
+
+            self.display('WorkerNode: Model saved at %s' %output_filename_model)

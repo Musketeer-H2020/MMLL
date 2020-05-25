@@ -3,7 +3,7 @@
 MasterNode Class
 '''
 
-__author__ = "Angel Navia-Vázquez"
+__author__ = "Angel Navia-Vázquez, Marcos Fernández"
 __date__ = "May 2020"
 
 import numpy as np
@@ -59,7 +59,7 @@ class MasterNode(Common_to_all_objects):
         self.yval = None       # Validation data (targets)
         self.model_is_trained = False
         self.classes = None
-        self.display('MasterNode: Innitiated')
+        self.display('MasterNode: Initiated')
 
     def create_model_Master(self, model_type, model_parameters=None):
         """
@@ -269,7 +269,7 @@ class MasterNode(Common_to_all_objects):
         None
         """
         if not self.model_is_trained:
-            print('\nError: Model not trained yet')
+            self.display('MasterNode: Error - Model not trained yet')
             return None
         else:
             return self.MasterMLmodel.model
@@ -284,16 +284,24 @@ class MasterNode(Common_to_all_objects):
         """
 
         if not self.model_is_trained:
-            print('\nError: Model not trained yet, nothing to save.')
+            self.display('MasterNode: Error - Model not trained yet, nothing to save.')
         else:
             if self.pom==2 or self.pom==3:
-                print('\nError: In POMs 2 and 3 the model is owner by the workers, not the master. Nothing to save.')
+                self.display('MasterNode: Error - In POMs 2 and 3, the model is owner by the workers, not the master. Nothing to save.')
                 return
+            '''
             if output_filename_model is None:
                 output_filename_model = './POM' + str(self.pom) + '_' + self.model_type + '_' + self.dataset_name + '_model.pkl'
-            with open(output_filename_model, 'wb') as f:
-                pickle.dump(self.MasterMLmodel.model, f)
-            print('Model saved at %s' % output_filename_model)
+            '''
+            try:
+                with open(output_filename_model, 'wb') as f:
+                    pickle.dump(self.MasterMLmodel.model, f)
+            except:
+                output_filename_model = './POM' + str(self.pom) + '_' + self.model_type + '_' + self.dataset_name + '_model.pkl'
+                with open(output_filename_model, 'wb') as f:
+                    pickle.dump(self.MasterMLmodel.model, f)
+
+            self.display('MasterNode: Model saved at %s' %output_filename_model)
 
     def terminate_Workers(self, workers_addresses_terminate=None):
         """
