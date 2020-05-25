@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='MMLL',
-    version='0.2.0',
+    version='0.3.0',
     description='Package for interacting with MMLL',
     author='angelnaviavazquez',
     author_email='navia@ing.uc3m.es',
@@ -13,8 +13,12 @@ setup(
         'pika==0.13.0',
         'transitions==0.6.9',
         'pygraphviz==1.5',
-        'numpy',
-        'dill'
+        'dill',
+        'scikit-learn',
+        'matplotlib',
+        'numpy==1.16.4', 
+        'Keras==2.2.4',
+        'tensorflow==1.14.0,
     ],
     url='https://github.com/Musketeer-H2020/MMLL'
 )
