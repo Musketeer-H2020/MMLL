@@ -18,7 +18,7 @@ setup(
         'matplotlib',
         'numpy==1.16.4', 
         'Keras==2.2.4',
-        'tensorflow==1.14.0,
+        'tensorflow==1.14.0'
     ],
     url='https://github.com/Musketeer-H2020/MMLL'
 )
