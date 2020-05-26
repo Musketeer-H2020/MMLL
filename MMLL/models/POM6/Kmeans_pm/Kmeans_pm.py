@@ -11,8 +11,8 @@ import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
 from transitions import State
 from transitions.extensions import GraphMachine
-from pympler import asizeof #asizeof.asizeof(my_object)
-import pickle
+#from pympler import asizeof #asizeof.asizeof(my_object)
+#import pickle
 
 
 class model():
