@@ -1,19 +1,37 @@
-# MMLL
-Musketeer Machine Learning Library
+# MMLL: Musketeer Machine Learning Library
 
+## Installing 
+
+`pip install git+https://github.com/Musketeer-H2020/MMLL.git`
 
 ## Dependencies
 
-`libgraphviz-dev` must be installed
+* `pika v0.13.0`
+* `transitions v0.6.9`
+* `pygraphviz v1.5`
+* `dill`
+* `scikit-learn`
+* `matplotlib`
+* `numpy v1.16.4` 
+* `Keras v2.2.4`
+* `tensorflow v1.14.0`
 
+## Content
 
-## Install a release
+Currently the library is in beta phase, and it only supports the following Privacy Operation Modes (POMs) and models:
 
-Use `@` to specify a tag/release e.g.
+**POM1**:
 
-```
-pip install git+https://github.com/Musketeer-H2020/MMLL.git@v0.1
-```
+* Kmeans
+* Neural Networks
 
+**POM6**: 
 
+* Kmeans
+* Logistic Binary Classifier
 
+## Usage 
+
+Please, visit the following git repository that contains a collection of demos that illustrate the usage of this library:
+
+[MMLL-demo](https://github.com/Musketeer-H2020/MMLL-demo)

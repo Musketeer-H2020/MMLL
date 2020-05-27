@@ -9,7 +9,7 @@ __date__ = "May 2020"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
-#import pickle
+import pickle
 from transitions import State
 from transitions.extensions import GraphMachine
 import time
