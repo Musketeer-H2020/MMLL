@@ -6,12 +6,12 @@ __author__ = "Angel Navia-Vázquez"
 __date__ = "Mar 2020"
 
 
-import requests
-import json
-import pickle
-import base64
+#import requests
+#import json
+#import pickle
+#import base64
 import numpy as np
-import dill
+#import dill
 
 
 class Common_to_all_objects():
@@ -73,6 +73,10 @@ class Common_to_all_objects():
                 self.Nmaxiter = value
             if key == 'NC':
                 self.NC = value
+            if key == 'learning_rate':
+                self.learning_rate = value
+            if key == 'model_architecture':
+                self.model_architecture = value
             if key == 'regularization':
                 self.regularization = value
             if key == 'classes':
