@@ -209,7 +209,7 @@ class Common_to_all_POMs(Common_to_all_objects):
 
         if self.comms.name == 'pycloudmessenger':
             try:
-                packet = self.comms.receive(1)
+                packet = self.comms.receive(10)
                 if packet is not None:
                     sender = self.receive_from[packet['sender']]
                     #self.display(self.name + ' %s received %s from %s' % (self.master_address, packet['action'], sender))
@@ -280,7 +280,7 @@ class Common_to_all_POMs(Common_to_all_objects):
 
         if self.comms.name == 'pycloudmessenger':
             try:
-                packet = self.comms.receive()
+                packet = self.comms.receive(10)
                 sender = packet['sender']
                 self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.worker_address, packet['action'], sender))
             except:
