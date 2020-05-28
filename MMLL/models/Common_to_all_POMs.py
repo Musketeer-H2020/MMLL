@@ -6,12 +6,12 @@ __author__ = "Angel Navia-Vázquez"
 __date__ = "Mar 2020"
 
 
-import requests
+#import requests
 import json
 import pickle
-import base64
+#import base64
 import numpy as np
-import dill
+#import dill
 from MMLL.Common_to_all_objects import Common_to_all_objects
 
 class Common_to_all_POMs(Common_to_all_objects):
@@ -209,7 +209,7 @@ class Common_to_all_POMs(Common_to_all_objects):
 
         if self.comms.name == 'pycloudmessenger':
             try:
-                packet = self.comms.receive(10)
+                packet = self.comms.receive(1)
                 if packet is not None:
                     sender = self.receive_from[packet['sender']]
                     #self.display(self.name + ' %s received %s from %s' % (self.master_address, packet['action'], sender))
@@ -280,7 +280,7 @@ class Common_to_all_POMs(Common_to_all_objects):
 
         if self.comms.name == 'pycloudmessenger':
             try:
-                packet = self.comms.receive(10)
+                packet = self.comms.receive(1)
                 sender = packet['sender']
                 self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.worker_address, packet['action'], sender))
             except:
