@@ -10,7 +10,7 @@ setup(
     packages=find_packages('.'),
     python_requires='>=3.6',
     install_requires=[
-        'pika==0.13.0',
+        'git+https://github.com/IBM/pycloudmessenger.git@v0.3.0',
         'transitions==0.6.9',
         'pygraphviz==1.5',
         'dill',
