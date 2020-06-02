@@ -10,7 +10,7 @@ setup(
     packages=find_packages('.'),
     python_requires='>=3.6',
     install_requires=[
-        'git+https://github.com/IBM/pycloudmessenger.git@v0.3.0',
+        'pycloudmessenger',
         'transitions==0.6.9',
         'pygraphviz==1.5',
         'dill',
@@ -19,6 +19,9 @@ setup(
         'numpy==1.16.4', 
         'Keras==2.2.4',
         'tensorflow==1.14.0'
+    ],
+    dependency_links = [
+        'git+https://github.com/IBM/pycloudmessenger.git@v0.3.0'
     ],
     url='https://github.com/Musketeer-H2020/MMLL'
 )
