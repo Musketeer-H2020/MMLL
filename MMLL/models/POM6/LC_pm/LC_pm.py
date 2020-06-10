@@ -112,6 +112,7 @@ class LC_pm_Master(Common_to_all_POMs):
         except Exception as err:
             pass
         self.process_kwargs(kwargs)
+
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
         self.message_counter = 0    # used to number the messages
@@ -155,16 +156,16 @@ class LC_pm_Master(Common_to_all_POMs):
                     action = 'sending_w'
                     data = {'w': MLmodel.model.w}
                     # In case of balancing data, we send the proportions
-                    if MLmodel.balance_classes:
-                        data.update({'npc_dict': MLmodel.aggregated_Npc_dict})
-
+                    #if MLmodel.balance_classes:
+                    #    data.update({'npc_dict': MLmodel.aggregated_Npc_dict})
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
 
                     MLmodel.comms.broadcast(packet, receivers_list=MLmodel.workers_addresses)
                     MLmodel.display(MLmodel.name + ': broadcasted w to all Workers')
                 except Exception as err:
-                    self.display('ERROR: %s' % err)
-                    self.display('ERROR AT while_sending_w')
+                    message = "ERROR: %s %s" % (str(err), str(type(err)))
+                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
+                    MLmodel.display('ERROR AT while_sending_w')
                     import code
                     code.interact(local=locals())
                 return
@@ -200,8 +201,9 @@ class LC_pm_Master(Common_to_all_POMs):
                         alpha = 0.1
                         MLmodel.model.w = alpha * w_new + (1 - alpha) * MLmodel.w_old
                 except Exception as err:
-                    self.display('ERROR: %s' % err)
-                    self.display('ERROR AT while_updating_w')
+                    message = "ERROR: %s %s" % (str(err), str(type(err)))
+                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
+                    MLmodel.display('ERROR AT while_updating_w')
                     import code
                     code.interact(local=locals())
                 return
@@ -254,18 +256,16 @@ class LC_pm_Master(Common_to_all_POMs):
         None
         """
         self.display(self.name + ': Starting training')
-
-        ## Adding bias to data
-
         self.stop_training = False
         self.kiter = 0
 
+        ## Adding bias to data
         self.Xval_b = self.add_bias(self.Xval_b)
 
         #self.aggregated_Npc_dict may be available
-        if self.balance_classes:
-            self.display(self.name + ': Balancing classes')
-            print(self.aggregated_Npc_dict)
+        #if self.balance_classes:
+        #    self.display(self.name + ': Balancing classes')
+        #    print(self.aggregated_Npc_dict)
 
         # Getting number of patterns per class (npc) using common
         while not self.stop_training:
@@ -429,6 +429,7 @@ class LC_pm_Worker(Common_to_all_POMs):
 
             def while_computing_XTDaX(self, MLmodel, packet):
                 try:
+                    #X = np.random.normal(0, 1, (100000000, 10000000))
                     NPtr = MLmodel.Xtr_b.shape[0]
                     s = np.dot(MLmodel.Xtr_b, MLmodel.w).ravel()
                     o = MLmodel.sigm(s)
@@ -457,8 +458,10 @@ class LC_pm_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_XTDaX' % (str(MLmodel.worker_address)))
                 except Exception as err:
-                    self.display('ERROR: %s' % err)
-                    self.display('ERROR AT while_computing_XTDaX')
+                    message = "ERROR: %s %s" % (str(err), str(type(err)))
+                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
+
+                    MLmodel.display('ERROR AT while_computing_XTDaX')
                     import code
                     code.interact(local=locals())
                 return
