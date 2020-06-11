@@ -255,7 +255,7 @@ class LC_pm_Master(Common_to_all_POMs):
         ----------
         None
         """
-        self.display(self.name + ': Starting training')
+        self.display(self.name + ': Starting training')        
         self.stop_training = False
         self.kiter = 0
 
@@ -422,13 +422,15 @@ class LC_pm_Worker(Common_to_all_POMs):
 
             name = 'FSM_worker'
 
+
             # Enter/exit callbacks are defined here
             def while_waiting_order(self, MLmodel):
                 MLmodel.display(self.name + ' %s: WAITING for instructions...' % (str(MLmodel.worker_address)))
-                return
 
             def while_computing_XTDaX(self, MLmodel, packet):
+                
                 try:
+                    #print(aaa)
                     #X = np.random.normal(0, 1, (100000000, 10000000))
                     NPtr = MLmodel.Xtr_b.shape[0]
                     s = np.dot(MLmodel.Xtr_b, MLmodel.w).ravel()
@@ -460,10 +462,12 @@ class LC_pm_Worker(Common_to_all_POMs):
                 except Exception as err:
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-
-                    MLmodel.display('ERROR AT while_computing_XTDaX')
+                    #MLmodel.display('ERROR AT while_computing_XTDaX')
+                    raise
+                    '''
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
         states_worker = [

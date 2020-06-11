@@ -219,17 +219,9 @@ class WorkerNode(Common_to_all_objects):
                 from MMLL.models.POM6.RR.RR import RR_Worker
                 self.workerMLmodel = RR_Worker(self.master_address, self.worker_address,  model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
 
-
-
             if model_type == 'KR_pm':
                 from MMLL.models.POM6.KR_pm.KR_pm import KR_pm_Worker
                 self.workerMLmodel = KR_pm_Worker(self.master_address, self.worker_address, model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
-
-
-
-
-
-
 
             if model_type == 'LC_pm':
                 from MMLL.models.POM6.LC_pm.LC_pm import LC_pm_Worker
@@ -258,17 +250,25 @@ class WorkerNode(Common_to_all_objects):
             self.workerCommonML.terminate = False
             while not (self.workerMLmodel.terminate or self.workerCommonML.terminate):  # The worker can be terminated from the MLmodel or CommonML
                 # We receive one packet, it could be for Common or MLmodel
+                #print('I'm alive!)
                 packet, sender = self.workerCommonML.CheckNewPacket_worker()
                 if packet is not None:
                     try:
+                        #if packet['action'] == 'do_local_prep':
+                        #    print('STOP AT ')
+                        #    import code
+                        #    code.interact(local=locals())
                         if packet['to'] == 'CommonML':
+                            print('worker run CommonML', packet['action'])
                             self.workerCommonML.ProcessReceivedPacket_Worker(packet, sender)
                             if packet['action'] == 'send_encrypter':
                                 # Passing the encrypter to workerMLmodel
                                 self.workerMLmodel.encrypter = self.workerCommonML.encrypter
                         if packet['to'] == 'MLmodel':
                             self.workerMLmodel.ProcessReceivedPacket_Worker(packet, sender)
-                    except:
+                    except Exception as err:
+                        #print('ERROR at Workernode', err, str(err), str(type(err)))
+                        raise
                         pass
 
 
