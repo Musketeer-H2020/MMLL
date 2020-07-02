@@ -7,6 +7,15 @@ __author__ = "Angel Navia Vázquez, UC3M."
 
 import random, string
 import time
+'''
+try:
+    import pycloudmessenger.ffl.abstractions as ffl
+    import pycloudmessenger.ffl.fflapi as fflapi
+    import pycloudmessenger.serializer as serializer
+except:
+    print("pycloudmessenger is not installed, use:")
+    print("pip install https://github.com/IBM/pycloudmessenger/archive/v0.3.0.tar.gz")
+'''
 
 def get_current_task_name(self):
     task_available = False

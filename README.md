@@ -20,15 +20,38 @@
 
 Currently the library is in beta phase, and it only supports the following Privacy Operation Modes (POMs) and models:
 
-**POM1**:
+### **POM1**:
 
 * Kmeans
 * Neural Networks
 
-**POM6**: 
+### **POM2**:
 
 * Kmeans
-* Logistic Binary Classifier
+* Neural Networks
+
+### **POM3**:
+
+* Kmeans
+* Neural Networks
+
+### **POM4**: 
+
+* Linear Regression (**LR**) 
+* Kmeans (**Kmeans**): 
+
+### **POM5**: 
+
+* Linear Regression (**LR**)
+* Kmeans (**Kmeans**): 
+
+### **POM6**: 
+
+* Ridge Regression (**RR**)
+* Kmeans (**Kmeans**): 
+* Binary Logistic Classifier (**LC_pm**)
+* Multiclass Logistic Classifier (**MLC_pm**)
+* Kernel Regression (**KR_pm**)
 
 ## Usage 
 

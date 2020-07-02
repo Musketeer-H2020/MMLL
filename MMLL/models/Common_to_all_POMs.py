@@ -155,15 +155,21 @@ class Common_to_all_POMs(Common_to_all_objects):
             State to be checked
 
         """
-        all_active = True
-        for waddr in self.workers_addresses:
-            if self.state_dict[waddr] != condition:
-                all_active = False
-
-        # Resetting states after checking
-        if all_active:
+        try:
+            all_active = True
             for waddr in self.workers_addresses:
-                self.state_dict[waddr] = ''
+                if self.state_dict[waddr] != condition:
+                    all_active = False
+
+            # Resetting states after checking
+            if all_active:
+                for waddr in self.workers_addresses:
+                    self.state_dict[waddr] = ''
+        except Exception as err:
+            print('STOP AT chekAllStates CommontoallPOMS')
+            import code
+            code.interact(local=locals())
+
 
         return all_active
 
@@ -186,6 +192,18 @@ class Common_to_all_POMs(Common_to_all_objects):
                     addresses2check += [self.cryptonode_address]
             except:
                 pass
+
+            try:
+                addresses2check = list(set( addresses2check + self.broadcast_addresses))
+            except:
+                print('STOP AT addresses2check' )
+                import code
+                code.interact(local=locals())
+
+                pass
+
+            #print("Listening: ", addresses2check)
+
             for sender in addresses2check:
                 try:
                     packet = self.comms.receive(sender, timeout=0.01)
@@ -208,19 +226,29 @@ class Common_to_all_POMs(Common_to_all_objects):
                             code.interact(local=locals())
 
         if self.comms.name == 'pycloudmessenger':
+
             try:
-                packet = self.comms.receive(1)
+                self.comms.pycloudmessenger_timeout_POMs456 > 0
+            except:
+                self.comms.pycloudmessenger_timeout_POMs456 = 1
+
+            try:
+                packet = self.comms.receive(self.comms.pycloudmessenger_timeout_POMs456)
                 if packet is not None:
                     sender = self.receive_from[packet['sender']]
+                    active_sender = sender
                     #self.display(self.name + ' %s received %s from %s' % (self.master_address, packet['action'], sender))
                     self.ProcessReceivedPacket_Master(packet, sender)
                     self.Update_State_Master()
+                    packet = None
             except Exception as err:
-                if 'pycloudmessenger.ffl.fflapi.TimedOutException' not in str(type(err)): # we skip the normal timeouts
-                    self.display('Unhandled ERROR AT CheckNewPacket_master: %s' % err)
+                if 'Operation timeout reached' not in str(err): 
+                    self.display('Unhandled ERROR AT CheckNewPacket_master: %s' % str(err))
+                    import code
+                    print('ERROR AT CheckNewPacket_master --------------')
                     import code
                     code.interact(local=locals())
-                    pass
+                pass
 
         return packet, active_sender
 
@@ -280,10 +308,20 @@ class Common_to_all_POMs(Common_to_all_objects):
 
         if self.comms.name == 'pycloudmessenger':
             try:
-                packet = self.comms.receive(1)
+                self.comms.pycloudmessenger_timeout_POMs456 > 0
+            except:
+                self.comms.pycloudmessenger_timeout_POMs456 = 1
+
+            try:
+                packet = self.comms.receive(self.comms.pycloudmessenger_timeout_POMs456)
                 sender = packet['sender']
                 self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.worker_address, packet['action'], sender))
-            except:
+            except Exception as err:
+                if 'Operation timeout reached' not in str(err): 
+                    print('ERROR AT CheckNewPacket_worker')
+                    self.display('Unhandled ERROR AT CheckNewPacket_worker: %s' % str(err))
+                    import code
+                    code.interact(local=locals())
                 pass
 
         return packet, sender
@@ -324,25 +362,34 @@ class Common_to_all_POMs(Common_to_all_objects):
 
         if self.comms.name == 'pycloudmessenger':
             try:
-                packet = self.comms.receive()
-                sender = packet['sender']
-                self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.worker_address, packet['action'], sender))
+                self.comms.pycloudmessenger_timeout_POMs456 > 0
             except:
+                self.comms.pycloudmessenger_timeout_POMs456 = 1
+
+            try:
+                packet = self.comms.receive(self.comms.pycloudmessenger_timeout_POMs456)
+                sender = packet['sender']
+                self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.cryptonode_address, packet['action'], sender))
+                self.ProcessReceivedPacket_Crypto(packet, sender)
+
+            except Exception as err:
+                if 'Operation timeout reached' not in str(err): 
+                    print('ERROR AT CheckNewPacket_crypto')
+                    self.display('Unhandled ERROR AT CheckNewPacket_crypto: %s' % str(err))
+                    import code
+                    code.interact(local=locals())
                 pass
 
         return packet, sender
 
 
-
-
-    # This is only to be executed at POM4... move there...
-    def crypto_mult_X(self, Bq_prodpk):
+    def crypto_mult_X(self, B):
         """
-        Multiplies any matrix/vector encrypted under prodpk with the previously stored X matrix also encrypted with prodpk. This is only to be executed by some POM4 algorithms.
+        Multiplies any matrix/vector encrypted with the previously stored at crypto X encr. This is only to be executed by some POM4 algorithms.
 
         Parameters
         ----------
-        Bq_prodpk: matrix, vector, or dictionary of matrix/vector of encrypted numbers
+        B: matrix, vector, or dictionary of matrix/vector of encrypted numbers
             matrix/vector to be multiplied by X
 
         Returns
@@ -352,108 +399,154 @@ class Common_to_all_POMs(Common_to_all_objects):
         """
         try:
             # Checking if dictionary
-            is_dictionary = type(Bq_prodpk) is dict
+            is_dictionary = type(B) is dict
 
             if not is_dictionary:
+
                 # Checking size
                 try:
                     scalar_value = False
-                    M, N = Bq_prodpk.shape
+                    M, N = B.shape
                 except:  # scalar value
                     scalar_value = True
+
+
                 # Blinding, keep Rbl_B for later deblinding...
                 if not scalar_value:
-                    [Bq_prodpk_bl, Rbl_B] = self.cr.vBlind_Trunc_BCP(Bq_prodpk, self.cr.ProdPK)
+                    # wT X
+                    Rbl_B = np.random.normal(0, 2, (M, N))
+                    try:
+                        B_bl = B + Rbl_B
+                    except:
+                        print('ERROR AT crypto_mult_X: overflow???')
+                        import code
+                        code.interact(local=locals())                       
+                        pass
                 else:
                     # PENDING
                     print('ERROR AT crypto_mult_X: escalar value')
                     import code
                     code.interact(local=locals())
-                Bq_prodpk_bl_send = Bq_prodpk_bl
+
+                B_bl_send = B_bl
 
             if is_dictionary:
-                Bq_prodpk_bl_dict = {}
+                B_bl_dict = {}
                 Rbl_B_dict = {}
-                keys = list(Bq_prodpk.keys())
+                keys = list(B.keys())
+
                 for key in keys:
-                    Bq_prodpk_ = Bq_prodpk[key]
+                    B_ = B[key]
                     # Checking size
                     try:
                         scalar_value = False
-                        M, N = Bq_prodpk_.shape
+                        M, N = B_.shape
                     except:  # scalar value
                         scalar_value = True
+
                     # Blinding, keep Rbl_B for later deblinding...
                     if not scalar_value:
-                        [Bq_prodpk_bl, Rbl_B] = self.cr.vBlind_Trunc_BCP(Bq_prodpk_, self.cr.ProdPK)
-                        Bq_prodpk_bl_dict.update({key: Bq_prodpk_bl})
+                        Rbl_B = np.random.normal(0, 2, (M, N))
+                        try: ### overflow for small key_size...                                        
+                            B_bl = B_ + Rbl_B
+                        except:
+                            print('STOP AT common xxx, overflow???')
+                            import code
+                            code.interact(local=locals())
+                            pass
+
+                        '''
+                            #aux = self.encrypter.encrypt(B_bl)
+                            aux = self.decrypter.decrypt(B_bl)
+                            print('Not overflow')
+                        '''
+                        B_bl_dict.update({key: B_bl})
                         Rbl_B_dict.update({key: Rbl_B})
                     else:
                         # PENDING
                         print('ERROR AT crypto_mult_X, dictionary: escalar value')
                         import code
                         code.interact(local=locals())
-                Bq_prodpk_bl_send = Bq_prodpk_bl_dict
+                B_bl_send = B_bl_dict
 
-            self.FSMmaster.go_mult_XB(self, Bq_prodpk_bl_send)
+
+            self.FSMmaster.go_mult_XB(self, B_bl_send)
             self.run_Master()
-            # returns self.XBq_prodpk_bl_dict
-            # deblinding results
-            # self.Xq_prodpk_dict
-            # self.Rbl_X_dict
+            # returns self.XB_bl_encr_dict
 
-            XBq_prodpk_dict = {}
-            if not is_dictionary:
-                MQ, NQ = Rbl_B.shape
-                Bq_prodpk_ = Bq_prodpk
+            # deblinding results, data:
+            # self.XB_bl_encr_dict  -> X * B , blinded
+            # Rbl_B_dict --> blinding values for B
+            # self.BX_dict --> blinding values for X
+            # self.X_encr_dict --> encrypted values for X
+            # B  --> encrypted values for B
+
+            XB_encr_dict = {} # stores the multiplication without blinding
 
             for waddr in self.workers_addresses:
-                Xq_prodpk = self.Xq_prodpk_dict[waddr]
-                MX, NX = Xq_prodpk.shape
-                NP = Xq_prodpk.shape[0]
-                Rx_bl = self.Rbl_X_dict[waddr]
-
-                if is_dictionary:  # the values in B change
-                    Bq_prodpk_bl = Bq_prodpk_bl_dict[waddr]
-                    Rbl_B = Rbl_B_dict[waddr]
+                if not is_dictionary: #check
+                    X_encr = self.X_encr_dict[waddr]
                     MQ, NQ = Rbl_B.shape
-                    Bq_prodpk_ = Bq_prodpk[waddr]
+                    B_encr = B
+                    Rx = self.BX_dict[waddr]
+                    Rb = Rbl_B
+                    aux = self.XB_bl_encr_dict[waddr]
+                    aux = aux - Rb * X_encr
+                    aux = aux - B_encr * Rx 
+                    aux = aux - Rb * Rx
+                    XB_encr_dict.update({waddr: aux})
 
-                if (MX == MQ and NQ == 1) or (MX == MQ and NQ == NX):
-                    if not is_dictionary:
-                        # B is of size MP, e.g., errors
-                        print('----------------------- PENDING ')
-                        print('ERROR AT crypto_mult_X: eX')
-                        import code
-                        code.interact(local=locals())
-                    if is_dictionary:
-                        # B is of size MP, e.g., errors
-                        BBq_prodpk = np.zeros((MX, NX), dtype=object)
-                        BBq_prodpk[:, :] = Bq_prodpk[waddr]
-                        RB_bl = np.zeros((MX, NX), dtype=object)
-                        RB_bl[:, :] = Rbl_B
-                if NX == MQ:
-                    if not is_dictionary:
-                        # B is of size NI, e.g., weights
-                        BBq_prodpk = np.zeros((MX, NX), dtype=object)
-                        BBq_prodpk[:, :] = Bq_prodpk_.T
-                        RB_bl = np.zeros((MX, NX), dtype=object)
-                        RB_bl[:, :] = Rbl_B.T
-                    if is_dictionary:
-                        print('----------------------- PENDING, dictionary, weight multiplication ')
-                        print('ERROR AT crypto_mult_X: eX')
-                        import code
-                        code.interact(local=locals())
-
-                XBq_prodpk_bl = self.XBq_prodpk_bl_dict[waddr]
-                XBq_prodpk = self.cr.vUnBlind_Product_Trunc_BCP(Xq_prodpk, BBq_prodpk, XBq_prodpk_bl, Rx_bl, RB_bl, self.cr.ProdPK)
-                XBq_prodpk_dict.update({waddr: XBq_prodpk})
+                if is_dictionary:  # the values in B change                  
+                    X_encr = self.X_encr_dict[waddr]
+                    B_encr = B[waddr]
+                    Rx = self.BX_dict[waddr]
+                    Rb = Rbl_B_dict[waddr]
+                    aux = self.XB_bl_encr_dict[waddr]
+                    aux = aux - X_encr * Rb
+                    aux = aux - Rx * B_encr
+                    aux = aux - Rx * Rb
+                    XB_encr_dict.update({waddr: aux})
         except:
             print('ERROR AT crypto_mult_X: general')
             import code
             code.interact(local=locals())
 
-        return XBq_prodpk_dict
+        return XB_encr_dict
+
+    def decrypt_model(self, model_encr):
+        self.FSMmaster.go_decrypt_model(self, model_encr)
+        self.run_Master()
+
+        #self.model_decr_bl
+        # deblinding
+
+        #print('STOP AT deblinding')
+        #import code
+        #code.interact(local=locals())
+
+        #print('COMMON decrypt_model')
+
+        try:
+            self.model_decr = {}
+            for key in list(self.model_decr_bl.keys()):
+                x_decr_bl = self.model_decr_bl[key]
+                #print('COMMON decrypt_model BL:')
+                #print(self.bl[key])
+                #print(x_decr_bl)
+                x = x_decr_bl - self.bl[key]
+                #print(x)
+                self.model_decr.update({key: x})
+        except:
+            print('ERROR AT COMMON decrypt_model')
+            import code
+            code.interact(local=locals())
+            pass
+
+        return self.model_decr
+
+
+
+    # DELETE?????
 
     def crypto_mult(self, Aq_prodpk, Bq_prodpk):
         """
