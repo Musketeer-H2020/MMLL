@@ -15,6 +15,7 @@
 * `numpy v1.16.4` 
 * `Keras v2.2.4`
 * `tensorflow v1.14.0`
+* `phe==1.4.0`
 
 ## Content
 
