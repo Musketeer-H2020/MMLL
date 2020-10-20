@@ -9,6 +9,8 @@ __date__ = "May 2020"
 import numpy as np
 import pickle
 from MMLL.Common_to_all_objects import Common_to_all_objects
+import time
+import json
 
 class WorkerNode(Common_to_all_objects):
     """
@@ -49,16 +51,16 @@ class WorkerNode(Common_to_all_objects):
         # The id of this worker (string), received through the comms library...
         # self.worker_address = worker_address          
         self.worker_address = self.comms.id
+        self.cryptonode_address = 'ca'          # The id of the cryptonode (string), default value
 
         self.terminate = False          # used to terminate the process
         self.model_type = None          # ML model to be used, to be defined later
         self.display('WorkerNode %s: Loading comms' % str(self.worker_address))
         self.display('WorkerNode %s: Loading Data Connector' % str(self.worker_address))
         self.display('WorkerNode %s: Initiated' % str(self.worker_address))
+        self.data_is_ready = False
 
-
-
-    def set_training_data(self, dataset_name, Xtr=None, ytr=None):
+    def set_training_data_OLD(self, dataset_name, Xtr=None, ytr=None):
         """
         Set data to be used for training.
 
@@ -73,24 +75,55 @@ class WorkerNode(Common_to_all_objects):
         try:
             self.NPtr = Xtr.shape[0]
             self.NI = Xtr.shape[1]                # Number of inputs
-            self.ytr = ytr
             self.Xtr_b = Xtr
+            self.ytr = ytr
 
             if self.Xtr_b.shape[0] != self.ytr.shape[0] and ytr is not None:
                 self.display('ERROR: different number of patterns in Xtr and ytr (%s vs %s)' % (str(self.Xval_b.shape[0]), str(self.yval.shape[0])))
                 self.Xtr_b = None
                 self.ytr = None
                 self.NPtr = 0
-                self.display('MasterNode: ***** Train data NOT VALID. *****')
+                self.display('WorkerNode: ***** Train data NOT VALID. *****')
                 return
             else:
-                self.display('MasterNode got train data: %d patterns, %d features' % (self.NPtr, self.NI))
-
-
-            self.display('WorkerNode got training data: %d patterns, %d features' % (self.NPtr, self.NI))
+                self.display('WorkerNode got train data: %d patterns, %d features' % (self.NPtr, self.NI))
+                self.data_is_ready = True
         except:
             self.display('WorkerNode: ***** Training data NOT available. *****')
             pass
+
+    def set_training_data(self, dataset_name, Xtr=None, ytr=None):
+        """
+        Set data to be used for training
+
+        *****  List of lists... ****
+
+        Parameters
+        ----------
+        dataset_name: (string): dataset name
+        Xtr: Input data: list of lists
+        ytr: target vector: list of lists 
+        """
+        self.dataset_name = dataset_name
+        try:
+            self.Xtr_b = np.array(Xtr)            
+            self.ytr = np.array(ytr)
+            self.NPtr, self.NI = self.Xtr_b.shape
+            
+            if self.Xtr_b.shape[0] != self.ytr.shape[0] and ytr is not None:
+                self.display('ERROR: different number of patterns in Xtr and ytr (%s vs %s)' % (str(self.Xval_b.shape[0]), str(self.yval.shape[0])))
+                self.Xtr_b = None
+                self.ytr = None
+                self.NPtr = 0
+                self.display('WorkerNode: ***** Train data NOT VALID. *****')
+                return
+            else:
+                self.display('WorkerNode got train data: %d patterns, %d features' % (self.NPtr, self.NI))
+
+        except:
+            self.display('WorkerNode: ***** Training data NOT available. *****')
+            pass
+
 
 
     def set_validation_data(self, dataset_name, Xval=None, yval=None):
@@ -183,21 +216,57 @@ class WorkerNode(Common_to_all_objects):
         if self.pom == 2:
             if model_type == 'Kmeans':
                 from MMLL.models.POM2.Kmeans.Kmeans import Kmeans_Worker
-                self.workerMLmodel = Kmeans_Worker(self.master_address, self.worker_address, self.platform, self.comms, self.logger,  self.verbose, self.Xtr_b)
+                self.workerMLmodel = Kmeans_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b)
+
+            elif model_type == 'NN':
+                from MMLL.models.POM2.NeuralNetworks.neural_network import NN_Worker
+                self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
 
             self.display('WorkerNode %s: Created %s model under POM %d' % (str(self.worker_address), model_type, self.pom))
 
         if self.pom == 3:
             if model_type == 'Kmeans':
                 from MMLL.models.POM3.Kmeans.Kmeans import Kmeans_Worker
-                self.workerMLmodel = Kmeans_Worker(self.master_address, self.worker_address, self.platform, self.comms, self.logger,  self.verbose, self.Xtr_b)
+                self.workerMLmodel = Kmeans_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b)
+
+            elif model_type == 'NN':
+                from MMLL.models.POM3.NeuralNetworks.neural_network import NN_Worker
+                self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
 
             self.display('WorkerNode %s: Created %s model under POM %d' % (str(self.worker_address), model_type, self.pom))
+
+
+        if self.pom == 4:
+            # This object includes general ML tasks, common to all algorithms in POM4
+            from MMLL.models.POM4.CommonML.POM4_CommonML import POM4_CommonML_Worker
+            self.workerCommonML = POM4_CommonML_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr, cryptonode_address=self.cryptonode_address)
+            self.display('WorkerNode %s: Created CommonML model' % str(self.worker_address))
+
+            if model_type == 'LR':
+                from MMLL.models.POM4.LR.LR import LR_Worker
+                self.workerMLmodel = LR_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr, cryptonode_address=self.cryptonode_address)
+                self.display('WorkerNode %s: Created CommonML model' % str(self.worker_address))
+                self.model_type = model_type
+                self.display('WorkerNode %s: Created %s model' % (str(self.worker_address), model_type))
+
+            if model_type == 'Kmeans':
+                from MMLL.models.POM4.Kmeans.Kmeans import Kmeans_Worker
+                self.workerMLmodel = Kmeans_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr, cryptonode_address=self.cryptonode_address)
+                self.display('WorkerNode %s: Created CommonML model' % str(self.worker_address))
+                self.model_type = model_type
+                self.display('WorkerNode %s: Created %s model' % (str(self.worker_address), model_type))
+
 
         if self.pom == 5:
             from MMLL.models.POM5.CommonML.POM5_CommonML import POM5_CommonML_Worker
             self.workerCommonML = POM5_CommonML_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
             self.display('WorkerNode %s: Created CommonML model' % str(self.worker_address))
+
+            if model_type == 'LR':
+                from MMLL.models.POM5.LR.LR import LR_Worker
+                self.workerMLmodel = LR_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
+                self.model_type = model_type
+                self.display('WorkerNode %s: Created %s model' % (str(self.worker_address), model_type))
 
             if model_type == 'Kmeans':
                 from MMLL.models.POM5.Kmeans.Kmeans import Kmeans_Worker
@@ -219,21 +288,17 @@ class WorkerNode(Common_to_all_objects):
                 from MMLL.models.POM6.RR.RR import RR_Worker
                 self.workerMLmodel = RR_Worker(self.master_address, self.worker_address,  model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
 
-
-
             if model_type == 'KR_pm':
                 from MMLL.models.POM6.KR_pm.KR_pm import KR_pm_Worker
                 self.workerMLmodel = KR_pm_Worker(self.master_address, self.worker_address, model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
 
-
-
-
-
-
-
             if model_type == 'LC_pm':
                 from MMLL.models.POM6.LC_pm.LC_pm import LC_pm_Worker
                 self.workerMLmodel = LC_pm_Worker(self.master_address, self.worker_address, model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
+
+            if model_type == 'MLC_pm':
+                from MMLL.models.POM6.MLC_pm.MLC_pm import MLC_pm_Worker
+                self.workerMLmodel = MLC_pm_Worker(self.master_address, self.worker_address, model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
 
             if model_type == 'Kmeans_pm':
                 from MMLL.models.POM6.Kmeans_pm.Kmeans_pm import Kmeans_pm_Worker
@@ -252,25 +317,57 @@ class WorkerNode(Common_to_all_objects):
         if self.pom == 1 or self.pom==2 or self.pom==3:
             self.workerMLmodel.run_worker()
 
-        if self.pom == 6 or self.pom == 4 or self.pom == 5:
+        if self.pom in [4, 5, 6]:
             # the worker checks both workerMLmodel and workerCommonML
             self.workerMLmodel.terminate = False
             self.workerCommonML.terminate = False
+            self.workerMLmodel.Xtr_b = self.workerCommonML.Xtr_b
+            self.workerMLmodel.ytr = self.workerCommonML.ytr
+
             while not (self.workerMLmodel.terminate or self.workerCommonML.terminate):  # The worker can be terminated from the MLmodel or CommonML
                 # We receive one packet, it could be for Common or MLmodel
+                #print('I'm alive!)
                 packet, sender = self.workerCommonML.CheckNewPacket_worker()
                 if packet is not None:
                     try:
+                        #if packet['action'] == 'do_local_prep':
+                        #    print('STOP AT ')
+                        #    import code
+                        #    code.interact(local=locals())
                         if packet['to'] == 'CommonML':
+                            #print('worker run CommonML', packet['action'])
                             self.workerCommonML.ProcessReceivedPacket_Worker(packet, sender)
                             if packet['action'] == 'send_encrypter':
                                 # Passing the encrypter to workerMLmodel
                                 self.workerMLmodel.encrypter = self.workerCommonML.encrypter
+                            if packet['action'] == 'do_local_prep':
+                                # Passing the transformed training data to workerMLmodel
+                                self.workerMLmodel.Xtr_b = self.workerCommonML.Xtr_b
+                                self.workerMLmodel.ytr = self.workerCommonML.ytr
+                                time.sleep(0.1)                               
                         if packet['to'] == 'MLmodel':
+                            #print('worker run MLmodel', packet['action'])
                             self.workerMLmodel.ProcessReceivedPacket_Worker(packet, sender)
-                    except:
+                    except Exception as err:
+                        #print('ERROR at Workernode', err, str(err), str(type(err)))
+                        raise
                         pass
 
+
+    def get_normalizer(self):
+        """
+        Returns the normalizer parameters and transform the training data in the workers
+
+        Returns
+        ----------
+        prep_model: Object
+            Preprocessing object
+        """
+        if not self.workerMLmodel.preprocessor_ready:
+            self.display('WorkerNode: Error - Preprocessor not available at the worker')
+            return None
+        else:
+            return self.workerMLmodel.prep_model
 
 
     def get_model(self):

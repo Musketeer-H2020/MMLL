@@ -11,9 +11,6 @@ import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
 from transitions import State
 from transitions.extensions import GraphMachine
-#from pympler import asizeof #asizeof.asizeof(my_object)
-#import pickle
-
 
 class model():
     def __init__(self):
@@ -69,57 +66,11 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         
         **kwargs: Arbitrary keyword arguments.
 
-
-        -----------------------------------------------------------------
-        Optional or POM dependant arguments
-
-        -----------------------------------------------------------------
-
-        Parameters
-        ---------------------
-        cr: encryption object instance
-            the encryption library to be used in POMs 4 and 5
-
-        cryptonode_address: string
-            address of the crypto node
-
-        Nmaxiter: integer
-            Maximum number of iterations during learning
-
-        NC: integer
-            Number of centroids
-
-        regularization: float
-            Regularization parameter
-
-        classes: list of strings
-            Possible class values in a multiclass problem
-
-        balance_classes: Boolean
-            If True, the algorithm takes into account unbalanced datasets
-
-        C: array of floats
-            Centroids matrix
-
-        nf: integer
-            Number of bits for the floating part
-
-        N: integer
-            Number of
-
-        fsigma: float
-            factor to multiply standard sigma value = sqrt(Number of inputs)
-
-        normalize_data: Boolean
-            If True, data normalization is applied, irrespectively if it has been previously normalized
-
         """
         super().__init__()
         self.pom = 6
         self.model_type = model_type
         self.name = self.model_type + '_Master'                 # Name
-        #self.NC = NC                                # No. Centroids
-        #self.Nmaxiter = Nmaxiter
         self.master_address = master_address
 
         # Convert workers_addresses -> '0', '1', + send_to dict
@@ -140,11 +91,6 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         self.state_dict = {}                        # dictionary storing the execution state
         self.NI = None
         self.model = model()
-        #self.regularization = regularization
-        #self.classes = classes
-        #self.balance_classes = balance_classes
-        #self.Xval_b = Xval_b
-        #self.yval = yval
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
         # we extract the model_parameters as extra kwargs, to be all jointly processed
@@ -158,6 +104,7 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         self.FSMmaster.master_address = master_address
         self.message_counter = 0    # used to number the messages
         self.cryptonode_address = None
+        self.newNI_dict = {}
 
     def create_FSM_master(self):
         """
@@ -170,19 +117,17 @@ class Kmeans_pm_Master(Common_to_all_POMs):
 
         self.display(self.name + ': creating FSM')
 
-        '''
-        path = '../MMLL/models/POM' + str(self.pom) + '/' + self.model_type + '/' 
-        filename = path + 'POM' + str(self.pom) + '_' + self.model_type + '_FSM_master.pkl'
-        with open(filename, 'rb') as f:
-            [states_master, transitions_master] = pickle.load(f)
-        '''
         states_master = [
             State(name='waiting_order', on_enter=['while_waiting_order']),
+            State(name='update_tr_data', on_enter=['while_update_tr_data']),
             State(name='sending_C', on_enter=['while_sending_C']),
             State(name='updating_C', on_enter=['while_updating_C']),
         ]
 
         transitions_master = [
+            ['go_update_tr_data', 'waiting_order', 'update_tr_data'],
+            ['go_waiting_order', 'update_tr_data', 'waiting_order'],
+
             ['go_sending_C', 'waiting_order', 'sending_C'],
             ['go_waiting_order', 'sending_C', 'waiting_order'],
 
@@ -198,6 +143,21 @@ class Kmeans_pm_Master(Common_to_all_POMs):
                 MLmodel.display(MLmodel.name + ': WAITING for instructions...')
                 return
 
+            def while_update_tr_data(self, MLmodel):
+                try:
+                    action = 'update_tr_data'
+                    data = {}
+                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                    MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
+                except Exception as err:
+                    message = "ERROR: %s %s" % (str(err), str(type(err)))
+                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
+                    MLmodel.display('ERROR AT while_update_tr_data')
+                    import code
+                    code.interact(local=locals())
+                return
+
             def while_sending_C(self, MLmodel):
                 try:
                     action = 'sending_C'
@@ -211,8 +171,8 @@ class Kmeans_pm_Master(Common_to_all_POMs):
                     MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
 
                 except Exception as err:
-                    self.display('ERROR: %s' % err)
-                    self.display('ERROR AT while_sending_C')
+                    MLmodel.display('ERROR: %s %s' % (str(err), str(type(err))))
+                    MLmodel.display('ERROR AT while_sending_C')
                     import code
                     code.interact(local=locals())         
                 return
@@ -254,7 +214,7 @@ class Kmeans_pm_Master(Common_to_all_POMs):
                     Overpop = list(np.where(TotalP > Nmean * 1.5)[0])
                     Maxpop = np.argmax(TotalP)
                     Overpop = list(set(Overpop + [Maxpop]))
-                    Underpop = list(np.where(TotalP < Nmean / 2)[0])
+                    Underpop = list(np.where(TotalP < 0.3 * Nmean)[0])
                     for which_under in Underpop:
                         which_over = Overpop[np.random.randint(0, len(Overpop))]
                         newc = MLmodel.model.c[which_over, :] + np.random.normal(0, 0.01, (1, NI))
@@ -263,8 +223,8 @@ class Kmeans_pm_Master(Common_to_all_POMs):
                     MLmodel.display(str(len(Overpop)) + ' ' + str(len(Underpop)))
                     MLmodel.display('---------------')
                 except Exception as err:
-                    self.display('ERROR: %s' % err)
-                    self.display('ERROR AT while_updating_C')
+                    MLmodel.display('ERROR: %s %s' % (str(err), str(type(err))))
+                    MLmodel.display('ERROR AT while_updating_C')
                     import code
                     code.interact(local=locals())         
 
@@ -316,6 +276,22 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         self.display(self.name + ': Starting training')
 
         self.c_orig = np.copy(self.model.c)
+
+        self.FSMmaster.go_update_tr_data(self)
+        self.run_Master()
+        # Checking the new NI values
+        newNIs = list(set(list(self.newNI_dict.values())))
+        if len(newNIs) > 1:
+            message = 'ERROR: the training data has different number of features...'
+            self.display(message)
+            self.display(list(self.newNI_dict.values()))
+            raise Exception(message)
+        else:
+            self.reset(newNIs[0])
+            ## Adding bias to validation data, if any
+            if self.Xval_b is not None: 
+                self.Xval_b = self.add_bias(self.Xval_b).astype(float)
+                self.yval = self.yval.astype(float)
 
         stop_training = False
         kiter = 0
@@ -372,6 +348,9 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         if self.chekAllStates('ACK_sending_C_inc'):
             self.FSMmaster.go_waiting_order(self)
 
+        if self.chekAllStates('ACK_update_tr_data'):
+            self.FSMmaster.go_waiting_order(self)
+
     def ProcessReceivedPacket_Master(self, packet, sender):
         """
         Process the received packet at Master and take some actions, possibly changing the state
@@ -392,6 +371,11 @@ class Kmeans_pm_Master(Common_to_all_POMs):
 
         if packet['action'] == 'ACK_sending_C_inc':
             self.Cinc_dict.update({sender : {'C_inc': packet['data']['C_inc'], 'Ninc': packet['data']['Ninc'], 'Dist_acum': packet['data']['Dist_acum']}})
+
+        if packet['action'] == 'ACK_update_tr_data':
+            #print('ProcessReceivedPacket_Master ACK_update_tr_data from %s' % str(sender))
+            self.newNI_dict.update({sender: packet['data']['newNI']})
+
         return
 
 
@@ -470,8 +454,29 @@ class Kmeans_pm_Worker(Common_to_all_POMs):
                 MLmodel.display(MLmodel.name + ' %s: WAITING for instructions...' % (str(MLmodel.worker_address)))
                 return
 
+            def while_setting_tr_data(self, MLmodel, packet):
+                try:
+                    NPtr, newNI = MLmodel.Xtr_b.shape
+                    #MLmodel.Xtr_b = MLmodel.add_bias(MLmodel.Xtr_b).astype(float)
+                    action = 'ACK_update_tr_data'
+                    data = {'newNI': newNI}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
+                except Exception as err:
+                    message = "ERROR: %s %s" % (str(err), str(type(err)))
+                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
+                    #raise
+                    import code
+                    code.interact(local=locals())
+                    #MLmodel.display('ERROR AT while_computing_XTDaX')
+
             def while_computing_DXC(self, MLmodel):
                 try:
+                    #print('1')
+                    #X = np.random.normal(0, 1, (100000000, 100000000))
+                    #print(aaa)
+                    #print('2')
                     MLmodel.display(MLmodel.name + ' %s: Computing DXC' % (str(MLmodel.worker_address)))
                     X = MLmodel.Xtr_b
                     C = MLmodel.C
@@ -508,28 +513,24 @@ class Kmeans_pm_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_C_inc' % (str(MLmodel.worker_address)))
                 except Exception as err:
-                    self.display('ERROR: %s' % err)
-                    self.display('ERROR AT while_computing_DXC')
+                    MLmodel.display('ERROR: %s %s' % (str(err), str(type(err))))
+                    MLmodel.display('ERROR AT while_computing_DXC')
                     import code
                     code.interact(local=locals())         
 
                 return
 
-        '''
-        path = '../MMLL/models/POM' + str(self.pom) + '/' + self.model_type + '/' 
-        filename = path + 'POM' + str(self.pom) + '_' + self.model_type + '_FSM_worker.pkl'
-        with open(filename, 'rb') as f:
-            [states_worker, transitions_worker] = pickle.load(f)
-        '''
-
         states_worker = [
             State(name='waiting_order', on_enter=['while_waiting_order']),
+            State(name='setting_tr_data', on_enter=['while_setting_tr_data']),
             State(name='computing_DXC', on_enter=['while_computing_DXC']),
-
             State(name='Exit', on_enter=['while_Exit']),
            ]
 
         transitions_worker = [
+            ['go_setting_tr_data', 'waiting_order', 'setting_tr_data'],
+            ['done_setting_tr_data', 'setting_tr_data', 'waiting_order'],
+
             ['go_computing_DXC', 'waiting_order', 'computing_DXC'],
             ['done_computing_DXC', 'computing_DXC', 'waiting_order'],
 
@@ -543,7 +544,7 @@ class Kmeans_pm_Worker(Common_to_all_POMs):
             initial='waiting_order',
             show_auto_transitions=False,  # default value is False
             title="Finite State Machine modelling the behaviour of worker No. %s" % str(self.worker_address),
-            show_conditions=False)
+            show_conditions=True)
         return
 
 
@@ -571,5 +572,10 @@ class Kmeans_pm_Worker(Common_to_all_POMs):
             self.C = packet['data']['C']
             self.FSMworker.go_computing_DXC(self)
             self.FSMworker.done_computing_DXC(self)
+
+        if packet['action'] == 'update_tr_data':
+            # We update the training data
+            self.FSMworker.go_setting_tr_data(self, packet)
+            self.FSMworker.done_setting_tr_data(self)
 
         return self.terminate

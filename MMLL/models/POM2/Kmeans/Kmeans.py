@@ -5,7 +5,8 @@ Kmeans model
 '''
 
 __author__ = "Marcos Fernández Díaz"
-__date__ = "May 2020"
+__date__ = "June 2020"
+
 
 # Code to ensure reproducibility in the results
 from numpy.random import seed
@@ -13,7 +14,7 @@ seed(1)
 
 import numpy as np
 
-from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_CommonML_Worker
+from MMLL.models.POM2.CommonML.POM2_CommonML import POM2_CommonML_Master, POM2_CommonML_Worker
 
 
 
@@ -43,8 +44,8 @@ class model():
         preds: ndarray
             1-D array containing the predictions
         """
-        # Calculate the vector with euclidean distances between all observations and the defined centroids       
-        dists = np.sqrt(np.abs(-2 * np.dot(self.centroids, X_b.T) + np.sum(X_b**2, axis=1) + np.sum(self.centroids**2, axis=1)[:, np.newaxis])) # Shape of vector (num_centroids, num_observations_X_b)
+        # Calculate the vector with euclidean distances between all observations and the defined centroids        
+        dists = dists = np.sqrt(np.abs(-2 * np.dot(self.centroids, X_b.T) + np.sum(X_b**2, axis=1) + np.sum(self.centroids**2, axis=1)[:, np.newaxis])) # Shape of vector (num_centroids, num_observations_X_b)
         min_dists = np.min(dists, axis=0) # Array of distances of every observation to the closest centroid
         mean_dists = np.mean(min_dists) # Average distance of all observations to all centroids (scalar)
         preds = np.argmin(dists, axis=0) # Identification of closest centroid for every observation. Shape (num_observations_X_b,)
@@ -53,10 +54,9 @@ class model():
 
 
 
-
-class Kmeans_Master(POM1_CommonML_Master):
+class Kmeans_Master(POM2_CommonML_Master):
     """
-    This class implements Kmeans, run at Master node. It inherits from POM1_CommonML_Master.
+    This class implements Kmeans, run at Master node. It inherits from POM2_CommonML_Master.
     """
 
     def __init__(self, comms, logger, verbose=False, NC=None, Nmaxiter=None, tolerance=None):
@@ -82,38 +82,41 @@ class Kmeans_Master(POM1_CommonML_Master):
 
         tolerance: float
             Minimum tolerance for continuing training
-        """        
+        """
         self.comms = comms
         self.logger = logger
-        self.verbose = verbose
+        self.verbose = verbose    
         self.num_centroids = int(NC)
         self.Nmaxiter = int(Nmaxiter)
         self.tolerance = tolerance
 
-        self.name = 'POM1_Kmeans_Master'            # Name
+        self.name = 'POM2_Kmeans_Master'            # Name
         self.platform = comms.name                  # String with the platform to use (either 'pycloudmessenger' or 'local_flask')
         self.workers_addresses = comms.workers_ids  # Addresses of the workers
         self.Nworkers = len(self.workers_addresses) # Nworkers
-        self.mean_dist = np.inf                     # Mean distance 
+        super().__init__(self.workers_addresses, comms, logger, verbose)
         self.num_features = None                    # Number of features
         self.iter = 0                               # Number of iterations
-        self.is_trained = False                     # Flag to know if the model is trained
-        self.preprocessor_ready = False             # Flag to know if the preprocessor object is ready                 
-        self.model = model()                        # Kmeans model
-        self.prep_model = None                      # Preprocessor object
+        self.mean_dist = np.inf                     # Mean distance 
         self.reset()
+        self.is_trained = False
         self.state_dict = {}                        # Dictionary storing the execution state
         for worker in self.workers_addresses:
             self.state_dict.update({worker: ''})
-            
-            
-
+        
+        
+        
     def Update_State_Master(self):
         '''
         Function to control the state of the execution
         '''
         if self.state_dict['CN'] == 'START_TRAIN':
-            self.state_dict['CN'] = 'SEND_CENTROIDS'
+            self.state_dict['CN'] = 'SEND_PUBLIC_KEY'
+            
+        if self.checkAllStates('SEND_PUBLIC_KEY', self.state_dict):
+            for worker in self.workers_addresses:
+                self.state_dict[worker] = ''
+            self.state_dict['CN'] = 'CHECK_PUBLIC_KEYS'            
 
         if self.checkAllStates('INIT_CENTROIDS', self.state_dict):
             for worker in self.workers_addresses:
@@ -131,43 +134,57 @@ class Kmeans_Master(POM1_CommonML_Master):
         """
         Takes actions according to the state
         """
-        # Asking the workers to send initialize centroids
+        # Ask workers to send public key
+        if self.state_dict['CN'] == 'SEND_PUBLIC_KEY':
+            action = 'SEND_PUBLIC_KEY'
+            packet = {'action': action}
+            self.comms.broadcast(packet, self.workers_addresses)
+            self.display(self.name + ': Sent ' + action + ' to all workers')
+            self.state_dict['CN'] = 'WAIT_PUBLIC_KEYS'
+        
+        # Checking public keys received from workers
+        if self.state_dict['CN'] == 'CHECK_PUBLIC_KEYS':
+            if not all(x==self.list_public_keys[0] for x in self.list_public_keys):
+                self.display(self.name + ': Workers have different keys, terminating POM2 execution')
+                self.state_dict['CN'] = 'END'
+                return
+            self.public_key = self.list_public_keys[0]
+            self.display(self.name + ': Storing public key from workers')
+            self.state_dict['CN'] = 'SEND_CENTROIDS'
+            
+        # Asking the DONs to send initialize centroids
         if self.state_dict['CN'] == 'SEND_CENTROIDS':
             action = 'SEND_CENTROIDS'
-            to = 'MLmodel'
             data = {'num_centroids': self.num_centroids}
-            packet = {'to': to, 'action': action, 'data': data}
+            packet = {'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
             self.state_dict['CN'] = 'wait_init_centroids'
             
-        # Average the initial centroids from every worker
         if self.state_dict['CN'] == 'AVERAGE_INIT_CENTROIDS':
             self.list_centroids = np.array(self.list_centroids)
-            self.model.centroids = np.sum(self.list_centroids, axis=0) / self.Nworkers
+            self.centroids = np.sum(self.list_centroids, axis=0) / self.Nworkers # Average the initial centroids from every workers
             self.reset()
             self.state_dict['CN'] = 'COMPUTE_LOCAL_CENTROIDS'
 
         # Compute average of centroids and mean distance
         if self.state_dict['CN'] == 'AVERAGE_CENTROIDS':
-            list_centroids = np.array(self.list_centroids) # Array of shape (num_dons x num_centroids x num_features)
-            list_counts = np.array(self.list_counts) # Array of shape (num_dons x num_centroids)
-            list_dists = np.array(self.list_dists) # Array of shape (num_dons x 1)
+            list_centroids = np.array(self.list_centroids) # Array of shape (num_workers x num_centroids x num_features)
+            list_counts = np.array(self.list_counts) # Array of shape (num_workers x num_centroids)
+            list_dists = np.array(self.list_dists) # Array of shape (num_workers x 1)
             
-            # Average all mean distances received from each DON according to total number of observations per DON with respect to the total 
-            # observations including all DONs
+            # Average all mean distances received from each worker according to total number of observations per worker with respect to the total observations including all workers
             self.new_mean_dist = np.dot(list_dists.T, np.sum(list_counts, axis=1)) / np.sum(list_counts[:,:])
 
-            # Average centroids taking into account the number of observations of the training set in each DON with respect to the total
-            # including the training observations of all DONs
-            if np.all(np.sum(list_counts, axis=0)): # If all centroids have at least one observation in one of the DONs
-                self.model.centroids = np.sum((list_centroids.T * (list_counts / np.sum(list_counts, axis=0)).T).T, axis=0) # Shape (num_centroids x num_features)
+            # Average centroids taking into account the number of observations of the training set in each worker with respect to the total, including the training observations of all workers
+            if np.all(np.sum(list_counts, axis=0)): # If all centroids have at least one observation in one of the workers
+                self.centroids = np.sum((list_centroids.T * (list_counts / np.sum(list_counts, axis=0)).T).T, axis=0) # Shape (num_centroids x num_features)
             else: # Modify only non-empty centroids
                 for i in range(self.num_centroids):
                     if np.sum(list_counts[:,i])>0:
-                        self.model.centroids[i,:] = np.zeros(self.num_features)
+                        self.centroids[i,:] = np.zeros(self.num_features)
                         for kdon in range(self.Nworkers):
-                            self.model.centroids[i,:] = self.model.centroids[i,:]+list_centroids[kdon,i,:]*list_counts[kdon,i]/np.sum(list_counts[:,i])
+                            self.centroids[i,:] = self.centroids[i,:]+list_centroids[kdon,i,:]*list_counts[kdon,i]/np.sum(list_counts[:,i])
 
             self.reset()
             self.iter += 1
@@ -187,12 +204,11 @@ class Kmeans_Master(POM1_CommonML_Master):
                     self.state_dict['CN'] = 'COMPUTE_LOCAL_CENTROIDS'
                     self.mean_dist = self.new_mean_dist
 
-        # Asking the workers to compute local centroids
+        # Asking the DONs to compute local centroids
         if self.state_dict['CN'] == 'COMPUTE_LOCAL_CENTROIDS':
             action = 'COMPUTE_LOCAL_CENTROIDS'
-            to = 'MLmodel'
-            data = {'centroids': self.model.centroids}
-            packet = {'to': to, 'action': action, 'data': data}
+            data = {'centroids': self.centroids}
+            packet = {'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
             self.state_dict['CN'] = 'wait_update_centroids'
@@ -200,9 +216,8 @@ class Kmeans_Master(POM1_CommonML_Master):
         # Send final model to all workers
         if self.state_dict['CN'] == 'SEND_FINAL_MODEL':
             action = 'SEND_FINAL_MODEL'
-            to = 'MLmodel'
-            data = {'centroids': self.model.centroids}
-            packet = {'to': to, 'action': action, 'data': data}
+            data = {'centroids': self.centroids}
+            packet = {'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent %s to all workers' %action)
             self.is_trained = True
@@ -229,7 +244,12 @@ class Kmeans_Master(POM1_CommonML_Master):
 
         if packet['action'] == 'EXCEEDED_NUM_CENTROIDS':
             self.display(self.name + ': Number of centroids exceeding training data size worker %s. Terminating training' %str(sender))
-            self.state_dict['CN'] = 'END'
+            self.state_dict['CN'] = 'END'        
+
+        if self.state_dict['CN'] == 'WAIT_PUBLIC_KEYS':
+            if packet['action'] == 'SEND_PUBLIC_KEY':
+                self.list_public_keys.append(packet['data']['public_key'])
+                self.state_dict[sender] = packet['action']
         
         if self.state_dict['CN'] == 'wait_init_centroids':
             if packet['action'] == 'INIT_CENTROIDS':
@@ -246,9 +266,9 @@ class Kmeans_Master(POM1_CommonML_Master):
                     self.list_counts.append(packet['data']['counts'])
                     self.list_dists.append(packet['data']['mean_dist'])
                     self.state_dict[sender] = packet['action']
-    
-    
-    
+
+
+
     def check_empty_clusters(self, array):
         """
         Function to check if there are empty clusters in array
@@ -274,7 +294,7 @@ class Kmeans_Master(POM1_CommonML_Master):
 #                 Worker   
 #===============================================================
 
-class Kmeans_Worker(POM1_CommonML_Worker):
+class Kmeans_Worker(POM2_CommonML_Worker):
     '''
     Class implementing Kmeans, run at Worker
 
@@ -307,15 +327,16 @@ class Kmeans_Worker(POM1_CommonML_Worker):
         self.verbose = verbose
         self.Xtr_b = Xtr_b
 
-        self.name = 'POM1_KMeans_Worker'        # Name
+        super().__init__(logger, verbose)
+        self.name = 'POM2_KMeans_Worker'        # Name
         self.worker_address = comms.id          # Id identifying the current worker
         self.platform = comms.name              # String with the platform to use (either 'pycloudmessenger' or 'local_flask')
         self.num_features = Xtr_b.shape[1]      # Number of features
         self.model = model()                    # Model  
         self.is_trained = False                 # Flag to know if the model has been trained
         
-        
-
+         
+            
     def ProcessReceivedPacket_Worker(self, packet):
         """
         Take an action after receiving a packet
@@ -324,14 +345,21 @@ class Kmeans_Worker(POM1_CommonML_Worker):
         ----------
         packet: Dictionary
             Packet received
-        """   
+        """        
         self.terminate = False
 
         # Exit the process
         if packet['action'] == 'STOP':
             self.display(self.name + ' %s: terminated by Master' %self.worker_address)
             self.terminate = True
-            
+        
+        if packet['action'] == 'SEND_PUBLIC_KEY':
+            self.public_key, self.private_key = self.generate_keypair()
+            action = 'SEND_PUBLIC_KEY'
+            data = {'public_key': self.public_key}
+            packet = {'action': action, 'data': data}
+            self.comms.send(packet, self.master_address)
+            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
         
         if packet['action'] == 'SEND_CENTROIDS':
             self.display(self.name + ' %s: Initializing centroids' %self.worker_address)
@@ -348,18 +376,21 @@ class Kmeans_Worker(POM1_CommonML_Worker):
                 np.random.shuffle(self.Xtr_b)
                 centroids = self.Xtr_b[:self.num_centroids, :] # Take the first K observations, this avoids selecting the same point twice
 
+                # Encrypt centroids before sending them to the master
+                encrypted_centroids = np.asarray(self.encrypt_list(centroids))
                 action = 'INIT_CENTROIDS'
-                data = {'centroids': centroids}
+                data = {'centroids': encrypted_centroids}
                 packet = {'action': action, 'data': data}
-                
+
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
             
-            
         if packet['action'] == 'COMPUTE_LOCAL_CENTROIDS':
             self.display(self.name + ' %s: Updating centroids' %self.worker_address)
-            centroids = packet['data']['centroids']
-            
+            encrypted_centroids = packet['data']['centroids']
+            # Unencrypt received centroids
+            centroids = np.asarray(self.decrypt_list(encrypted_centroids))
+            # Calculate the vector with euclidean distances between all observations and the defined centroids        
             dists = np.sqrt(np.abs(-2 * np.dot(centroids, self.Xtr_b.T) + np.sum(self.Xtr_b**2, axis=1) + np.sum(centroids**2, axis=1)[:, np.newaxis])) # Matrix of euclidean distances between all observations in training set and centroids. Shape of vector (num_centroids x num_observations_X)
             min_dists = np.min(dists, axis=0) # Array of distances of every observation to the closest centroid
             mean_dists = np.mean(min_dists) # Average distance of all observations to all centroids (scalar)
@@ -373,15 +404,17 @@ class Kmeans_Worker(POM1_CommonML_Worker):
                 if counts[i]>0:
                     self.model.centroids[i,:] = (1/len(clusters[i]))*np.sum(clusters[i], axis=0)
 
+            encrypted_centroids = np.asarray(self.encrypt_list(self.model.centroids))
             action = 'UPDATE_CENTROIDS'
-            data = {'centroids': self.model.centroids, 'counts': counts, 'mean_dist': mean_dists}
+            data = {'centroids': encrypted_centroids, 'counts': counts, 'mean_dist': mean_dists}
             packet = {'action': action, 'data': data}            
             self.comms.send(packet, self.master_address)
-            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))            
+            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
             
         if packet['action'] == 'SEND_FINAL_MODEL':
             self.display(self.name + ' %s: Receiving final model' %self.worker_address)
-            self.model.centroids = packet['data']['centroids']
+            encrypted_centroids = packet['data']['centroids']
+            self.model.centroids = np.asarray(self.decrypt_list(encrypted_centroids))
             self.is_trained = True
             self.display(self.name + ' %s: Final model stored' %self.worker_address)
 
