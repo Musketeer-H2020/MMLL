@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Logistic Classifier model (public model) under POM6
+Multiclass Logistic Classifier (public model) under POM6
 
 '''
 
@@ -11,10 +11,13 @@ import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
 from transitions import State
 from transitions.extensions import GraphMachine
+#from pympler import asizeof #asizeof.asizeof(my_object)
+import pickle
 
 class model():
     def __init__(self):
         self.w = None
+        self.classes = None
 
     def sigm(self, x):
         """
@@ -46,17 +49,31 @@ class model():
         prediction_values: ndarray
 
         """
-        return self.sigm(np.dot(X_b, self.w.ravel()))
 
 
-class LC_pm_Master(Common_to_all_POMs):
+        preds_dict = {}
+        NCLA = len(self.classes)
+        NP = X_b.shape[0]
+        X = []
+        for cla in self.classes:
+            s = np.dot(X_b, self.w_dict[cla]).ravel()
+            o = self.sigm(s)
+            preds_dict.update({cla: o})
+            X.append(o)
+
+        X = np.array(X)
+        winners = list(np.argmax(X, axis=0))
+        o = [self.classes[pos] for pos in winners] 
+        return preds_dict, o
+
+class MLC_pm_Master(Common_to_all_POMs):
     """
-    This class implements the Logistic Classifier model, run at Master node. It inherits from Common_to_all_POMs.
+    This class implements the Multiclass Logistic Classifier (public model), run at Master node. It inherits from Common_to_all_POMs.
     """
 
-    def __init__(self, master_address, workers_addresses, model_type, comms, logger, verbose=False, **kwargs):
+    def __init__(self, master_address, workers_addresses, model_type, comms, logger, verbose=True, **kwargs):
         """
-        Create a :class:`LC_pm_Master` instance.
+        Create a :class:`MLC_pm_Master` instance.
 
         Parameters
         ----------
@@ -78,12 +95,16 @@ class LC_pm_Master(Common_to_all_POMs):
         **kwargs: Arbitrary keyword arguments.
 
         """
+ 
         super().__init__()
         self.pom = 6
         self.model_type = model_type
         self.name = self.model_type + '_Master'                 # Name
+        #self.NC = NC                                # No. Centroids
+        #self.Nmaxiter = Nmaxiter
         self.master_address = master_address
-
+        self.balance_classes = False
+        
         # Convert workers_addresses -> '0', '1', + send_to dict
         self.broadcast_addresses = workers_addresses
         self.Nworkers = len(workers_addresses)                    # Nworkers
@@ -94,6 +115,7 @@ class LC_pm_Master(Common_to_all_POMs):
         for k in range(self.Nworkers):
             self.send_to.update({str(k): workers_addresses[k]})
             self.receive_from.update({workers_addresses[k]: str(k)})
+        #self.cryptonode_address = None
 
         self.logger = logger                        # logger
         self.comms = comms                          # comms lib
@@ -105,19 +127,36 @@ class LC_pm_Master(Common_to_all_POMs):
         self.epsilon = 0.00000001  # to avoid log(0)
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
+        #default values
+        self.alpha_fixed = 0.1
+        self.alpha_min = -1.0
+        self.alpha_max = 1.0
+        self.alpha_step = (self.alpha_max - self.alpha_min) / 100
         # we extract the model_parameters as extra kwargs, to be all jointly processed
         try:
             kwargs.update(kwargs['model_parameters'])
             del kwargs['model_parameters']
-        except Exception as err:
+        except:
             pass
         self.process_kwargs(kwargs)
-
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
         self.message_counter = 0    # used to number the messages
-        self.cryptonode_address = None
         self.newNI_dict = {}
+
+        try:
+            if self.target_data_description['NT'] == 1:
+                if self.target_data_description['output_type'][0]['type'] == 'cat':
+                    self.classes = self.target_data_description['output_type'][0]['values']
+                else:
+                    self.display('Target values must be categorical (string)')
+                    sys.exit()
+            else:
+                self.display('The case with more than one target is not covered yet.')
+                sys.exit()
+        except Exception as err:
+            self.display('The target_data_description is not well defined, please check.', str(err))
+            raise
 
     def create_FSM_master(self):
         """
@@ -159,7 +198,7 @@ class LC_pm_Master(Common_to_all_POMs):
             def while_update_tr_data(self, MLmodel):
                 try:
                     action = 'update_tr_data'
-                    data = {}
+                    data = {'classes': MLmodel.classes}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
                     MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
@@ -172,61 +211,67 @@ class LC_pm_Master(Common_to_all_POMs):
                 return
 
             def while_sending_w(self, MLmodel):
-                try:
-                    action = 'sending_w'
-                    data = {'w': MLmodel.model.w}
-                    # In case of balancing data, we send the proportions
-                    #if MLmodel.balance_classes:
-                    #    data.update({'npc_dict': MLmodel.aggregated_Npc_dict})
-                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
 
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
-                    MLmodel.display(MLmodel.name + ': broadcasted w to all Workers')
-                except Exception as err:
-                    message = "ERROR: %s %s" % (str(err), str(type(err)))
-                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-                    MLmodel.display('ERROR AT while_sending_w')
-                    import code
-                    code.interact(local=locals())
+                action = 'sending_w'
+                data = {'w': MLmodel.model.w_dict}
+
+                # Sending classes to workers at iteration 0
+                if MLmodel.kiter == 0:
+                    data.update({'classes': MLmodel.classes})
+
+                # In case of balancing data, we send the proportions
+                if MLmodel.balance_classes:
+                    data.update({'npc_dict': MLmodel.aggregated_Npc_dict})
+
+                packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                '''
+                for waddr in MLmodel.workers_addresses:
+                    MLmodel.comms.send(waddr, packet)
+                '''
+                MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                MLmodel.display(MLmodel.name + ': broadcasted w_dict to all Workers')
                 return
 
             def while_updating_w(self, MLmodel):
-                try:
-                    MLmodel.XTDaX_accum = np.zeros((MLmodel.NI + 1, MLmodel.NI + 1))
-                    MLmodel.XTDast_accum = np.zeros((MLmodel.NI + 1, 1))
+
+                # We reset XTDaX_accum_dict and XTDast_accum_dict
+                for cla in MLmodel.classes:
+                    MLmodel.XTDaX_accum_dict[cla] = np.zeros((MLmodel.NI + 1, MLmodel.NI + 1))
+                    MLmodel.XTDast_accum_dict[cla] = np.zeros((MLmodel.NI + 1, 1))
+
+                    # We accumulate data stored at self.XTDaX_dict
                     for waddr in MLmodel.workers_addresses:
-                        MLmodel.XTDaX_accum += MLmodel.XTDaX_dict[waddr]['XTDaX']
-                        MLmodel.XTDast_accum += MLmodel.XTDaX_dict[waddr]['XTDast'].reshape((-1, 1))
+                        MLmodel.XTDaX_accum_dict[cla] += MLmodel.XTDaX_dict[waddr][cla]
+                        MLmodel.XTDast_accum_dict[cla] += MLmodel.XTDast_dict[waddr][cla]
 
-                    # Trying to use the validation set to estimate the optima update
-                    MLmodel.w_old = np.copy(MLmodel.model.w)
-                    w_new = np.dot(np.linalg.inv(MLmodel.XTDaX_accum + MLmodel.regularization * np.eye(MLmodel.NI + 1)), MLmodel.XTDast_accum)
+                    MLmodel.w_old_dict[cla] = np.copy(MLmodel.model.w_dict[cla])
 
+                    w_new = np.dot(np.linalg.inv(MLmodel.XTDaX_accum_dict[cla] + MLmodel.regularization * np.eye(MLmodel.NI + 1)), MLmodel.XTDast_accum_dict[cla])
+                    # --------------------------------------------------
                     if MLmodel.Xval_b is not None:
+                    #if False:  # Deactivated by now... pending analysis
+                        #print('####################################')
+                        #w_new = np.dot(np.linalg.inv(MLmodel.XTDaX_accum + MLmodel.regularization * np.eye(MLmodel.NI + 1)), MLmodel.XTDast_accum)
                         # We explore alfa values to find a minimum in the validation error
                         CE_val = []
-                        alphas = np.arange(-2, 2, 0.01)
+                        alphas = np.arange(-2,2,0.01)
                         for alpha in alphas:
-                            w_tmp = alpha * w_new + (1 - alpha) * MLmodel.w_old
+                            w_tmp = alpha * w_new + (1 - alpha) * MLmodel.w_old_dict[cla]
                             s_val = np.dot(MLmodel.Xval_b, w_tmp).ravel()
                             o_val = MLmodel.sigm(s_val)
-                            ce_val = np.mean(MLmodel.cross_entropy(o_val, MLmodel.yval, MLmodel.epsilon))
+                            yval = (MLmodel.yval == cla).astype(float)
+                            ce_val = np.mean(MLmodel.cross_entropy(o_val, yval, MLmodel.epsilon))
                             CE_val.append(ce_val)
 
                         min_pos = np.argmin(CE_val)
                         alpha_opt = alphas[min_pos]
                         MLmodel.display(MLmodel.name + ': optimal alpha = %s' % str(alpha_opt)[0:7])
-                        MLmodel.model.w = alpha_opt * w_new + (1 - alpha_opt) * MLmodel.w_old
+                        MLmodel.model.w_dict[cla] = alpha_opt * w_new + (1 - alpha_opt) * MLmodel.w_old_dict[cla]
                     else:
-                        alpha = 0.1
-                        #print(alpha)
-                        MLmodel.model.w = alpha * w_new + (1 - alpha) * MLmodel.w_old
-                except Exception as err:
-                    message = "ERROR: %s %s" % (str(err), str(type(err)))
-                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-                    MLmodel.display('ERROR AT while_updating_w')
-                    import code
-                    code.interact(local=locals())
+                        alpha = 0.2
+                        # --------------------------------------------------
+                        #alpha = 0.2
+                        MLmodel.model.w_dict[cla] = alpha * w_new + (1 - alpha) * MLmodel.w_old_dict[cla]
                 return
 
             def while_Exit(self, MLmodel):
@@ -253,15 +298,24 @@ class LC_pm_Master(Common_to_all_POMs):
             Number of input features
         """
         self.NI = NI
-        self.model.w = np.random.normal(0, 0.001, (self.NI + 1, 1))      # weights in plaintext, first value is bias
         self.w_old = np.random.normal(0, 1.0, (self.NI + 1, 1))
         self.XTDaX_accum = np.zeros((self.NI + 1, self.NI + 1))    # Cov. matrix in plaintext
         self.XTDast_accum = np.zeros((self.NI + 1, 1))              # Cov. matrix in plaintext
         self.preds_dict = {}                                           # dictionary storing the prediction errors
         self.AUCs_dict = {}                                           # dictionary storing the prediction errors
-        self.R_dict = {}
-        self.r_dict = {}
         self.XTDaX_dict = {}
+        self.XTDast_dict = {}
+        self.model.w_dict = {}
+        self.w_old_dict = {}
+        self.XTDaX_accum_dict = {}
+        self.XTDast_accum_dict = {}
+
+        for cla in self.classes:
+            self.model.w_dict.update({cla: np.random.normal(0, 0.001, (self.NI + 1, 1))})
+            self.w_old_dict.update({cla: np.random.normal(0, 1.0, (self.NI + 1, 1))})
+            self.XTDaX_accum_dict.update({cla: np.zeros((self.NI + 1, self.NI + 1))})
+            self.XTDast_accum_dict.update({cla: np.zeros((self.NI + 1, 1))})
+
         self.display(self.name + ': Resetting local data')
 
     def train_Master(self):
@@ -276,9 +330,7 @@ class LC_pm_Master(Common_to_all_POMs):
         ----------
         None
         """
-        self.display(self.name + ': Starting training')        
-        self.stop_training = False
-        self.kiter = 0
+        self.display(self.name + ': Starting training')       
 
         self.FSMmaster.go_update_tr_data(self)
         self.run_Master()
@@ -295,6 +347,14 @@ class LC_pm_Master(Common_to_all_POMs):
             if self.Xval_b is not None: 
                 self.Xval_b = self.add_bias(self.Xval_b).astype(float)
                 self.yval = self.yval.astype(float)
+        '''        
+        #self.aggregated_Npc_dict
+        if self.balance_classes:
+            self.display(self.name + ': Balancing classes')
+            print(self.aggregated_Npc_dict)
+        '''
+        self.stop_training = False
+        self.kiter = 0
 
         while not self.stop_training:
 
@@ -302,7 +362,7 @@ class LC_pm_Master(Common_to_all_POMs):
             self.FSMmaster.go_sending_w(self)
             self.run_Master()
 
-            # This updates self.w and self.w_old
+            # This updates self.w_dict and self.w_old_dict
             self.FSMmaster.go_updating_w(self)
             self.FSMmaster.go_waiting_order(self)
 
@@ -311,17 +371,25 @@ class LC_pm_Master(Common_to_all_POMs):
             if self.kiter == self.Nmaxiter:
                 self.stop_training = True
 
-            inc_w = np.linalg.norm(self.model.w - self.w_old) / np.linalg.norm(self.w_old)
+            inc_w = 0
+            for cla in self.classes:
+                inc_w += np.linalg.norm(self.model.w_dict[cla] - self.w_old_dict[cla]) / np.linalg.norm(self.model.w_dict[cla])
+            inc_w = inc_w / len(self.classes)
+
             # Stop if convergence is reached
             if inc_w < 0.01:
                 self.stop_training = True
 
-            #message = '==================> ' + str(self.regularization) + ', ' + str(self.Nmaxiter) + ', ' + str(self.kiter) + ', ' + str(inc_w)
+            #self.display('==================> ' + str(self.Nmaxiter) + ' ' + str(self.kiter) + ' ' + str(inc_w))
+            #print('==================> ' + str(self.Nmaxiter) + ' ' + str(self.kiter) + ' ' + str(inc_w))
+            #print(self.regularization)
             message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, self.kiter, inc_w)
             #self.display(message)
             print(message)
 
         self.display(self.name + ': Training is done')
+        self.model.niter = self.kiter
+        self.model.classes = self.classes
 
     def predict_Master(self, X_b):
         """
@@ -337,9 +405,8 @@ class LC_pm_Master(Common_to_all_POMs):
         prediction_values: ndarray
 
         """
-        #prediction_values = self.sigm(np.dot(X_b, self.w.ravel()))
-        prediction_values = self.model.predict(X_b)
-        return prediction_values
+        preds_dict, o = self.model.predict(self, X_b)
+        return preds_dict, o
 
     def Update_State_Master(self):
         """
@@ -355,7 +422,6 @@ class LC_pm_Master(Common_to_all_POMs):
         if self.chekAllStates('ACK_update_tr_data'):
             self.FSMmaster.go_waiting_order(self)
 
-
     def ProcessReceivedPacket_Master(self, packet, sender):
         """
         Process the received packet at Master and take some actions, possibly changing the state
@@ -369,14 +435,14 @@ class LC_pm_Master(Common_to_all_POMs):
                 id of the sender
         """
         sender = self.receive_from[packet['sender']]
-
+        
         if packet['action'][0:3] == 'ACK':
             self.display(self.name + ' received ACK from %s: %s' % (str(sender), packet['action']))
             self.state_dict[sender] = packet['action']
-            self.display('COMMS_MASTER_RECEIVED %s' % packet['action'], verbose=False)
 
         if packet['action'] == 'ACK_sending_XTDaX':
-            self.XTDaX_dict.update({sender: {'XTDaX': packet['data']['XTDaX'], 'XTDast': packet['data']['XTDast']}})
+            self.XTDaX_dict.update({sender: packet['data']['XTDaX_dict']})
+            self.XTDast_dict.update({sender: packet['data']['XTDast_dict']})
 
         if packet['action'] == 'ACK_update_tr_data':
             #print('ProcessReceivedPacket_Master ACK_update_tr_data')
@@ -388,15 +454,15 @@ class LC_pm_Master(Common_to_all_POMs):
 #===============================================================
 #                 Worker
 #===============================================================
-class LC_pm_Worker(Common_to_all_POMs):
+class MLC_pm_Worker(Common_to_all_POMs):
     '''
-    Class implementing Logistic Classifier (public model), run at Worker
+    Class implementing Multiclass Logistic Classifier (public model), run at Worker
 
     '''
 
-    def __init__(self, master_address, worker_address, model_type, comms, logger, verbose=False, Xtr_b=None, ytr=None):
+    def __init__(self, master_address, worker_address, model_type, comms, logger, verbose=True, Xtr_b=None, ytr=None):
         """
-        Create a :class:`LC_pm_Worker` instance.
+        Create a :class:`MLC_pm_Worker` instance.
 
         Parameters
         ----------
@@ -433,10 +499,14 @@ class LC_pm_Worker(Common_to_all_POMs):
         self.logger = logger                    # logger
         self.name = model_type + '_Worker'    # Name
         self.verbose = verbose                  # print on screen when true
-
+        #self.Xtr_b = self.add_bias(Xtr_b.astype(float))
+        #self.ytr = ytr  # We do not convert to float 
+        self.NPtr = len(ytr)
         self.w = None
         self.epsilon = 0.00000001  # to avoid log(0)
         self.create_FSM_worker()
+        self.message_id = 0    # used to number the messages
+        self.cryptonode_address = None
 
     def create_FSM_worker(self):
         """
@@ -454,16 +524,17 @@ class LC_pm_Worker(Common_to_all_POMs):
 
             name = 'FSM_worker'
 
-            # Enter/exit callbacks are defined here
             def while_waiting_order(self, MLmodel):
-                MLmodel.display(self.name + ' %s: WAITING for instructions...' % (str(MLmodel.worker_address)))
+                MLmodel.display(MLmodel.name + ' %s: WAITING for instructions...' % (str(MLmodel.worker_address)))
+                return
 
             def while_setting_tr_data(self, MLmodel, packet):
                 try:
                     NPtr, newNI = MLmodel.Xtr_b.shape
                     MLmodel.Xtr_b = MLmodel.add_bias(MLmodel.Xtr_b).astype(float)
-                    MLmodel.ytr = MLmodel.ytr.astype(float)
-                    MLmodel.st = -np.log(1.0 / (MLmodel.ytr * (1.0 - MLmodel.epsilon) + MLmodel.epsilon * (1.0 - MLmodel.ytr)) - 1.0)
+                    
+                    MLmodel.classes = packet['data']['classes']
+
                     action = 'ACK_update_tr_data'
                     data = {'newNI': newNI}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
@@ -478,51 +549,60 @@ class LC_pm_Worker(Common_to_all_POMs):
                     #MLmodel.display('ERROR AT while_computing_XTDaX')
 
             def while_computing_XTDaX(self, MLmodel, packet):
-                
                 try:
-                    #print(aaa)
-                    #X = np.random.normal(0, 1, (100000000, 10000000))
-                    NPtr = MLmodel.Xtr_b.shape[0]
-                    s = np.dot(MLmodel.Xtr_b, MLmodel.w).ravel()
-                    o = MLmodel.sigm(s)
-                    ce = MLmodel.cross_entropy(o, MLmodel.ytr, MLmodel.epsilon)
-                    e2 = (MLmodel.st.ravel() - s) ** 2 + 0.000001
-                    #a = np.sqrt(np.abs(np.divide(ce, e2)))
-                    a = np.abs(np.divide(ce, e2)).reshape((NPtr, 1))
+                    MLmodel.display(MLmodel.name + ' %s: computing XTDaX...' % (str(MLmodel.worker_address)))
+                    XTDaX_dict = {}
+                    XTDast_dict = {}
+                    for cla in MLmodel.classes:
+                        s = np.dot(MLmodel.Xtr_b, MLmodel.w_dict[cla]).ravel()
+                        o = MLmodel.sigm(s)
+                        ytr = MLmodel.ytr_dict[cla]
+                        st = MLmodel.st_dict[cla]
+                        ce = MLmodel.cross_entropy(o, ytr, MLmodel.epsilon)
+                        e2 = (st.ravel() - s) ** 2 + 0.000001
+                        a = np.sqrt(np.abs(np.divide(ce, e2)))
 
-                    try:
-                        wpos = packet['data']['npc_dict']['1']
-                        wneg = packet['data']['npc_dict']['0']
-                        wbalance_pos = (MLmodel.ytr == 1).astype(float) / wpos * (wpos + wneg)
-                        wbalance_neg = (MLmodel.ytr == 0).astype(float) / wneg * (wpos + wneg)
-                        wbalance = wbalance_pos + wbalance_neg
-                        a = np.multiply(a, wbalance)
-                    except:
-                        pass
+                        try:
+                            wpos = packet['data']['npc_dict'][cla]
+                            wneg = 0
+                            for ccla in MLmodel.classes:
+                                if ccla != cla:
+                                    wneg += packet['data']['npc_dict'][ccla]
 
-                    Xa = MLmodel.Xtr_b * a
-                    XaTXa = np.dot(Xa.T, MLmodel.Xtr_b)
-                    XaTst = np.dot(Xa.T, MLmodel.st)
+                            wbalance_pos = (MLmodel.ytr == cla).astype(float) / wpos * (wpos + wneg)
+                            wbalance_neg = (MLmodel.ytr != cla).astype(float) / wneg * (wpos + wneg)
+                            wbalance = wbalance_pos + wbalance_neg
+
+                            a = np.multiply(a, wbalance)
+                        except:
+                            pass
+                            
+                        #XTa = np.dot(MLmodel.Xtr_b.T, np.diag(a))  # this uses a lot of memory
+                        XTa = np.multiply(MLmodel.Xtr_b.T, a)                       
+                        XTDaX = np.dot(XTa, MLmodel.Xtr_b)
+                        XTDast = np.dot(XTa, st)
+                        XTDaX_dict.update({cla: XTDaX})
+                        XTDast_dict.update({cla: XTDast})
 
                     action = 'ACK_sending_XTDaX'
-                    data = {'XTDaX': XaTXa, 'XTDast': XaTst}
+                    data = {'XTDaX_dict': XTDaX_dict, 'XTDast_dict': XTDast_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
                     MLmodel.comms.send(packet, MLmodel.master_address)
+                    #MLmodel.comms.send(MLmodel.master_address, packet)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_XTDaX' % (str(MLmodel.worker_address)))
                 except Exception as err:
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-                    #raise
+                    raise
+                    print('STOP AT while_computing_XTDaX')
                     import code
-                    code.interact(local=locals())
-                    #MLmodel.display('ERROR AT while_computing_XTDaX')
-                    '''
-                    '''
+                    code.interact(local=locals())    
+                    pass
                 return
 
         states_worker = [
             State(name='waiting_order', on_enter=['while_waiting_order']),
-            State(name='setting_tr_data', on_enter=['while_setting_tr_data']),
+            State(name='setting_tr_data', on_enter=['while_setting_tr_data']),            
             State(name='computing_XTDaX', on_enter=['while_computing_XTDaX']),
             State(name='Exit', on_enter=['while_Exit'])
            ]
@@ -536,6 +616,7 @@ class LC_pm_Worker(Common_to_all_POMs):
 
             ['go_exit', 'waiting_order', 'Exit']
             ]
+
 
         self.FSMworker = FSM_worker()
         self.grafmachine_worker = GraphMachine(model=self.FSMworker,
@@ -563,21 +644,35 @@ class LC_pm_Worker(Common_to_all_POMs):
         """
         self.terminate = False
 
-        # Exit the process
         if packet['action'] == 'STOP':
             self.display(self.name + ' %s: terminated by Master' % (str(self.worker_address)))
             self.terminate = True
-
-        if packet['action'] == 'sending_w':
-            # We update the model weights
-            self.w = packet['data']['w']
-            self.FSMworker.go_computing_XTDaX(self, packet)
-            self.FSMworker.done_computing_XTDaX(self)
 
         if packet['action'] == 'update_tr_data':
             # We update the training data
             self.FSMworker.go_setting_tr_data(self, packet)
             self.FSMworker.done_setting_tr_data(self)
 
+        if packet['action'] == 'sending_w':
+            self.w_dict = packet['data']['w']
+
+            try:
+                #### processing classes if communicated by the master...
+                # This is only executed at the first iteration 
+                classes = packet['data']['classes']
+                self.classes = [str(cla) for cla in classes]
+                self.ytr_dict = {}
+                self.st_dict = {}
+                for cla in self.classes:
+                    y = (self.ytr == cla).astype(float)
+                    self.ytr_dict[cla] = np.copy(y)
+                    st = -np.log(1.0 / (y * (1.0 - self.epsilon) + self.epsilon * (1.0 - y)) - 1.0)
+                    st = st.reshape((-1, 1))
+                    self.st_dict.update({cla: st})
+            except:
+                pass
+
+            self.FSMworker.go_computing_XTDaX(self, packet)
+            self.FSMworker.done_computing_XTDaX(self)
 
         return self.terminate
