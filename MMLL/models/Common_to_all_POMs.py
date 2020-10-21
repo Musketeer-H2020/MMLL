@@ -230,7 +230,7 @@ class Common_to_all_POMs(Common_to_all_objects):
             try:
                 self.comms.pycloudmessenger_timeout_POMs456 > 0
             except:
-                self.comms.pycloudmessenger_timeout_POMs456 = 1
+                self.comms.pycloudmessenger_timeout_POMs456 = 0.1
 
             try:
                 packet = self.comms.receive(self.comms.pycloudmessenger_timeout_POMs456)
@@ -242,12 +242,13 @@ class Common_to_all_POMs(Common_to_all_objects):
                     self.Update_State_Master()
                     packet = None
             except Exception as err:
-                if 'Operation timeout reached' not in str(err): 
-                    self.display('Unhandled ERROR AT CheckNewPacket_master: %s' % str(err))
-                    import code
-                    print('ERROR AT CheckNewPacket_master --------------')
-                    import code
-                    code.interact(local=locals())
+                if 'Operation timeout reached' not in str(err):
+                    if 'Operation timed out' not in str(err):
+                        self.display('Unhandled ERROR AT CheckNewPacket_master: %s' % str(err))
+                        import code
+                        print('*** ERROR AT CheckNewPacket_master --------------')
+                        import code
+                        code.interact(local=locals())
                 pass
 
         return packet, active_sender
@@ -310,18 +311,19 @@ class Common_to_all_POMs(Common_to_all_objects):
             try:
                 self.comms.pycloudmessenger_timeout_POMs456 > 0
             except:
-                self.comms.pycloudmessenger_timeout_POMs456 = 1
+                self.comms.pycloudmessenger_timeout_POMs456 = 0.1
 
             try:
                 packet = self.comms.receive(self.comms.pycloudmessenger_timeout_POMs456)
                 sender = packet['sender']
                 self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.worker_address, packet['action'], sender))
             except Exception as err:
-                if 'Operation timeout reached' not in str(err): 
-                    print('ERROR AT CheckNewPacket_worker')
-                    self.display('Unhandled ERROR AT CheckNewPacket_worker: %s' % str(err))
-                    import code
-                    code.interact(local=locals())
+                if 'Operation timeout reached' not in str(err):
+                    if 'Operation timed out' not in str(err):
+                        print('ERROR AT CheckNewPacket_worker')
+                        self.display('Unhandled ERROR AT CheckNewPacket_worker: %s' % str(err))
+                        import code
+                        code.interact(local=locals())
                 pass
 
         return packet, sender
@@ -364,7 +366,7 @@ class Common_to_all_POMs(Common_to_all_objects):
             try:
                 self.comms.pycloudmessenger_timeout_POMs456 > 0
             except:
-                self.comms.pycloudmessenger_timeout_POMs456 = 1
+                self.comms.pycloudmessenger_timeout_POMs456 = 0.1
 
             try:
                 packet = self.comms.receive(self.comms.pycloudmessenger_timeout_POMs456)
@@ -373,11 +375,12 @@ class Common_to_all_POMs(Common_to_all_objects):
                 self.ProcessReceivedPacket_Crypto(packet, sender)
 
             except Exception as err:
-                if 'Operation timeout reached' not in str(err): 
-                    print('ERROR AT CheckNewPacket_crypto')
-                    self.display('Unhandled ERROR AT CheckNewPacket_crypto: %s' % str(err))
-                    import code
-                    code.interact(local=locals())
+                if 'Operation timeout reached' not in str(err):
+                    if 'Operation timed out' not in str(err):
+                        print('ERROR AT CheckNewPacket_crypto')
+                        self.display('Unhandled ERROR AT CheckNewPacket_crypto: %s' % str(err))
+                        import code
+                        code.interact(local=locals())
                 pass
 
         return packet, sender
