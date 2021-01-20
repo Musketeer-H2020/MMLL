@@ -15,38 +15,27 @@
 * `numpy v1.16.4` 
 * `Keras v2.2.4`
 * `tensorflow v1.14.0`
-* `phe==1.4.0`
 
 ## Content
 
 Currently the library is in beta phase, and it only supports the following Privacy Operation Modes (POMs) and models:
 
-### **POM1**:
+**POM1**:
 
 * Kmeans
 * Neural Networks
 
-### **POM2**:
-
-* Kmeans
-* Neural Networks
-
-### **POM3**:
-
-* Kmeans
-* Neural Networks
-
-### **POM4**: 
+### POM4: 
 
 * Linear Regression (**LR**) 
 * Kmeans (**Kmeans**): 
 
-### **POM5**: 
+### POM5: 
 
 * Linear Regression (**LR**)
 * Kmeans (**Kmeans**): 
 
-### **POM6**: 
+**POM6**: 
 
 * Ridge Regression (**RR**)
 * Kmeans (**Kmeans**): 
