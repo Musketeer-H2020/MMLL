@@ -5,11 +5,11 @@ Kmeans model
 '''
 
 __author__ = "Marcos Fernández Díaz"
-__date__ = "May 2020"
+__date__ = "December 2020"
 
 # Code to ensure reproducibility in the results
-from numpy.random import seed
-seed(1)
+#from numpy.random import seed
+#seed(1)
 
 import numpy as np
 
@@ -66,13 +66,13 @@ class Kmeans_Master(POM1_CommonML_Master):
         Parameters
         ----------
         comms: comms object instance
-            Object providing communication functionalities
+            object providing communications
 
-        logger: class `mylogging.Logger`
-            Logging object instance
+        logger: class:`logging.Logger`
+            logging object instance
 
         verbose: boolean
-            Indicates if messages are print or not on screen
+            indicates if messages are print or not on screen
 
         NC: int
             Number of clusters
@@ -83,28 +83,16 @@ class Kmeans_Master(POM1_CommonML_Master):
         tolerance: float
             Minimum tolerance for continuing training
         """        
-        self.comms = comms
-        self.logger = logger
-        self.verbose = verbose
         self.num_centroids = int(NC)
         self.Nmaxiter = int(Nmaxiter)
         self.tolerance = tolerance
 
-        self.name = 'POM1_Kmeans_Master'            # Name
-        self.platform = comms.name                  # String with the platform to use (either 'pycloudmessenger' or 'local_flask')
-        self.workers_addresses = comms.workers_ids  # Addresses of the workers
-        self.Nworkers = len(self.workers_addresses) # Nworkers
+        super().__init__(comms, logger, verbose)    # Initialize common class for POM1
+        self.name = 'POM1_CommonML_Master'          # Name
         self.mean_dist = np.inf                     # Mean distance 
-        self.num_features = None                    # Number of features
         self.iter = 0                               # Number of iterations
         self.is_trained = False                     # Flag to know if the model is trained
-        self.preprocessor_ready = False             # Flag to know if the preprocessor object is ready                 
         self.model = model()                        # Kmeans model
-        self.prep_model = None                      # Preprocessor object
-        self.reset()
-        self.state_dict = {}                        # Dictionary storing the execution state
-        for worker in self.workers_addresses:
-            self.state_dict.update({worker: ''})
             
             
 
@@ -131,10 +119,11 @@ class Kmeans_Master(POM1_CommonML_Master):
         """
         Takes actions according to the state
         """
+        to = 'MLmodel'
+
         # Asking the workers to send initialize centroids
         if self.state_dict['CN'] == 'SEND_CENTROIDS':
             action = 'SEND_CENTROIDS'
-            to = 'MLmodel'
             data = {'num_centroids': self.num_centroids}
             packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
@@ -165,10 +154,9 @@ class Kmeans_Master(POM1_CommonML_Master):
             else: # Modify only non-empty centroids
                 for i in range(self.num_centroids):
                     if np.sum(list_counts[:,i])>0:
-                        self.model.centroids[i,:] = np.zeros(self.num_features)
+                        self.model.centroids[i,:] = np.zeros_like(list_centroids[0, i])
                         for kdon in range(self.Nworkers):
                             self.model.centroids[i,:] = self.model.centroids[i,:]+list_centroids[kdon,i,:]*list_counts[kdon,i]/np.sum(list_counts[:,i])
-
             self.reset()
             self.iter += 1
             self.state_dict['CN'] = 'CHECK_TERMINATION'
@@ -190,7 +178,6 @@ class Kmeans_Master(POM1_CommonML_Master):
         # Asking the workers to compute local centroids
         if self.state_dict['CN'] == 'COMPUTE_LOCAL_CENTROIDS':
             action = 'COMPUTE_LOCAL_CENTROIDS'
-            to = 'MLmodel'
             data = {'centroids': self.model.centroids}
             packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
@@ -200,7 +187,6 @@ class Kmeans_Master(POM1_CommonML_Master):
         # Send final model to all workers
         if self.state_dict['CN'] == 'SEND_FINAL_MODEL':
             action = 'SEND_FINAL_MODEL'
-            to = 'MLmodel'
             data = {'centroids': self.model.centroids}
             packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
@@ -210,7 +196,7 @@ class Kmeans_Master(POM1_CommonML_Master):
             
 
 
-    def ProcessReceivedPacket_Master(self, packet, sender):
+    def ProcessReceivedPacket_Master_(self, packet, sender):
         """
         Process the received packet at Master and take some actions, possibly changing the state
 
@@ -222,11 +208,6 @@ class Kmeans_Master(POM1_CommonML_Master):
         sender: String
             Id of the sender
         """
-        if packet['action'][0:3] == 'ACK':
-            self.state_dict[sender] = packet['action']
-            if self.checkAllStates('ACK_FINAL_MODEL', self.state_dict): # Included here to avoid calling CheckNewPacket_Master after sending the final model (this call could imply significant delay if timeout is set to a high value)
-                self.state_dict['CN'] = 'END'
-
         if packet['action'] == 'EXCEEDED_NUM_CENTROIDS':
             self.display(self.name + ': Number of centroids exceeding training data size worker %s. Terminating training' %str(sender))
             self.state_dict['CN'] = 'END'
@@ -301,18 +282,13 @@ class Kmeans_Worker(POM1_CommonML_Worker):
         Xtr_b: ndarray
             2-D numpy array containing the input training patterns
         """
-        self.master_address = master_address
-        self.comms = comms
-        self.logger = logger
-        self.verbose = verbose
         self.Xtr_b = Xtr_b
 
-        self.name = 'POM1_KMeans_Worker'        # Name
-        self.worker_address = comms.id          # Id identifying the current worker
-        self.platform = comms.name              # String with the platform to use (either 'pycloudmessenger' or 'local_flask')
-        self.num_features = Xtr_b.shape[1]      # Number of features
-        self.model = model()                    # Model  
-        self.is_trained = False                 # Flag to know if the model has been trained
+        super().__init__(master_address, comms, logger, verbose)       # Initialize common class for POM1
+        self.name = 'POM1_KMeans_Worker'                               # Name
+        self.num_features = Xtr_b.shape[1]                             # Number of features
+        self.model = model()                                           # Model  
+        self.is_trained = False                                        # Flag to know if the model has been trained
         
         
 
@@ -324,15 +300,7 @@ class Kmeans_Worker(POM1_CommonML_Worker):
         ----------
         packet: Dictionary
             Packet received
-        """   
-        self.terminate = False
-
-        # Exit the process
-        if packet['action'] == 'STOP':
-            self.display(self.name + ' %s: terminated by Master' %self.worker_address)
-            self.terminate = True
-            
-        
+        """        
         if packet['action'] == 'SEND_CENTROIDS':
             self.display(self.name + ' %s: Initializing centroids' %self.worker_address)
             self.num_centroids = packet['data']['num_centroids']
@@ -353,8 +321,7 @@ class Kmeans_Worker(POM1_CommonML_Worker):
                 packet = {'action': action, 'data': data}
                 
             self.comms.send(packet, self.master_address)
-            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
-            
+            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))            
             
         if packet['action'] == 'COMPUTE_LOCAL_CENTROIDS':
             self.display(self.name + ' %s: Updating centroids' %self.worker_address)

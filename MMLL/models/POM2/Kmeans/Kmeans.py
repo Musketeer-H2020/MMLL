@@ -5,12 +5,12 @@ Kmeans model
 '''
 
 __author__ = "Marcos Fernández Díaz"
-__date__ = "June 2020"
+__date__ = "December 2020"
 
 
 # Code to ensure reproducibility in the results
-from numpy.random import seed
-seed(1)
+#from numpy.random import seed
+#seed(1)
 
 import numpy as np
 
@@ -82,27 +82,16 @@ class Kmeans_Master(POM2_CommonML_Master):
 
         tolerance: float
             Minimum tolerance for continuing training
-        """
-        self.comms = comms
-        self.logger = logger
-        self.verbose = verbose    
+        """ 
         self.num_centroids = int(NC)
         self.Nmaxiter = int(Nmaxiter)
         self.tolerance = tolerance
 
+        super().__init__(comms, logger, verbose)    # Initialize common class for POM2
         self.name = 'POM2_Kmeans_Master'            # Name
-        self.platform = comms.name                  # String with the platform to use (either 'pycloudmessenger' or 'local_flask')
-        self.workers_addresses = comms.workers_ids  # Addresses of the workers
-        self.Nworkers = len(self.workers_addresses) # Nworkers
-        super().__init__(self.workers_addresses, comms, logger, verbose)
-        self.num_features = None                    # Number of features
-        self.iter = 0                               # Number of iterations
         self.mean_dist = np.inf                     # Mean distance 
-        self.reset()
-        self.is_trained = False
-        self.state_dict = {}                        # Dictionary storing the execution state
-        for worker in self.workers_addresses:
-            self.state_dict.update({worker: ''})
+        self.iter = 0                               # Number of iterations
+        self.is_trained = False                     # Flag to know if the model is trained
         
         
         
@@ -111,8 +100,11 @@ class Kmeans_Master(POM2_CommonML_Master):
         Function to control the state of the execution
         '''
         if self.state_dict['CN'] == 'START_TRAIN':
-            self.state_dict['CN'] = 'SEND_PUBLIC_KEY'
-            
+            if self.public_key is None:
+                self.state_dict['CN'] = 'SEND_PUBLIC_KEY'
+            else:
+                self.state_dict['CN'] = 'SEND_CENTROIDS'
+
         if self.checkAllStates('SEND_PUBLIC_KEY', self.state_dict):
             for worker in self.workers_addresses:
                 self.state_dict[worker] = ''
@@ -134,10 +126,12 @@ class Kmeans_Master(POM2_CommonML_Master):
         """
         Takes actions according to the state
         """
+        to = 'MLmodel'
+
         # Ask workers to send public key
         if self.state_dict['CN'] == 'SEND_PUBLIC_KEY':
             action = 'SEND_PUBLIC_KEY'
-            packet = {'action': action}
+            packet = {'to': to,'action': action}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
             self.state_dict['CN'] = 'WAIT_PUBLIC_KEYS'
@@ -156,7 +150,7 @@ class Kmeans_Master(POM2_CommonML_Master):
         if self.state_dict['CN'] == 'SEND_CENTROIDS':
             action = 'SEND_CENTROIDS'
             data = {'num_centroids': self.num_centroids}
-            packet = {'action': action, 'data': data}
+            packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
             self.state_dict['CN'] = 'wait_init_centroids'
@@ -182,7 +176,7 @@ class Kmeans_Master(POM2_CommonML_Master):
             else: # Modify only non-empty centroids
                 for i in range(self.num_centroids):
                     if np.sum(list_counts[:,i])>0:
-                        self.centroids[i,:] = np.zeros(self.num_features)
+                        self.centroids[i,:] = np.zeros_like(list_centroids[0, i])
                         for kdon in range(self.Nworkers):
                             self.centroids[i,:] = self.centroids[i,:]+list_centroids[kdon,i,:]*list_counts[kdon,i]/np.sum(list_counts[:,i])
 
@@ -208,7 +202,7 @@ class Kmeans_Master(POM2_CommonML_Master):
         if self.state_dict['CN'] == 'COMPUTE_LOCAL_CENTROIDS':
             action = 'COMPUTE_LOCAL_CENTROIDS'
             data = {'centroids': self.centroids}
-            packet = {'action': action, 'data': data}
+            packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
             self.state_dict['CN'] = 'wait_update_centroids'
@@ -217,7 +211,7 @@ class Kmeans_Master(POM2_CommonML_Master):
         if self.state_dict['CN'] == 'SEND_FINAL_MODEL':
             action = 'SEND_FINAL_MODEL'
             data = {'centroids': self.centroids}
-            packet = {'action': action, 'data': data}
+            packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent %s to all workers' %action)
             self.is_trained = True
@@ -225,7 +219,7 @@ class Kmeans_Master(POM2_CommonML_Master):
             
 
 
-    def ProcessReceivedPacket_Master(self, packet, sender):
+    def ProcessReceivedPacket_Master_(self, packet, sender):
         """
         Process the received packet at Master and take some actions, possibly changing the state
 
@@ -237,11 +231,6 @@ class Kmeans_Master(POM2_CommonML_Master):
         sender: String
             Id of the sender
         """
-        if packet['action'][0:3] == 'ACK':
-            self.state_dict[sender] = packet['action']
-            if self.checkAllStates('ACK_FINAL_MODEL', self.state_dict): # Included here to avoid calling CheckNewPacket_Master after sending the final model (this call could imply significant delay if timeout is set to a high value)
-                self.state_dict['CN'] = 'END'
-
         if packet['action'] == 'EXCEEDED_NUM_CENTROIDS':
             self.display(self.name + ': Number of centroids exceeding training data size worker %s. Terminating training' %str(sender))
             self.state_dict['CN'] = 'END'        
@@ -321,19 +310,13 @@ class Kmeans_Worker(POM2_CommonML_Worker):
         Xtr_b: ndarray
             2-D numpy array containing the input training patterns
         """
-        self.master_address = master_address
-        self.comms = comms
-        self.logger = logger
-        self.verbose = verbose
         self.Xtr_b = Xtr_b
 
-        super().__init__(logger, verbose)
-        self.name = 'POM2_KMeans_Worker'        # Name
-        self.worker_address = comms.id          # Id identifying the current worker
-        self.platform = comms.name              # String with the platform to use (either 'pycloudmessenger' or 'local_flask')
-        self.num_features = Xtr_b.shape[1]      # Number of features
-        self.model = model()                    # Model  
-        self.is_trained = False                 # Flag to know if the model has been trained
+        super().__init__(master_address, comms, logger, verbose)       # Initialize common class for POM2
+        self.name = 'POM2_KMeans_Worker'                               # Name
+        self.num_features = Xtr_b.shape[1]                             # Number of features
+        self.model = model()                                           # Model  
+        self.is_trained = False                                        # Flag to know if the model has been trained
         
          
             
@@ -346,15 +329,7 @@ class Kmeans_Worker(POM2_CommonML_Worker):
         packet: Dictionary
             Packet received
         """        
-        self.terminate = False
-
-        # Exit the process
-        if packet['action'] == 'STOP':
-            self.display(self.name + ' %s: terminated by Master' %self.worker_address)
-            self.terminate = True
-        
         if packet['action'] == 'SEND_PUBLIC_KEY':
-            self.public_key, self.private_key = self.generate_keypair()
             action = 'SEND_PUBLIC_KEY'
             data = {'public_key': self.public_key}
             packet = {'action': action, 'data': data}
@@ -390,7 +365,7 @@ class Kmeans_Worker(POM2_CommonML_Worker):
             encrypted_centroids = packet['data']['centroids']
             # Unencrypt received centroids
             centroids = np.asarray(self.decrypt_list(encrypted_centroids))
-            # Calculate the vector with euclidean distances between all observations and the defined centroids        
+            # Calculate the vector with eucliddecrypt_liean distances between all observations and the defined centroids        
             dists = np.sqrt(np.abs(-2 * np.dot(centroids, self.Xtr_b.T) + np.sum(self.Xtr_b**2, axis=1) + np.sum(centroids**2, axis=1)[:, np.newaxis])) # Matrix of euclidean distances between all observations in training set and centroids. Shape of vector (num_centroids x num_observations_X)
             min_dists = np.min(dists, axis=0) # Array of distances of every observation to the closest centroid
             mean_dists = np.mean(min_dists) # Average distance of all observations to all centroids (scalar)

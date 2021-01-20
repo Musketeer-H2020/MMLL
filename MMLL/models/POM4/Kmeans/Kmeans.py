@@ -77,6 +77,7 @@ class Kmeans_Master(Common_to_all_POMs):
         #self.NC = NC                                # No. Centroids
         #self.Nmaxiter = Nmaxiter
         self.master_address = master_address
+
         self.workers_addresses = workers_addresses
         self.cryptonode_address = None
         self.Nworkers = len(workers_addresses)                    # Nworkers
@@ -110,6 +111,8 @@ class Kmeans_Master(Common_to_all_POMs):
         #self.decrypter = self.cr.get_decrypter()  # to be kept as secret  self.encrypter.decrypt()
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
+        self.added_bias = False
+        self.train_data_is_ready = False
 
 
     def create_FSM_master(self):
@@ -359,6 +362,8 @@ class Kmeans_Master(Common_to_all_POMs):
         self.C = np.random.normal(0, 0.5, (self.NC, self.NI))
         self.C_old = np.random.normal(0, 10, (self.NC, self.NI))
 
+        self.selected_workers = self.workers_addresses
+
         # Data at:
         #self.X_encr_dict
 
@@ -371,7 +376,8 @@ class Kmeans_Master(Common_to_all_POMs):
             for waddr in self.workers_addresses:
                 X = self.X_encr_dict[waddr]
                 # X contains bias, removing it
-                X = X[:,1:]
+                #X = X[:,1:]
+
                 XTC = np.dot(X, self.C.T)
                 c2_2XTC = self.C2.T - 2 * XTC
                 self.c2_2XTC_dict.update({waddr: c2_2XTC})
@@ -392,7 +398,7 @@ class Kmeans_Master(Common_to_all_POMs):
                         which = self.argmin_dict[waddr] == kc
                         aux = self.X_encr_dict[waddr][which, :]
                         # aux contains bias, removing it
-                        aux = aux[:,1:]
+                        #aux = aux[:,1:]
                         Nselected = aux.shape[0]
                         newC_encr[kc, :] += np.sum(aux, axis=0)
                         TotalP[kc] += Nselected
@@ -437,7 +443,8 @@ class Kmeans_Master(Common_to_all_POMs):
                 self.stop_training = True
 
             message = 'Maxiter = %d, iter = %d, inc = %f' % (self.Nmaxiter, kiter, inc_normc)
-            self.display(message, True)
+            print(message)
+            #self.display(message, True)
             kiter += 1
 
         self.model.c = self.C

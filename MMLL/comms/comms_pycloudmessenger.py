@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Comms interface to pycloudmessenger
+Comms interface to pycloudmessenger with roundrobin functionality
 @author:  Angel Navia Vázquez
 '''
 __author__ = "Angel Navia Vázquez, UC3M."
@@ -48,11 +48,10 @@ class Comms_master:
         self.workers_ids = list(workers.keys())
 
     def send(self, message, destiny):
-
         try:
             with self.commsffl:
                 # self.send_to maps between worker_id and pseudo_id 
-                self.commsffl.send(message, destiny)
+                self.commsffl.send(message, destiny, topology='STAR') 
         except Exception as err:
             print('\n')
             print('*' * 80)
@@ -64,8 +63,13 @@ class Comms_master:
     def broadcast(self, message, receivers_list=None):
         # receivers_list are not used here, pycloudmessenger already knows all the recipients
         try:
-            with self.commsffl:
-                self.commsffl.send(message)
+            if receivers_list is None:
+                with self.commsffl:
+                    self.commsffl.send(message, topology='STAR')
+            else:
+                for destiny in receivers_list:
+                    with self.commsffl:
+                        self.commsffl.send(message, destiny, topology='STAR')
         except Exception as err:
             print('\n')
             print('*' * 80)
@@ -74,17 +78,43 @@ class Comms_master:
             print('\n')
             raise
 
-    def receive(self, timeout=1):
+    def roundrobin(self, message, receivers_list=None):
+        # receivers_list are not used here, pycloudmessenger already knows all the recipients
         try:
             with self.commsffl:
+                self.commsffl.send(message, topology='RING')
+        except Exception as err:
+            print('\n')
+            print('*' * 80)
+            print('Pycloudmessenger ERROR at roundrobin: %s' % err)
+            print('*' * 80)
+            print('\n')
+            raise
+
+
+    def receive(self, timeout=1):
+        try:
+            message = None
+            packet = None
+            with self.commsffl:
                 packet = self.commsffl.receive(timeout)
-            message = packet.content
-            pseudo_id = packet.notification['participant']
-            #sender_ = str(self.workers_addresses_cloud.index(pseudo_id))
-            #sender = message['sender']
-            #message.update({'pseudo_id': pseudo_id})
-            #message.update({'sender_': sender})
-            message.update({'sender': pseudo_id})
+
+            if packet is not None:
+                if packet.content is not None:
+                    message = packet.content
+                    pseudo_id = packet.notification['participant']
+                    #sender_ = str(self.workers_addresses_cloud.index(pseudo_id))
+                    #sender = message['sender']
+                    #message.update({'pseudo_id': pseudo_id})
+                    #message.update({'sender_': sender})
+                    '''
+                    print('----------- message update')
+                    print(packet)
+                    print('---------------------------')
+                    print(message)
+                    print('------------ message update')
+                    '''
+                    message.update({'sender': pseudo_id})
         except Exception as err:
             if 'pycloudmessenger.ffl.fflapi.TimedOutException' not in str(type(err)): # we skip the normal timeouts
                 print('\n')
@@ -92,6 +122,9 @@ class Comms_master:
                 print('Pycloudmessenger ERROR at receive: %s' % err)
                 print('*' * 80)
                 print('\n')
+                print('STOP AT comms_pycloudmessenger')
+                import code
+                code.interact(local=locals())
             else:
                 message = None
             raise
@@ -130,21 +163,37 @@ class Comms_worker:
             print('\n')
             raise
 
-    def receive(self, timeout=1):
+    def receive(self, timeout=0.1):
+        
+        #print('Listening...')
+
+        message = None
         try:
             with self.commsffl:
                 packet = self.commsffl.receive(timeout)
-            message = packet.content
+            
+            if packet is not None:
+                '''
+                print('=======================  RECEIVED PACKET ========================')
+                print(packet)
+                print('=================================================================')
+                '''
+                if packet.content is not None:
+                    message = packet.content
         except Exception as err:
+            #print(err)
             if 'pycloudmessenger.ffl.fflapi.TimedOutException' not in str(type(err)): # we skip the normal timeouts
+                #if 'pika.exceptions.ChannelClosed' not in str(type(err)):
                 print('\n')
                 print('*' * 80)
                 print('Pycloudmessenger ERROR at receive: %s' % err)
                 print('*' * 80)
                 print('\n')
+                print('STOP AT comms_pycloudmessenger')
+                import code
+                code.interact(local=locals())
             else:
                 message = None
-            raise
         return message
 
 

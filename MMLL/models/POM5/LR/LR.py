@@ -77,6 +77,9 @@ class LR_Master(Common_to_all_POMs):
         self.Nworkers = len(workers_addresses)                    # Nworkers
         self.workers_addresses = list(range(self.Nworkers))
         self.workers_addresses = [str(x) for x in self.workers_addresses]
+
+        self.all_workers_addresses = [str(x) for x in self.workers_addresses]
+
         self.send_to = {}
         self.receive_from = {}
         for k in range(self.Nworkers):
@@ -114,6 +117,8 @@ class LR_Master(Common_to_all_POMs):
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
         self.newNI_dict = {}
+        self.train_data_is_ready = False
+        self.encrypter_sent = False
 
     def create_FSM_master(self):
         """
@@ -160,7 +165,7 @@ class LR_Master(Common_to_all_POMs):
                     action = 'update_tr_data'
                     data = {}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                    MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
@@ -178,8 +183,13 @@ class LR_Master(Common_to_all_POMs):
                     #data.update({'wq_encr': wdill})
 
                     packet = {'action': 'send_w_encr', 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, MLmodel.broadcast_addresses)
-                    MLmodel.display(MLmodel.name + ' send_w_encr to workers')
+                    if MLmodel.selected_workers is None: 
+                        MLmodel.comms.broadcast(packet)
+                        MLmodel.display(MLmodel.name + ': broadcasted w to all Workers')
+                    else:
+                        recipients = [MLmodel.send_to[w] for w in MLmodel.selected_workers]
+                        MLmodel.comms.broadcast(packet, recipients)
+                        MLmodel.display(MLmodel.name + ': broadcasted w to Workers: %s' % str(MLmodel.selected_workers))
                 except:
                     print('ERROR AT while_send_w_encr')
                     import code
@@ -241,6 +251,7 @@ class LR_Master(Common_to_all_POMs):
         # We take the first value, but all are available for consistency checking
         #self.NI = list(self.NI_dict.values())[0]
 
+        '''
         self.FSMmaster.go_update_tr_data(self)
         self.run_Master()
         # Checking the new NI values
@@ -254,11 +265,49 @@ class LR_Master(Common_to_all_POMs):
             self.reset(newNIs[0])
             ## Adding bias to validation data, if any
             ## Pending
-            '''
-            if self.Xval is not None: 
-                self.Xval_b = self.add_bias(self.Xval).astype(float)
-                self.yval = self.yval.astype(float)
-            '''
+            #if self.Xval is not None: 
+            #    self.Xval_b = self.add_bias(self.Xval).astype(float)
+            #    self.yval = self.yval.astype(float)
+        '''
+
+        if not self.train_data_is_ready: 
+            self.FSMmaster.go_update_tr_data(self)
+            self.run_Master()
+            # Checking the new NI values
+            print(list(self.newNI_dict.values()))
+            newNIs = list(set(list(self.newNI_dict.values())))
+            if len(newNIs) > 1:
+                message = 'ERROR: the training data has different number of features...'
+                self.display(message)
+                self.display(list(self.newNI_dict.values()))
+                raise Exception(message)
+            else:
+                self.reset(newNIs[0])
+                ## Adding bias to validation data, if any
+                if self.Xval_b is not None: 
+                    self.Xval_b = self.add_bias(self.Xval_b).astype(float)
+                    self.yval = self.yval.astype(float)
+            self.train_data_is_ready = True
+
+        # self.broadcast_addresses  direcciones pycloud
+        # self.workers_addresses  0->N, active
+        # self.all_workers_addresses  0->N all that joined the task
+        # self.selected_workers
+
+        self.receivers_list = None
+        if self.selected_workers is not None:
+            self.workers_addresses = self.selected_workers
+        else:
+            self.workers_addresses = self.all_workers_addresses[:]
+
+        self.Nworkers  = len(self.workers_addresses) 
+        self.state_dict = {}                        # dictionary storing the execution state
+        for k in range(0, self.Nworkers):
+            self.state_dict.update({self.workers_addresses[k]: ''})
+        self.receivers_list=[]
+        for worker in self.workers_addresses:
+            self.receivers_list.append(self.send_to[worker])
+
 
         self.grads_dict = {}
         
@@ -311,8 +360,8 @@ class LR_Master(Common_to_all_POMs):
                 self.stop_training = True
 
             message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
-            self.display(message, verbose=True)
-            #print(message)
+            #self.display(message, verbose=True)
+            print(message)
             
             kiter += 1
             #print(self.w)
@@ -437,9 +486,9 @@ class LR_Worker(Common_to_all_POMs):
         self.logger = logger                    # logger
         self.name = model_type + '_Worker'    # Name
         self.verbose = verbose                  # print on screen when true
-        self.Xtr_b = self.add_bias(Xtr_b)
-        self.ytr = ytr
-        self.NPtr = len(ytr)
+        #self.Xtr_b = self.add_bias(Xtr_b)
+        #self.ytr = ytr
+        #self.NPtr = len(ytr)
         self.create_FSM_worker()
         self.message_id = 0    # used to number the messages
 

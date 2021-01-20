@@ -1,0 +1,72 @@
+# -*- coding: utf-8 -*-
+'''
+Preprocessing object for image reshaping 
+@author:  Angel Navia Vázquez
+'''
+__author__ = "Angel Navia Vázquez, UC3M."
+
+import random, string
+import time
+import numpy as np
+from torchvision import models  # pip install torchvision
+from torchvision import transforms
+from tqdm import tqdm   # pip install tqdm
+from PIL import Image as PIL_Image
+import torch
+
+class image_reshape_model():
+
+    def __init__(self, data_description, M, N):
+        self.data_description = data_description
+        self.name = 'image_reshape'
+        NI = self.data_description['NI']
+        self.M = M
+        self.N = N
+
+        self.transf = transforms.Resize((self.M, self.N))
+
+        '''
+        print('STOP AT ')
+        import code
+        code.interact(local=locals())
+
+        self.vision_model = models.alexnet(pretrained=True)
+        # Grayscale
+        self.transf = transforms.Compose([            #[1]
+            transforms.Resize(256),                   #[2]
+            transforms.CenterCrop(224),               #[3]
+            transforms.ToTensor(),                    #[4]
+            transforms.Normalize(                     #[5]
+                mean=[0.485],           #[6]
+                std=[0.229]             #[7]
+            )])
+        '''
+
+    def transform(self, X):
+        """
+        Transform image
+
+        Parameters
+        ----------
+        X: ndarray
+            Matrix with the input values
+
+        Returns
+        -------
+        transformed values: ndarray
+
+        """
+        N = X.shape[0]
+        NC = X.shape[1]
+        X_t = np.zeros((N, NC, self.M, self.N))
+        for k in tqdm(range(N)):
+            for kc in range(NC):
+                pixels = X[k, kc, :]
+                image = PIL_Image.fromarray(pixels)
+                img_t = self.transf(image)
+                pixels_t = np.array(img_t)
+                X_t[k, kc, :, :] = pixels_t
+
+        #print(X.shape)
+        #print(X_t.shape)
+        return X_t

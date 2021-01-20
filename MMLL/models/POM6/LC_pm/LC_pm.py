@@ -89,6 +89,8 @@ class LC_pm_Master(Common_to_all_POMs):
         self.Nworkers = len(workers_addresses)                    # Nworkers
         self.workers_addresses = list(range(self.Nworkers))
         self.workers_addresses = [str(x) for x in self.workers_addresses]
+        self.all_workers_addresses = [str(x) for x in self.workers_addresses]
+        
         self.send_to = {}
         self.receive_from = {}
         for k in range(self.Nworkers):
@@ -99,10 +101,11 @@ class LC_pm_Master(Common_to_all_POMs):
         self.comms = comms                          # comms lib
         self.state_dict = None                      # State of the main script
         self.verbose = verbose                      # print on screen when true
-        self.state_dict = {}                        # dictionary storing the execution state
         self.NI = None
         self.model = model()
         self.epsilon = 0.00000001  # to avoid log(0)
+        
+        self.state_dict = {}                        # dictionary storing the execution state
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
         # we extract the model_parameters as extra kwargs, to be all jointly processed
@@ -118,6 +121,7 @@ class LC_pm_Master(Common_to_all_POMs):
         self.message_counter = 0    # used to number the messages
         self.cryptonode_address = None
         self.newNI_dict = {}
+        self.train_data_is_ready = False
 
     def create_FSM_master(self):
         """
@@ -157,12 +161,14 @@ class LC_pm_Master(Common_to_all_POMs):
                 return
 
             def while_update_tr_data(self, MLmodel):
+                # Always all, only once
                 try:
                     action = 'update_tr_data'
                     data = {}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                    MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
+
                 except Exception as err:
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
@@ -179,9 +185,15 @@ class LC_pm_Master(Common_to_all_POMs):
                     #if MLmodel.balance_classes:
                     #    data.update({'npc_dict': MLmodel.aggregated_Npc_dict})
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
-                    MLmodel.display(MLmodel.name + ': broadcasted w to all Workers')
+                    
+                    if MLmodel.selected_workers is None: 
+                        MLmodel.comms.broadcast(packet)
+                        MLmodel.display(MLmodel.name + ': broadcasted w to all Workers')
+                    else:
+                        recipients = [MLmodel.send_to[w] for w in MLmodel.selected_workers]
+                        MLmodel.comms.broadcast(packet, recipients)
+                        MLmodel.display(MLmodel.name + ': broadcasted w to Workers: %s' % str(MLmodel.selected_workers))
+                
                 except Exception as err:
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
@@ -198,7 +210,7 @@ class LC_pm_Master(Common_to_all_POMs):
                         MLmodel.XTDaX_accum += MLmodel.XTDaX_dict[waddr]['XTDaX']
                         MLmodel.XTDast_accum += MLmodel.XTDaX_dict[waddr]['XTDast'].reshape((-1, 1))
 
-                    # Trying to use the validation set to estimate the optima update
+                    # Trying to use the validation set to estimate the optimal update
                     MLmodel.w_old = np.copy(MLmodel.model.w)
                     w_new = np.dot(np.linalg.inv(MLmodel.XTDaX_accum + MLmodel.regularization * np.eye(MLmodel.NI + 1)), MLmodel.XTDast_accum)
 
@@ -280,21 +292,42 @@ class LC_pm_Master(Common_to_all_POMs):
         self.stop_training = False
         self.kiter = 0
 
-        self.FSMmaster.go_update_tr_data(self)
-        self.run_Master()
-        # Checking the new NI values
-        newNIs = list(set(list(self.newNI_dict.values())))
-        if len(newNIs) > 1:
-            message = 'ERROR: the training data has different number of features...'
-            self.display(message)
-            self.display(list(self.newNI_dict.values()))
-            raise Exception(message)
+        if not self.train_data_is_ready: 
+            self.FSMmaster.go_update_tr_data(self)
+            self.run_Master()
+            # Checking the new NI values
+            print(list(self.newNI_dict.values()))
+            newNIs = list(set(list(self.newNI_dict.values())))
+            if len(newNIs) > 1:
+                message = 'ERROR: the training data has different number of features...'
+                self.display(message)
+                self.display(list(self.newNI_dict.values()))
+                raise Exception(message)
+            else:
+                self.reset(newNIs[0])
+                ## Adding bias to validation data, if any
+                if self.Xval_b is not None: 
+                    self.Xval_b = self.add_bias(self.Xval_b).astype(float)
+                    self.yval = self.yval.astype(float)
+            self.train_data_is_ready = True
+
+        # self.broadcast_addresses  direcciones pycloud
+        # self.workers_addresses  0->N, active
+        # self.all_workers_addresses  0->N all that joined the task
+        # self.selected_workers
+        self.receivers_list = None
+        if self.selected_workers is not None:
+            self.workers_addresses = self.selected_workers
         else:
-            self.reset(newNIs[0])
-            ## Adding bias to validation data, if any
-            if self.Xval_b is not None: 
-                self.Xval_b = self.add_bias(self.Xval_b).astype(float)
-                self.yval = self.yval.astype(float)
+            self.workers_addresses = self.all_workers_addresses[:]
+
+        self.Nworkers  = len(self.workers_addresses) 
+        self.state_dict = {}                        # dictionary storing the execution state
+        for k in range(0, self.Nworkers):
+            self.state_dict.update({self.workers_addresses[k]: ''})
+        self.receivers_list=[]
+        for worker in self.workers_addresses:
+            self.receivers_list.append(self.send_to[worker])
 
         while not self.stop_training:
 
@@ -379,6 +412,11 @@ class LC_pm_Master(Common_to_all_POMs):
             self.XTDaX_dict.update({sender: {'XTDaX': packet['data']['XTDaX'], 'XTDast': packet['data']['XTDast']}})
 
         if packet['action'] == 'ACK_update_tr_data':
+            
+            if 'sender' == '1':
+                print('STOP AT ACK_update_tr_data')
+                import code
+                code.interact(local=locals())
             #print('ProcessReceivedPacket_Master ACK_update_tr_data')
             self.newNI_dict.update({sender: packet['data']['newNI']})
 
@@ -437,6 +475,7 @@ class LC_pm_Worker(Common_to_all_POMs):
         self.w = None
         self.epsilon = 0.00000001  # to avoid log(0)
         self.create_FSM_worker()
+        self.added_bias=False
 
     def create_FSM_worker(self):
         """
@@ -460,12 +499,16 @@ class LC_pm_Worker(Common_to_all_POMs):
 
             def while_setting_tr_data(self, MLmodel, packet):
                 try:
-                    NPtr, newNI = MLmodel.Xtr_b.shape
-                    MLmodel.Xtr_b = MLmodel.add_bias(MLmodel.Xtr_b).astype(float)
+                    NPtr = MLmodel.Xtr_b.shape[0]
+                    if not MLmodel.added_bias:  # Only ad bias once
+                        MLmodel.newNI = MLmodel.Xtr_b.shape[1]
+                        MLmodel.Xtr_b = MLmodel.add_bias(MLmodel.Xtr_b).astype(float)
+                        MLmodel.added_bias = True
+                    
                     MLmodel.ytr = MLmodel.ytr.astype(float)
                     MLmodel.st = -np.log(1.0 / (MLmodel.ytr * (1.0 - MLmodel.epsilon) + MLmodel.epsilon * (1.0 - MLmodel.ytr)) - 1.0)
                     action = 'ACK_update_tr_data'
-                    data = {'newNI': newNI}
+                    data = {'newNI': MLmodel.newNI}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
@@ -485,7 +528,7 @@ class LC_pm_Worker(Common_to_all_POMs):
                     NPtr = MLmodel.Xtr_b.shape[0]
                     s = np.dot(MLmodel.Xtr_b, MLmodel.w).ravel()
                     o = MLmodel.sigm(s)
-                    ce = MLmodel.cross_entropy(o, MLmodel.ytr, MLmodel.epsilon)
+                    ce = MLmodel.cross_entropy(o, MLmodel.ytr.ravel(), MLmodel.epsilon)
                     e2 = (MLmodel.st.ravel() - s) ** 2 + 0.000001
                     #a = np.sqrt(np.abs(np.divide(ce, e2)))
                     a = np.abs(np.divide(ce, e2)).reshape((NPtr, 1))

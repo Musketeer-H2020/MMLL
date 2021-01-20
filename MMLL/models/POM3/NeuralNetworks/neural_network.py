@@ -4,7 +4,7 @@ Neural Network model
 '''
 
 __author__ = "Marcos Fernández Díaz"
-__date__ = "June 2020"
+__date__ = "November 2020"
 
 
 # Code to ensure reproducibility in the results
@@ -32,7 +32,7 @@ class model():
     This class contains the neural network model
     """
 
-    def __init__(self, model_architecture, loss='categorical_crossentropy', metric='accuracy'):
+    def __init__(self, model_architecture, optimizer='Adam', loss='categorical_crossentropy', metric='accuracy'):
         """
         Initializes keras model
 
@@ -40,13 +40,15 @@ class model():
         ----------
         model_architecture: JSON
             JSON containing the neural network architecture as defined by Keras (in model.to_json())
+        optimizer: String
+            Type of optimizer to use (must be one from https://keras.io/api/optimizers/)
         loss: String
-            Type of loss to use (should be one from https://keras.io/api/losses/)
+            Type of loss to use (must be one from https://keras.io/api/losses/)
         metric: String
-            Type of metric to use (should be one from https://keras.io/api/metrics/)
+            Type of metric to use (must be one from https://keras.io/api/metrics/)
         """
-        self.keras_model = model_from_json(model_architecture) # Store the model architecture
-        self.keras_model.compile(loss=loss, optimizer='Adam', metrics=[metric])  # Optimizer is not used (but must be one from https://keras.io/api/optimizers/)
+        self.keras_model = model_from_json(model_architecture)                        # Store the model architecture
+        self.keras_model.compile(optimizer=optimizer, loss=loss, metrics=[metric])    # Compile the model
 
 
 
@@ -65,8 +67,6 @@ class model():
             1-D array containing the predictions
         """
         preds = self.keras_model.predict(X_b) # One-hot encoding
-        preds = np.argmax(preds, axis=-1)     # Labels
-
         return preds
 
 
@@ -76,8 +76,7 @@ class NN_Master(POM3_CommonML_Master):
     """
     This class implements Neural nets, run at Master node. It inherits from POM3_CommonML_Master.
     """
-
-    def __init__(self, comms, logger, verbose=False, model_architecture=None, Nmaxiter=None, learning_rate=None):
+    def __init__(self, comms, logger, verbose=False, model_architecture=None, Nmaxiter=10, learning_rate=0.0001, model_averaging='True', optimizer='adam', loss='categorical_crossentropy', metric='accuracy', batch_size=32, num_epochs=1):
         """
         Create a :class:`NN_Master` instance.
 
@@ -100,34 +99,48 @@ class NN_Master(POM3_CommonML_Master):
 
         learning_rate: float
             Learning rate for training
+
+        model_averaging: Boolean
+            Wether to use model averaging (True) or gradient averaging (False)
+
+        optimizer: String
+            Type of optimizer to use (should be one from https://keras.io/api/optimizers/)
+
+        loss: String
+            Type of loss to use (should be one from https://keras.io/api/losses/)
+
+        metric: String
+            Type of metric to use (should be one from https://keras.io/api/metrics/)
+
+        batch_size: Int
+            Size of the batch to use for training in each worker locally
+
+        num_epochs: Int
+            Number of epochs to train in each worker locally before sending the result to the master
         """
-        self.comms = comms
-        self.logger = logger
-        self.verbose = verbose
         self.model_architecture = model_architecture
-        self.Nmaxiter = Nmaxiter                      
-        self.learning_rate = learning_rate            
+        self.Nmaxiter = Nmaxiter
+        self.learning_rate = learning_rate
+        self.model_averaging = model_averaging.lower()               # Convert string to lowercase
+        self.optimizer = optimizer
+        self.loss = loss
+        self.metric = metric
+        self.batch_size = batch_size
+        self.num_epochs = num_epochs           
 
-        self.name = 'POM3_NN_Master'                          # Name of the class
-        self.platform = comms.name                            # Type of comms to use: either 'pycloudmessenger' or 'localflask'
-        self.workers_addresses = comms.workers_ids            # Addresses of the workers
-        self.Nworkers = len(self.workers_addresses)           # Number of workers
-        super().__init__(self.workers_addresses, comms, logger, verbose)
-        model = model_from_json(model_architecture)           # Keras model initialization
+        super().__init__(comms, logger, verbose)                     # Initialize common class for POM3
+        self.name = 'POM3_NN_Master'                                 # Name of the class
+        #self.Init_Environment()                                      # Send initialization messages common to all algorithms
+        model = model_from_json(model_architecture)                  # Keras model initialization
         self.display(self.name + ': Model architecture:')
-        model.summary(print_fn=self.display)                  # Print the model architecture
-        self.model_weights = model.get_weights()              # Weights of the initial model
-        self.iter = 0                                         # Number of iterations already executed
-        self.is_trained = False                               # Flag to know if the model has been trained
-        self.public_keys = {}                                 # Dictionary to store public keys from all workers
-        self.encrypted_Xi = {}                                # Dictionary to store encrypted Xi from all workers
-        self.state_dict = {}                                  # Dictionary storing the execution state
-        for worker in self.workers_addresses:
-            self.state_dict.update({worker: ''})
+        model.summary(print_fn=self.display)                         # Print the model architecture
+        self.model_weights = model.get_weights()                     # Weights of the initial model
+        self.iter = 0                                                # Number of iterations already executed
+        self.is_trained = False                                      # Flag to know if the model has been trained
 
 
 
-    def train_Master(self):
+    def train_Master_(self):
         """
         This is the main training loop, it runs the following actions until the stop condition is met:
             - Update the execution state
@@ -138,10 +151,15 @@ class NN_Master(POM3_CommonML_Master):
         ----------
         None
         """        
-        self.state_dict.update({'CN': 'START_TRAIN'})
-        self.display(self.name + ': Starting training')
+        model = model_from_json(self.model_architecture)
+        self.model_weights = model.get_weights()
+        self.iter = 0
+        self.is_trained = False
 
-        while self.state_dict['CN'] != 'INITIALIZATION_READY':
+        self.Init_Environment() 
+        self.state_dict['CN'] = 'START_TRAIN'
+
+        while self.state_dict['CN'] != 'TRAINING_READY':
             self.Update_State_Master()
             self.TakeAction_Master()
             self.CheckNewPacket_Master()
@@ -149,11 +167,15 @@ class NN_Master(POM3_CommonML_Master):
         # Now communications should work sequentially (not sending a message to next worker until the actual one replied)
         self.display(self.name + ': Initialization ready, starting sequential communications')
         encrypted_weights = self.encrypt_list(self.model_weights, self.public_keys[self.workers_addresses[0]]) # Encrypt weights using worker 0 public key
+
         while self.iter != self.Nmaxiter:
-            for index_worker, worker in enumerate(self.workers_addresses): 
-                action = 'UPDATE_MODEL'
+            for index_worker, worker in enumerate(self.workers_addresses):
+                if self.model_averaging == 'true':
+                    action = 'LOCAL_TRAIN'
+                else:
+                    action = 'UPDATE_MODEL'
                 data = {'model_weights': encrypted_weights}
-                packet = {'action': action, 'data': data}
+                packet = {'to':'MLModel', 'action': action, 'data': data}
                 
                 # Send message to specific worker and wait until receiving reply
                 packet = self.send_worker_and_wait_receive(packet, worker)                    
@@ -170,7 +192,7 @@ class NN_Master(POM3_CommonML_Master):
         action = 'SEND_FINAL_MODEL'
         for index_worker, worker in enumerate(self.workers_addresses):
             data = {'model_weights': encrypted_weights}
-            packet = {'action': action, 'data': data}
+            packet = {'to':'MLModel', 'action': action, 'data': data}
 
             # Send message to specific worker and wait until receiving reply
             packet = self.send_worker_and_wait_receive(packet, worker)
@@ -191,37 +213,39 @@ class NN_Master(POM3_CommonML_Master):
         None
         '''
         if self.state_dict['CN'] == 'START_TRAIN':
-            self.state_dict['CN'] = 'SET_PRECISION'
-
-        if self.checkAllStates('ACK_SET_PRECISION', self.state_dict):
-            for worker in self.workers_addresses:
-                self.state_dict[worker] = ''
-            self.state_dict['CN'] = 'SEND_PUBLIC_KEY'
-            
-        if self.checkAllStates('SEND_PUBLIC_KEY', self.state_dict):
-            for worker in self.workers_addresses:
-                self.state_dict[worker] = ''
             self.state_dict['CN'] = 'INIT_MODEL'
-            
+
         if self.checkAllStates('ACK_INIT_MODEL', self.state_dict):
             for worker in self.workers_addresses:
                 self.state_dict[worker] = ''
-            self.state_dict['CN'] = 'SET_NUM_WORKERS'
-        
-        if self.checkAllStates('ACK_SET_NUM_WORKERS', self.state_dict):
-            for worker in self.workers_addresses:
-                self.state_dict[worker] = ''
-            self.state_dict['CN'] = 'SET_LEARNING_RATE'
-        
-        if self.checkAllStates('ACK_SET_LEARNING_RATE', self.state_dict):
-            for worker in self.workers_addresses:
-                self.state_dict[worker] = ''
             self.state_dict['CN'] = 'SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE'
+            
+        if self.model_averaging == 'true':
+            if self.checkAllStates('SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE', self.state_dict):
+                for worker in self.workers_addresses:
+                    self.state_dict[worker] = ''
+                self.state_dict['CN'] = 'COMPILE_INIT'
+
+            if self.checkAllStates('ACK_COMPILE_INIT', self.state_dict):
+                for worker in self.workers_addresses:
+                    self.state_dict[worker] = ''
+                self.state_dict['CN'] = 'FIT_INIT'
+
+            if self.checkAllStates('ACK_FIT_INIT', self.state_dict):
+                for worker in self.workers_addresses:
+                    self.state_dict[worker] = ''
+                self.state_dict['CN'] = 'TRAINING_READY'
+
+        else:
+            if self.checkAllStates('SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE', self.state_dict):
+                for worker in self.workers_addresses:
+                    self.state_dict[worker] = ''
+                self.state_dict['CN'] = 'SET_LEARNING_RATE'
         
-        if self.checkAllStates('SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE', self.state_dict):
-            for worker in self.workers_addresses:
-                self.state_dict[worker] = ''
-            self.state_dict['CN'] = 'INITIALIZATION_READY'
+            if self.checkAllStates('ACK_SET_LEARNING_RATE', self.state_dict):
+                for worker in self.workers_addresses:
+                    self.state_dict[worker] = ''
+                self.state_dict['CN'] = 'TRAINING_READY'
     
     
     
@@ -233,37 +257,13 @@ class NN_Master(POM3_CommonML_Master):
         ----------
         None
         """
-        # Send the precision to encrypt numbers to all workers
-        if self.state_dict['CN'] == 'SET_PRECISION':
-            action = 'SET_PRECISION'
-            data = {'precision': self.precision}
-            packet = {'action': action, 'data': data}
-            self.comms.broadcast(packet, self.workers_addresses)
-            self.display(self.name + ': Sent ' + action + ' to all workers')
-            self.state_dict['CN'] = 'WAIT'
-
-        # Ask workers to send public key
-        if self.state_dict['CN'] == 'SEND_PUBLIC_KEY':
-            action = 'SEND_PUBLIC_KEY'
-            packet = {'action': action}
-            self.comms.broadcast(packet, self.workers_addresses)
-            self.display(self.name + ': Sent ' + action + ' to all workers')
-            self.state_dict['CN'] = 'WAIT_PUBLIC_KEYS'
+        to = 'MLmodel'
 
         # Send model to all workers
         if self.state_dict['CN'] == 'INIT_MODEL':
             action = 'INIT_MODEL'
             data = {'model_json': self.model_architecture}
-            packet = {'action': action, 'data': data}
-            self.comms.broadcast(packet, self.workers_addresses)
-            self.display(self.name + ': Sent ' + action + ' to all workers')
-            self.state_dict['CN'] = 'WAIT'
-
-        # Send the number of centroids to all workers
-        if self.state_dict['CN'] == 'SET_NUM_WORKERS':
-            action = 'SET_NUM_WORKERS'
-            data = {'num_workers': self.Nworkers}
-            packet = {'action': action, 'data': data}
+            packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
             self.state_dict['CN'] = 'WAIT'
@@ -272,7 +272,7 @@ class NN_Master(POM3_CommonML_Master):
         if self.state_dict['CN'] == 'SET_LEARNING_RATE':
             action = 'SET_LEARNING_RATE'
             data = {'learning_rate': self.learning_rate}
-            packet = {'action': action, 'data': data}
+            packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
             self.state_dict['CN'] = 'WAIT'
@@ -280,37 +280,28 @@ class NN_Master(POM3_CommonML_Master):
         # Checking public keys received from workers
         if self.state_dict['CN'] == 'SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE':
             action = 'SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE'
-            packet = {'action': action}
+            packet = {'to': to, 'action': action}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
             self.state_dict['CN'] = 'WAIT_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE'
-            
 
+        # Asking the workers to compile the model
+        if self.state_dict['CN'] == 'COMPILE_INIT':
+            action = 'COMPILE_INIT'
+            data = {'optimizer': self.optimizer, 'loss': self.loss, 'metric': self.metric}
+            packet = {'to': to, 'action': action, 'data': data}
+            self.comms.broadcast(packet, self.workers_addresses)
+            self.display(self.name + ': Sent ' + action + ' to all workers')
+            self.state_dict['CN'] = 'WAIT'
 
-    def ProcessReceivedPacket_Master(self, packet, sender):
-        """
-        Process the received packet at Master and take some actions, possibly changing the state
-
-        Parameters
-        ----------
-        packet: Dictionary
-            Packet received
-
-        sender: Strings
-            Id of the sender
-        """
-        if packet['action'][0:3] == 'ACK':
-            self.state_dict[sender] = packet['action']
-
-        if self.state_dict['CN'] == 'WAIT_PUBLIC_KEYS':
-            if packet['action'] == 'SEND_PUBLIC_KEY':
-                self.public_keys[sender] = packet['data']['public_key']    # Store all public keys
-                self.state_dict[sender] = packet['action']                 # Update state of sender
-
-        if self.state_dict['CN'] == 'WAIT_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE':
-            if packet['action'] == 'SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE':
-                self.encrypted_Xi[sender] = packet['data']['encrypted_Xi'] # Store all encrypted Xi
-                self.state_dict[sender] = packet['action']                 # Update state of sender
+        # Asking the workers to initialize fit parameters
+        if self.state_dict['CN'] == 'FIT_INIT':
+            action = 'FIT_INIT'
+            data = {'batch_size': self.batch_size, 'num_epochs': self.num_epochs}
+            packet = {'to': to, 'action': action, 'data': data}
+            self.comms.broadcast(packet, self.workers_addresses)
+            self.display(self.name + ': Sent ' + action + ' to all workers')
+            self.state_dict['CN'] = 'WAIT'
   
     
     
@@ -349,22 +340,17 @@ class NN_Worker(POM3_CommonML_Worker):
         ytr: np.ndarray
             2-D numpy array containing the labels for training
         """
-        self.master_address = master_address
-        self.comms = comms
-        self.logger = logger
-        self.verbose = verbose
         self.Xtr_b = Xtr_b
         self.ytr = ytr
 
-        super().__init__(logger, verbose)
-        self.name = 'POM3_NN_Worker'                           # Name of the class
-        self.worker_address = comms.id                         # Id identifying the current worker
-        self.platform = comms.name                             # Type of comms to use: either 'pycloudmessenger' or 'localflask'
-        self.num_classes = ytr.shape[1]                        # Number of classes
-        self.sess = tf.compat.v1.InteractiveSession()          # Create TF session
-        init = tf.compat.v1.global_variables_initializer()     # Initialize variables
-        self.sess.run(init)                                    # Start TF session
-        self.is_trained = False                                # Flag to know if the model has been trained
+        super().__init__(master_address, comms, logger, verbose)      # Initialize common class for POM3
+        self.name = 'POM3_NN_Worker'                                  # Name of the class
+        self.num_classes = ytr.shape[1]                               # Number of classes
+        self.num_features = Xtr_b.shape[1]                            # Number of features
+        self.sess = tf.compat.v1.InteractiveSession()                 # Create TF session
+        init = tf.compat.v1.global_variables_initializer()            # Initialize variables
+        self.sess.run(init)                                           # Start TF session
+        self.is_trained = False                                       # Flag to know if the model has been trained
         
         
 
@@ -376,30 +362,7 @@ class NN_Worker(POM3_CommonML_Worker):
         ----------
         packet: Dictionary
             Packet received
-        """
-        self.terminate = False
-
-        # Exit the process
-        if packet['action'] == 'STOP':
-            self.display(self.name + ' %s: terminated by Master' %self.worker_address)
-            self.terminate = True
-
-        if packet['action'] == 'SET_PRECISION':
-            self.display(self.name + ' %s: Storing precision' %self.worker_address)
-            self.precision = packet['data']['precision'] # Store the precision for encryption
-            action = 'ACK_SET_PRECISION'
-            packet = {'action': action}
-            self.comms.send(packet, self.master_address)
-            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
-
-        if packet['action'] == 'SEND_PUBLIC_KEY':
-            self.public_key, self.private_key = self.generate_keypair()
-            action = 'SEND_PUBLIC_KEY'
-            data = {'public_key': self.public_key}
-            packet = {'action': action, 'data': data}
-            self.comms.send(packet, self.master_address)
-            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
-        
+        """        
         if packet['action'] == 'INIT_MODEL':
             self.display(self.name + ' %s: Initializing local model' %self.worker_address)
             model_json = packet['data']['model_json']
@@ -437,20 +400,47 @@ class NN_Worker(POM3_CommonML_Worker):
             packet = {'action': action, 'data': data}
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
-            
-        if packet['action'] == 'SET_NUM_WORKERS':
-            self.display(self.name + ' %s: Storing number of workers' %self.worker_address)
-            self.num_workers = packet['data']['num_workers'] # Store the number of centroids
-            action = 'ACK_SET_NUM_WORKERS'
-            packet = {'action': action}
-            self.comms.send(packet, self.master_address)
-            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
         
         if packet['action'] == 'SET_LEARNING_RATE':
             self.display(self.name + ' %s: Storing learning rate' %self.worker_address)
             self.learning_rate = packet['data']['learning_rate'] # Store the learning rate
             action = 'ACK_SET_LEARNING_RATE'
             packet = {'action': action}
+            self.comms.send(packet, self.master_address)
+            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
+
+        if packet['action'] == 'COMPILE_INIT':
+            self.display(self.name + ' %s: Initializing compiler' %self.worker_address)
+            optimizer = packet['data']['optimizer']
+            loss = packet['data']['loss']
+            metric = packet['data']['metric']
+            # Compile the model
+            self.model.keras_model.compile(loss=loss, optimizer=optimizer, metrics=[metric])
+            action = 'ACK_COMPILE_INIT'
+            packet = {'action': action}
+            self.comms.send(packet, self.master_address)
+            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
+
+        if packet['action'] == 'FIT_INIT':
+            self.display(self.name + ' %s: Storing batch size and number of epochs' %self.worker_address)
+            self.batch_size = packet['data']['batch_size']
+            self.num_epochs =  packet['data']['num_epochs']
+            action = 'ACK_FIT_INIT'
+            packet = {'action': action}
+            self.comms.send(packet, self.master_address)
+            self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
+
+        if packet['action'] == 'LOCAL_TRAIN':
+            self.display(self.name + ' %s: Updating model locally' %self.worker_address)
+            # Unencrypt received weights
+            model_weights = self.decrypt_list(packet['data']['model_weights'])
+            self.model.keras_model.set_weights(model_weights)
+            self.model.keras_model.fit(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size, verbose=1)
+            # Encrypt weights
+            encrypted_weights = self.encrypt_list_rvalues(self.model.keras_model.get_weights())
+            action = 'LOCAL_UPDATE'
+            data = {'model_weights': encrypted_weights}
+            packet = {'action': action, 'data': data}            
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
             

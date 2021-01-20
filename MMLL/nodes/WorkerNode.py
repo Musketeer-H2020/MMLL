@@ -92,7 +92,7 @@ class WorkerNode(Common_to_all_objects):
             self.display('WorkerNode: ***** Training data NOT available. *****')
             pass
 
-    def set_training_data(self, dataset_name, Xtr=None, ytr=None):
+    def set_training_data(self, dataset_name, Xtr=None, ytr=None, input_data_description=None, target_data_description=None):
         """
         Set data to be used for training
 
@@ -105,11 +105,37 @@ class WorkerNode(Common_to_all_objects):
         ytr: target vector: list of lists 
         """
         self.dataset_name = dataset_name
+        self.input_data_description = input_data_description
+        self.target_data_description = target_data_description
         try:
-            self.Xtr_b = np.array(Xtr)            
-            self.ytr = np.array(ytr)
-            self.NPtr, self.NI = self.Xtr_b.shape
+            # We store the original data as it is received...
+            self.Xtr_orig = Xtr
+            self.ytr_orig = ytr
             
+            sparse = False
+            try:
+                Xtype = Xtr.getformat()
+                if Xtype == 'csr' or Xtype == 'csc':
+                    sparse = True 
+            except:
+                pass
+
+
+            # If the matrix is sparse, we skip this processing
+            if not sparse:
+                # We store here the data ready to be used for training
+                self.Xtr_b = np.array(Xtr)            
+                self.ytr = np.array(ytr)
+            else:
+                self.Xtr_b = Xtr            
+                self.ytr = ytr
+
+            #self.Xtr_b = np.array(Xtr)            
+            #self.ytr = np.array(ytr)
+
+            self.NPtr  = self.Xtr_b.shape[0]
+            self.NI = self.Xtr_b.shape[1]
+
             if self.Xtr_b.shape[0] != self.ytr.shape[0] and ytr is not None:
                 self.display('ERROR: different number of patterns in Xtr and ytr (%s vs %s)' % (str(self.Xval_b.shape[0]), str(self.yval.shape[0])))
                 self.Xtr_b = None
@@ -122,9 +148,69 @@ class WorkerNode(Common_to_all_objects):
 
         except:
             self.display('WorkerNode: ***** Training data NOT available. *****')
+
+            pass
+    '''
+    def set_training_data_V(self, dataset_name, Xtr=None, ytr=None, input_data_description=None, target_data_description=None):
+        """
+        Set data to be used for training
+
+        *****  List of lists... ****
+
+        Parameters
+        ----------
+        dataset_name: (string): dataset name
+        Xtr: Input data: list of lists
+        ytr: target vector: list of lists 
+        """
+        self.dataset_name = dataset_name
+        self.input_data_description = input_data_description
+        self.target_data_description = target_data_description
+        try:
+            # We store the original data as it is received...
+            self.Xtr_orig = Xtr
+            self.ytr_orig = ytr
+            
+            sparse = False
+            try:
+                Xtype = Xtr.getformat()
+                if Xtype == 'csr' or Xtype == 'csc':
+                    sparse = True 
+            except:
+                pass
+
+
+            # If the matrix is sparse, we skip this processing
+            if not sparse:
+                # We store here the data ready to be used for training
+                self.Xtr_b = np.array(Xtr)            
+                self.ytr = np.array(ytr)
+            else:
+                self.Xtr_b = Xtr            
+                self.ytr = ytr
+
+            #self.Xtr_b = np.array(Xtr)            
+            #self.ytr = np.array(ytr)
+
+            self.NPtr  = self.Xtr_b.shape[0]
+            self.NI = self.Xtr_b.shape[1]
+
+            if self.Xtr_b.shape[0] != self.ytr.shape[0] and ytr is not None:
+                self.display('ERROR: different number of patterns in Xtr and ytr (%s vs %s)' % (str(self.Xval_b.shape[0]), str(self.yval.shape[0])))
+                self.Xtr_b = None
+                self.ytr = None
+                self.NPtr = 0
+                self.display('WorkerNode: ***** Train data NOT VALID. *****')
+                return
+            else:
+                self.display('WorkerNode got train data: %d patterns, %d features' % (self.NPtr, self.NI))
+
+        except:
+            self.display('WorkerNode: ***** Training data NOT available. *****')
+
             pass
 
-
+    '''
 
     def set_validation_data(self, dataset_name, Xval=None, yval=None):
         """
@@ -200,6 +286,7 @@ class WorkerNode(Common_to_all_objects):
             Type of model to be used
 
         """
+
         self.model_type = model_type
 
         if self.pom == 1:
@@ -210,6 +297,10 @@ class WorkerNode(Common_to_all_objects):
             elif model_type == 'NN':
                 from MMLL.models.POM1.NeuralNetworks.neural_network import NN_Worker
                 self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
+
+            elif model_type == 'SVM':
+                from MMLL.models.POM1.SVM.SVM import SVM_Worker
+                self.workerMLmodel = SVM_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
 
             self.display('WorkerNode %s: Created %s model under POM %d' % (str(self.worker_address), model_type, self.pom))
 
@@ -222,6 +313,10 @@ class WorkerNode(Common_to_all_objects):
                 from MMLL.models.POM2.NeuralNetworks.neural_network import NN_Worker
                 self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
 
+            elif model_type == 'SVM':
+                from MMLL.models.POM2.SVM.SVM import SVM_Worker
+                self.workerMLmodel = SVM_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
+
             self.display('WorkerNode %s: Created %s model under POM %d' % (str(self.worker_address), model_type, self.pom))
 
         if self.pom == 3:
@@ -233,6 +328,10 @@ class WorkerNode(Common_to_all_objects):
                 from MMLL.models.POM3.NeuralNetworks.neural_network import NN_Worker
                 self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
 
+            elif model_type == 'SVM':
+                from MMLL.models.POM3.SVM.SVM import SVM_Worker
+                self.workerMLmodel = SVM_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
+
             self.display('WorkerNode %s: Created %s model under POM %d' % (str(self.worker_address), model_type, self.pom))
 
 
@@ -240,6 +339,11 @@ class WorkerNode(Common_to_all_objects):
             # This object includes general ML tasks, common to all algorithms in POM4
             from MMLL.models.POM4.CommonML.POM4_CommonML import POM4_CommonML_Worker
             self.workerCommonML = POM4_CommonML_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr, cryptonode_address=self.cryptonode_address)
+            try:
+                self.workerCommonML.input_data_description = self.input_data_description
+                self.workerCommonML.target_data_description = self.target_data_description
+            except:
+                pass
             self.display('WorkerNode %s: Created CommonML model' % str(self.worker_address))
 
             if model_type == 'LR':
@@ -260,6 +364,11 @@ class WorkerNode(Common_to_all_objects):
         if self.pom == 5:
             from MMLL.models.POM5.CommonML.POM5_CommonML import POM5_CommonML_Worker
             self.workerCommonML = POM5_CommonML_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
+            try:
+                self.workerCommonML.input_data_description = self.input_data_description
+                self.workerCommonML.target_data_description = self.target_data_description
+            except:
+                pass
             self.display('WorkerNode %s: Created CommonML model' % str(self.worker_address))
 
             if model_type == 'LR':
@@ -278,6 +387,12 @@ class WorkerNode(Common_to_all_objects):
             # This object includes general ML tasks, common to all algorithms in POM6
             from MMLL.models.POM6.CommonML.POM6_CommonML import POM6_CommonML_Worker
             self.workerCommonML = POM6_CommonML_Worker(self.master_address, self.worker_address, model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr)
+            try:
+                self.workerCommonML.input_data_description = self.input_data_description
+                self.workerCommonML.target_data_description = self.target_data_description
+            except:
+                pass
+
             self.display('WorkerNode %s: Created CommonML model' % str(self.worker_address))
 
             if model_type == 'XC':
@@ -306,8 +421,6 @@ class WorkerNode(Common_to_all_objects):
 
             self.display('WorkerNode_' + self.model_type + ' %s: Created %s model' % (str(self.worker_address), model_type))
 
-
-
     def run(self):
         """
         Run the main execution loop at the worker
@@ -315,6 +428,14 @@ class WorkerNode(Common_to_all_objects):
         self.display('WorkerNode_' + self.model_type + ' %s: running %s ...' % (str(self.worker_address), self.model_type))
 
         if self.pom == 1 or self.pom==2 or self.pom==3:
+            # Only for vertical partition of data 
+            try:
+                self.workerMLmodel.input_data_description = self.input_data_description
+                self.workerMLmodel.target_data_description = self.target_data_description
+                self.display('WorkerNode: Received input/target_data_description')
+            except:
+                pass
+
             self.workerMLmodel.run_worker()
 
         if self.pom in [4, 5, 6]:
@@ -324,9 +445,20 @@ class WorkerNode(Common_to_all_objects):
             self.workerMLmodel.Xtr_b = self.workerCommonML.Xtr_b
             self.workerMLmodel.ytr = self.workerCommonML.ytr
 
+            # Only for vertical partition of data 
+            try:
+                self.workerMLmodel.input_data_description = self.workerCommonML.input_data_description
+                self.workerMLmodel.target_data_description = self.workerCommonML.target_data_description
+                #self.display('WorkerNode: received input/target_data_description')
+            except:
+                pass
+
+            #self.workerMLmodel.Xtr_orig = self.workerCommonML.Xtr_orig
+            #self.workerMLmodel.ytr_orig = self.workerCommonML.ytr_orig
+
             while not (self.workerMLmodel.terminate or self.workerCommonML.terminate):  # The worker can be terminated from the MLmodel or CommonML
                 # We receive one packet, it could be for Common or MLmodel
-                #print('I'm alive!)
+                #print("I'm alive!")
                 packet, sender = self.workerCommonML.CheckNewPacket_worker()
                 if packet is not None:
                     try:
@@ -349,12 +481,13 @@ class WorkerNode(Common_to_all_objects):
                             #print('worker run MLmodel', packet['action'])
                             self.workerMLmodel.ProcessReceivedPacket_Worker(packet, sender)
                     except Exception as err:
-                        #print('ERROR at Workernode', err, str(err), str(type(err)))
+                        print('ERROR at Workernode', err, str(err), str(type(err)))
                         raise
                         pass
 
 
-    def get_normalizer(self):
+
+    def get_preprocessors(self):
         """
         Returns the normalizer parameters and transform the training data in the workers
 
@@ -363,11 +496,14 @@ class WorkerNode(Common_to_all_objects):
         prep_model: Object
             Preprocessing object
         """
-        if not self.workerMLmodel.preprocessor_ready:
-            self.display('WorkerNode: Error - Preprocessor not available at the worker')
-            return None
-        else:
-            return self.workerMLmodel.prep_model
+        preprocessors = None
+        if self.pom in [1, 2, 3]:
+            if len(self.workerMLmodel.preprocessors) > 0:
+                preprocessors = self.workerMLmodel.preprocessors
+            else:
+                self.display('WorkerNode: No preprocessors available at the worker')
+
+        return preprocessors
 
 
     def get_model(self):
@@ -378,11 +514,17 @@ class WorkerNode(Common_to_all_objects):
         ----------
         None
         """
-        if not self.workerMLmodel.is_trained:
-            self.display('WorkerNode: Error -  Model not trained yet')
+
+        try:
+            model_is_trained = self.workerMLmodel.is_trained
+            if not model_is_trained:
+                self.display('WorkerNode: Error - Model not trained yet')
+                return None
+            else:
+                return self.workerMLmodel.model
+        except:
+            self.display('In this POM, the model is not available at WorkerNode.')
             return None
-        else:
-            return self.workerMLmodel.model
 
 
 

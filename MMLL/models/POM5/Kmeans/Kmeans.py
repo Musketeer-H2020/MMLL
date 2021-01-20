@@ -81,6 +81,9 @@ class Kmeans_Master(Common_to_all_POMs):
         self.Nworkers = len(workers_addresses)                    # Nworkers
         self.workers_addresses = list(range(self.Nworkers))
         self.workers_addresses = [str(x) for x in self.workers_addresses]
+
+        self.all_workers_addresses = [str(x) for x in self.workers_addresses]
+
         self.send_to = {}
         self.receive_from = {}
         for k in range(self.Nworkers):
@@ -116,6 +119,8 @@ class Kmeans_Master(Common_to_all_POMs):
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
         self.newNI_dict = {}
+        self.train_data_is_ready = False
+        self.encrypter_sent = False
 
     def create_FSM_master(self):
         """
@@ -193,8 +198,14 @@ class Kmeans_Master(Common_to_all_POMs):
                     data.update({'C_encr': MLmodel.C_encr})
                     data.update({'C2_encr': MLmodel.C2_encr})
                     packet = {'action': 'send_C_encr', 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, MLmodel.workers_addresses)
+                    #MLmodel.comms.broadcast(packet, MLmodel.workers_addresses)
+                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
                     MLmodel.display(MLmodel.name + ' send_C_encr to workers')
+                    #print('STOP AT while_send_C_encr')
+                    #import code
+                    #code.interact(local=locals())
+
+
                 except Exception as err:
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )

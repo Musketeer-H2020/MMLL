@@ -200,7 +200,7 @@ class MLC_pm_Master(Common_to_all_POMs):
                     action = 'update_tr_data'
                     data = {'classes': MLmodel.classes}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                    MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
@@ -227,9 +227,15 @@ class MLC_pm_Master(Common_to_all_POMs):
                 '''
                 for waddr in MLmodel.workers_addresses:
                     MLmodel.comms.send(waddr, packet)
-                '''
                 MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
                 MLmodel.display(MLmodel.name + ': broadcasted w_dict to all Workers')
+                '''
+                MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                if MLmodel.selected_workers is None: 
+                    MLmodel.display(MLmodel.name + ': broadcasted w_dict to all workers')
+                else:
+                    MLmodel.display(MLmodel.name + ': broadcasted w_dict to workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
+
                 return
 
             def while_updating_w(self, MLmodel):

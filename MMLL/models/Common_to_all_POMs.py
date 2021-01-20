@@ -166,7 +166,7 @@ class Common_to_all_POMs(Common_to_all_objects):
                 for waddr in self.workers_addresses:
                     self.state_dict[waddr] = ''
         except Exception as err:
-            print('STOP AT chekAllStates CommontoallPOMS')
+            print('STOP AT chekAllStates CommontoallPOMS OK')
             import code
             code.interact(local=locals())
 
@@ -233,14 +233,16 @@ class Common_to_all_POMs(Common_to_all_objects):
                 self.comms.pycloudmessenger_timeout_POMs456 = 0.1
 
             try:
+                packet = None
                 packet = self.comms.receive(self.comms.pycloudmessenger_timeout_POMs456)
                 if packet is not None:
                     sender = self.receive_from[packet['sender']]
                     active_sender = sender
-                    #self.display(self.name + ' %s received %s from %s' % (self.master_address, packet['action'], sender))
                     self.ProcessReceivedPacket_Master(packet, sender)
                     self.Update_State_Master()
-                    packet = None
+                    #print(packet)
+                    # ANV Check this:
+                    #packet = None
             except Exception as err:
                 if 'Operation timeout reached' not in str(err):
                     if 'Operation timed out' not in str(err):
@@ -315,8 +317,9 @@ class Common_to_all_POMs(Common_to_all_objects):
 
             try:
                 packet = self.comms.receive(self.comms.pycloudmessenger_timeout_POMs456)
-                sender = packet['sender']
-                self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.worker_address, packet['action'], sender))
+                if packet is not None:
+                    sender = packet['sender']
+                    self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.worker_address, packet['action'], sender))
             except Exception as err:
                 if 'Operation timeout reached' not in str(err):
                     if 'Operation timed out' not in str(err):
@@ -368,12 +371,14 @@ class Common_to_all_POMs(Common_to_all_objects):
             except:
                 self.comms.pycloudmessenger_timeout_POMs456 = 0.1
 
+            packet = None
+            sender = None
             try:
                 packet = self.comms.receive(self.comms.pycloudmessenger_timeout_POMs456)
-                sender = packet['sender']
-                self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.cryptonode_address, packet['action'], sender))
-                self.ProcessReceivedPacket_Crypto(packet, sender)
-
+                if packet is not None: 
+                    sender = packet['sender']
+                    self.display(self.name + ' %s received %s from %s through pycloudmessenger' % (self.cryptonode_address, packet['action'], sender))
+                    self.ProcessReceivedPacket_Crypto(packet, sender)
             except Exception as err:
                 if 'Operation timeout reached' not in str(err):
                     if 'Operation timed out' not in str(err):
@@ -384,6 +389,363 @@ class Common_to_all_POMs(Common_to_all_objects):
                 pass
 
         return packet, sender
+
+
+    def terminate_workers_(self, workers_addresses_terminate=None):
+        """
+        Send order to terminate Workers
+
+        Parameters
+        ----------
+        workers_addresses_terminate: list of strings
+            addresses of the workers to be terminated
+
+        """
+        message_id = self.master_address + str(self.message_counter)
+        self.message_counter += 1            
+        packet = {'action': 'STOP', 'to': 'CommonML', 'sender': self.master_address, 'message_id': message_id}
+
+        if workers_addresses_terminate is None:  # We terminate all of them
+            workers_addresses_terminate = self.workers_addresses
+            self.display(self.name + ' sent STOP to all Workers')
+            self.comms.broadcast(packet)
+        else:
+            self.display(self.name + ' sent STOP to %d Workers' % len(workers_addresses_terminate))
+            for worker in workers_addresses_terminate:
+                self.comms.send(packet, self.send_to[worker])
+
+        # Updating the list of active users
+        self.workers_addresses = list(set(self.workers_addresses) - set(workers_addresses_terminate))
+        self.Nworkers = len(self.workers_addresses)
+
+        self.FSMmaster.go_Exit(self)
+        self.FSMmaster.go_waiting_order(self)
+
+    def stop_workers_(self):
+        """
+        Send order to stop Workers
+
+        Parameters
+        ----------
+        None
+        """
+        message_id = self.master_address + str(self.message_counter)
+        self.message_counter += 1            
+        packet = {'action': 'STOP_NOT_CLOSE_CONNECTION', 'to': 'CommonML', 'sender': self.master_address, 'message_id': message_id}
+        self.display(self.name + ' sent STOP_NOT_CLOSE_CONNECTION to all Workers')
+        self.comms.broadcast(packet)
+
+        self.FSMmaster.go_Exit(self)
+        self.FSMmaster.go_waiting_order(self)
+
+
+
+    def send_check(self, input_data_description, target_data_description):
+        """
+        Parameters
+        ----------
+            None
+        """
+        self.worker_errors_dict = {}
+        self.FSMmaster.go_sending_check_data(self, input_data_description, target_data_description)
+        self.display(self.name + ' : Sending check data')
+        self.run_Master()
+        self.display(self.name + ' : Checking data at workers is done')
+        return self.worker_errors_dict
+
+    def get_X_minus_mean_squared(self, mean_values=None, input_data_description=None, which_variables='num'):
+        """
+        Gets from workers their sum of input data multiplied by the targets
+
+        Parameters
+        ----------
+        None
+        """
+
+        self.display(self.name + ': Asking workers their sum X-mean squared')
+
+        if self.aggregation_type == 'direct':
+            self.sumXminusmeansquared_dict = {}
+            self.FSMmaster.go_getting_X_minus_mean_squared(self, mean_values, input_data_description, which_variables)
+            self.run_Master()
+
+            self.total_X_minus_mean_squared = np.zeros((1, self.NI))
+            for waddr in self.workers_addresses:
+                self.total_X_minus_mean_squared += self.sumXminusmeansquared_dict[waddr]
+
+        if self.aggregation_type == 'roundrobin':
+            self.display(self.name + ': Getting sum X-mean squared with roundrobin')
+
+            # pending generate random numbers here...
+            #self.x2_ini = 999999999 + np.zeros((1, self.NI))
+            self.x2_ini = np.random.uniform(-9e5, 9e5, (1, self.NI))
+
+            self.FSMmaster.go_getting_X_minus_mean_squared_roundrobin(self, mean_values, input_data_description, self.x2_ini, which_variables)
+            self.run_Master()
+
+            self.total_X_minus_mean_squared = self.sumX2_roundrobin - self.x2_ini
+
+        self.display(self.name + ': getting X_minus_mean_squared is done')
+        return self.total_X_minus_mean_squared
+
+    def get_min_max_X(self, input_data_description):
+        """
+        Gets from workers their min and max of input data
+
+        Parameters
+        ----------
+        None
+        """
+        self.input_data_description = input_data_description
+        self.NI = self.input_data_description['NI']
+
+        self.minX_dict = {}
+        self.maxX_dict = {}
+
+        # roundrobin not usable here
+        if self.aggregation_type == 'direct' or self.aggregation_type == 'roundrobin':
+            self.display(self.name + ': Asking workers their minX')
+            self.FSMmaster.go_getting_minX(self, input_data_description)
+            self.run_Master()
+
+            self.total_minX = 9e20 * np.ones((1, self.NI))
+            self.total_maxX = -9e20 * np.ones((1, self.NI))
+            self.total_NP = 0
+            for waddr in self.workers_addresses:
+                self.total_minX = np.vstack((self.total_minX, self.minX_dict[waddr]))
+                self.total_maxX = np.vstack((self.total_maxX, self.maxX_dict[waddr]))
+                self.total_NP += self.NP_dict[waddr]
+
+            self.total_minX = np.min(self.total_minX, axis=0)
+            self.total_maxX = np.max(self.total_maxX, axis=0)
+
+        '''
+        if self.aggregation_type == 'roundrobin':
+            self.display(self.name + ': Getting sumX with roundrobin')
+            # pending generate random numbers here...
+            #self.x_ini = 999999999 + np.zeros((1, self.NI))
+            #self.NP_ini = 999999999
+            self.FSMmaster.go_getting_sumX_roundrobin(self, input_data_description, self.x_ini, self.NP_ini)
+            self.run_Master()
+            self.total_sumX = self.sumX_roundrobin - self.x_ini
+            self.total_NP =  self.NP_roundrobin - self.NP_ini   
+        '''
+        self.display(self.name + ': getting minX, maxX is done')
+
+    def get_Rxyb_rxyb_direct(self):
+        """
+        Obtaining get_Rxyb_rxyb from workers, direct method
+
+        Parameters
+        ----------
+            None
+        """
+
+        self.Rxyb_dict = {}
+        self.rxyb_dict = {}
+
+        self.display(self.name + ': Asking workers to compute Rxyb_rxyb, direct transmission')
+        self.FSMmaster.go_getting_Rxyb_rxyb_direct(self)
+        self.run_Master()
+
+        workers = list(self.Rxyb_dict.keys())
+        Rxy_b = self.Rxyb_dict[workers[0]]
+        rxy_b = self.rxyb_dict[workers[0]]
+        for worker in workers[1:]:
+            Rxy_b += self.Rxyb_dict[worker]
+            rxy_b += self.rxyb_dict[worker]
+
+        self.display(self.name + ': compute Rxyb_rxyb is done')
+        return Rxy_b, rxy_b
+
+    def get_Rxyb_rxyb_roundrobin(self, Rxyb_ini, rxyb_ini):
+        """
+        Obtaining get_Rxyb_rxyb from workers, roundrobin method
+
+        Parameters
+        ----------
+            None
+        """
+        self.display(self.name + ': Asking workers to compute Rxyb_rxyb, roundrobin aggregation')
+        self.FSMmaster.go_getting_Rxyb_rxyb_roundrobin(self, Rxyb_ini, rxyb_ini)
+        self.run_Master()
+
+        Rxy_b = self.Rxyb_roundrobin - Rxyb_ini
+        rxy_b = self.rxyb_roundrobin - rxyb_ini
+        self.display(self.name + ': compute Rxyb_rxyb, roundrobin is done')
+        return Rxy_b, rxy_b
+
+    def get_Npc(self):
+        """
+        Obtain the number of patterns per class, to balance uneven pattern distribution among classes
+
+        Parameters
+        ----------
+        None
+        """
+        self.display(self.name + ': Asking workers their Npc')
+        self.FSMmaster.go_getting_Npc(self)
+        self.run_Master()
+
+        self.aggregated_Npc_dict = {} # Number of aggregated patterns per class
+        for cla in self.classes:
+            count = 0
+            for wa in self.workers_addresses:
+                count += self.Npc_dict[wa][cla]
+            self.aggregated_Npc_dict.update({cla: count})   
+
+        self.display(self.name + ': getting Npc is done')
+
+    def get_sumXy(self):
+        """
+        Gets from workers their sum of input data multiplied by the targets
+
+        Parameters
+        ----------
+        None
+        """
+        self.sumy_dict = {}
+        self.sumX_dict = {}
+        self.NP_dict = {}
+
+        self.display(self.name + ': Asking workers their sumX sumy')
+        self.FSMmaster.go_getting_sumXy(self)
+        self.run_Master()
+
+        self.total_sumX = np.zeros((1, self.NI))
+        self.total_sumy = 0
+        self.total_NP = 0
+        for waddr in self.workers_addresses:
+            self.total_sumX += self.sumX_dict[waddr]
+            self.total_sumy += self.sumy_dict[waddr]
+            self.total_NP += self.NP_dict[waddr]
+
+        self.display(self.name + ': getting sumXy is done')
+
+    def get_sumX(self, input_data_description, which_variables='num'):
+        """
+        Gets from workers their sum of input data
+
+        Parameters
+        ----------
+        input_data_description
+        which_variables : when to compute the mean, 'num' = only numerical, 'all' = numerical + binary
+        None
+        """
+        self.input_data_description = input_data_description
+        self.NI = self.input_data_description['NI']
+        self.sumX_dict = {}
+
+        if self.aggregation_type == 'direct':
+            self.display(self.name + ': Asking workers their sumX')
+            self.FSMmaster.go_getting_sumX(self, input_data_description, which_variables)
+            self.run_Master()
+
+            self.total_sumX = np.zeros((1, self.NI))
+            self.total_NP = 0
+            for waddr in self.workers_addresses:
+                self.total_sumX += self.sumX_dict[waddr]
+                self.total_NP += self.NP_dict[waddr]
+
+        if self.aggregation_type == 'roundrobin':
+            self.display(self.name + ': Getting sumX with roundrobin')
+            # pending generate random numbers here...
+            self.x_ini = np.random.uniform(-9e5, 9e5, (1, self.NI))
+            self.NP_ini = np.random.uniform(-9e5, 9e5)
+            self.FSMmaster.go_getting_sumX_roundrobin(self, input_data_description, self.x_ini, self.NP_ini, which_variables)
+            self.run_Master()
+            self.total_sumX = self.sumX_roundrobin - self.x_ini
+            self.total_NP =  self.NP_roundrobin - self.NP_ini   
+
+        self.display(self.name + ': getting sumX is done')
+
+    def send_preprocess(self, prep_model):
+        """
+        This is the local preprocessing loop, it runs the following actions:
+            - It sends the preprocessing object to the workers 
+            - It sends instruction to the workers to preprocess the data
+
+        Parameters
+        ----------
+            None
+        """
+        self.worker_errors = {}
+        self.FSMmaster.go_sending_prep_object(self, prep_model)
+        self.display(self.name + ' : Sending Preprocessing object')
+        self.run_Master()
+        self.display(self.name + ' : Local Preprocessing is done')
+        return self.worker_errors
+
+    def send_preprocess_V(self, prep_model):
+        """
+        This is the local preprocessing loop, it runs the following actions:
+            - It sends the preprocessing object to the workers 
+            - It sends instruction to the workers to preprocess the data
+
+        Parameters
+        ----------
+            None
+        """
+        self.worker_errors = {}
+        self.mean_dict = {}
+        self.std_dict = {}
+        self.FSMmaster.go_sending_prep_object_V(self, prep_model)
+        self.display(self.name + ' : Sending Preprocessing object V' )
+        self.run_Master()
+        self.display(self.name + ' : Local Preprocessing V is done ')
+        return self.worker_errors
+
+    '''
+    def send_check(self, input_data_description, target_data_description):
+        """
+        Parameters
+        ----------
+            None
+        """
+        self.worker_errors_dict = {}
+        self.FSMmaster.go_sending_check_data(self, input_data_description, target_data_description)
+        self.display(self.name + ' : Sending check data')
+        self.run_Master()
+        self.display(self.name + ' : Checking data at workers is done')
+        return self.worker_errors_dict
+    '''
+
+    def local_prep_Master(self, prep_object):
+        """
+        This is the local preprocessing loop, it runs the following actions:
+            - It sends the preprocessing object to the workers 
+            - It sends instruction to the workers to preprocess the data
+
+        Parameters
+        ----------
+            None
+        """
+        self.prep = prep_object
+        self.FSMmaster.go_sending_prep_object(self)
+        self.display(self.name + ' : Sending Preprocessing object')
+        self.run_Master()
+        self.display(self.name + ' : Local Preprocessing is done')
+
+    def get_stats(self, stats_list):
+        """
+        Gets from workers their stats
+
+        Parameters
+        ----------
+        stats_list: list of stats to be computed
+        """
+        self.stats_dict = {}
+        self.display(self.name + ': Asking workers their stats')
+        self.FSMmaster.go_getting_stats(self, stats_list)
+        self.run_Master()
+
+        self.display(self.name + ': getting stats is done')
+
+
+
+
+
+
 
 
     def crypto_mult_X(self, B):
@@ -472,7 +834,6 @@ class Common_to_all_POMs(Common_to_all_objects):
                         code.interact(local=locals())
                 B_bl_send = B_bl_dict
 
-
             self.FSMmaster.go_mult_XB(self, B_bl_send)
             self.run_Master()
             # returns self.XB_bl_encr_dict
@@ -486,7 +847,9 @@ class Common_to_all_POMs(Common_to_all_objects):
 
             XB_encr_dict = {} # stores the multiplication without blinding
 
-            for waddr in self.workers_addresses:
+            # Warning, the operation can be done on a selection of workers
+            #for waddr in self.workers_addresses:
+            for waddr in keys:
                 if not is_dictionary: #check
                     X_encr = self.X_encr_dict[waddr]
                     MQ, NQ = Rbl_B.shape

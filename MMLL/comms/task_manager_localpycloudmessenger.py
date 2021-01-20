@@ -7,6 +7,7 @@ __author__ = "Angel Navia Vázquez, UC3M."
 
 import random, string
 import time
+import sys
 try:
     import pycloudmessenger.ffl.abstractions as ffl
     import pycloudmessenger.ffl.fflapi as fflapi
@@ -14,6 +15,7 @@ try:
 except:
     print("pycloudmessenger is not installed, use:")
     print("pip install https://github.com/IBM/pycloudmessenger/archive/v0.3.0.tar.gz")
+    sys.exit()
 
 class Task_Manager:
     """

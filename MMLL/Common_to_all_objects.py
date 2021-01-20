@@ -12,7 +12,16 @@ __date__ = "Mar 2020"
 #import base64
 import numpy as np
 #import dill
-
+from tqdm import tqdm # pip install tqdm
+import hashlib # pip install hashlib
+import os, sys
+#sys.path.append("..")
+#sys.path.append("../..")
+from MMLL.preprocessors.normalizer import normalize_model
+from MMLL.preprocessors.data2num import data2num_model
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import LabelEncoder
+from scipy.stats import kurtosis, skew
 
 class Common_to_all_objects():
     """
@@ -31,14 +40,17 @@ class Common_to_all_objects():
         self.verbose = True
         return
 
-    def display(self, message, verbose=True):
+    def display(self, message, verbose=None):
         """
         Write message to log file and display on screen if verbose=True
 
         :param message: string message to be shown/logged
         :type message: str
         """
-        if verbose:
+        if verbose is not None:
+            if verbose:
+                print(message)
+        else:
             if self.verbose:
                 print(message)
         try:
@@ -49,6 +61,219 @@ class Common_to_all_objects():
     def add_bias(self, X):
         # We add first column of ones, to deal with bias
         return np.hstack((np.ones((X.shape[0], 1)), X))
+
+    def compute_stats(self, X, y, stats_list):
+        stats_dict = {}
+
+        X = X.astype(float)
+        y = np.array(y).astype(float)
+
+        if 'rxy' in stats_list:
+            rxy = np.dot(X.T, y)
+            # normalize norm
+            if np.linalg.norm(rxy) > 0:
+                rxy = rxy / np.linalg.norm(rxy)
+            stats_dict.update({'rxy': rxy})
+
+        if 'meanx' in stats_list:
+            meanx = np.mean(X, axis=0)
+            # normalize norm
+            if np.linalg.norm(meanx) > 0:
+                meanx = meanx / np.linalg.norm(meanx)
+            stats_dict.update({'meanx': meanx})
+
+        if 'medianx' in stats_list:
+            medianx = np.median(X, axis=0)
+            # normalize norm
+            if np.linalg.norm(medianx) > 0:
+                medianx = medianx / np.linalg.norm(medianx)
+            stats_dict.update({'medianx': medianx})
+
+        if 'npatterns' in stats_list:
+            npatterns = X.shape[0]
+            stats_dict.update({'npatterns': npatterns})
+
+        if 'stdx' in stats_list:
+            stdx = np.stdx(X, axis=0)
+            # normalize norm
+            if np.linalg.norm(stdx) > 0:
+                stdx = stdx / np.linalg.norm(stdx)
+            stats_dict.update({'stdx': stdx})
+
+        if 'skewx' in stats_list:
+            skewx = skew(X)
+            # normalize norm
+            if np.linalg.norm(skewx) > 0:
+                skewx = skewx / np.linalg.norm(skewx)
+            stats_dict.update({'skewx': skewx})
+
+        if 'kurx' in stats_list:
+            kurx = kurtosis(X)
+            # normalize norm
+            if np.linalg.norm(kurx) > 0:
+                kurx = kurx / np.linalg.norm(kurx)
+            stats_dict.update({'kurx': kurx})
+
+        if 'perc25' in stats_list:
+            perc25 = np.percentile(X, 25, axis=0)
+            # normalize norm
+            if np.linalg.norm(perc25) > 0:
+                perc25 = perc25 / np.linalg.norm(perc25)
+            stats_dict.update({'perc25': perc25})
+
+        if 'perc75' in stats_list:
+            perc75 = np.percentile(X, 75, axis=0)
+            # normalize norm
+            if np.linalg.norm(perc75) > 0:
+                perc75 = perc75 / np.linalg.norm(perc75)
+            stats_dict.update({'perc75': perc75})
+
+        if 'staty' in stats_list:
+            staty = np.array([np.mean(y), np.std(y), skew(y), kurtosis(y)])
+            # normalize norm
+            if np.linalg.norm(staty) > 0:
+                staty = staty / np.linalg.norm(staty)
+            stats_dict.update({'staty': staty})
+
+        return stats_dict
+
+    def compute_gfs(self, Rxy_b, rxy_b, Xval, yval, NF=None, stop_incr=None, regularization=0.0001):
+        '''
+        Feature Selection by a brute force greedy approach using linear models
+        '''
+        try: 
+            NI = Rxy_b.shape[0]
+            pos_remain = list(range(0, NI))
+            pos_selected = []
+            Xval_b = self.add_bias(Xval)
+
+            if NF is None: 
+                NF = NI  # We rank all
+            else:
+                NF = NF + 1 # bias will be removed
+            
+            yval = np.array(yval).ravel().astype(float)
+
+            self.display('Ranking input variables...', verbose=True)
+
+            for i in tqdm(range(NF)):
+                get_more_features = False
+                if len(pos_selected) < NF + 1:
+                    get_more_features = True
+
+                if stop_incr is not None and i > 1:
+                    try: 
+                        if (perf_val[i - 2] - perf_val[i - 1]) / perf_val[i - 2] > stop_incr:
+                            get_more_features = True
+                        else:
+                            get_more_features = False
+                    except:
+                        get_more_features = False
+
+                if get_more_features:
+                    if len(pos_selected) < NF + 1:
+                        if len(pos_selected) == 0:
+                            pos_selected = [0]
+                            cuales_select = pos_selected
+                            R_tmp = Rxy_b[cuales_select, :]
+                            R_tmp = R_tmp[:, cuales_select]
+
+                            r_tmp = rxy_b[cuales_select]
+                            NI_tmp = R_tmp.shape[0]
+                            w = np.dot(np.linalg.inv(R_tmp + regularization * np.eye(NI_tmp)), r_tmp)
+
+                            Xval_tmp = Xval_b[:, cuales_select]
+                            preds_val = np.dot(Xval_tmp, w.ravel())
+                            error = (preds_val.ravel() - yval.ravel()) ** 2
+                            perf_val = [np.mean(error)]  # store here the final values
+                            pos_remain = list(set(pos_remain) - set([0]))
+                        else:
+                            perf_val_tmp = []
+                            for pos_eval in pos_remain:
+                                cuales_select = pos_selected + [pos_eval]
+                                R_tmp = Rxy_b[cuales_select, :]
+                                R_tmp = R_tmp[:, cuales_select]
+                                r_tmp = rxy_b[cuales_select]
+                                NI_tmp = R_tmp.shape[0]
+                                Xval_tmp = Xval_b[:, cuales_select]
+                                w = np.dot(np.linalg.inv(R_tmp + regularization * np.eye(NI_tmp)), r_tmp)
+                                preds_val = np.dot(Xval_tmp, w.ravel())
+                                error = (preds_val.ravel() - yval.ravel()) ** 2
+                                perf = np.mean(error)
+                                perf_val_tmp.append(perf)
+
+                            # select the best
+                            which_min = np.argmin(np.array(perf_val_tmp))
+                            new_index = pos_remain[which_min]
+                            pos_selected.append(new_index)
+                            pos_remain = list(set(pos_remain) - set([new_index]))
+                            perf_val.append(perf_val_tmp[which_min])
+        except:
+            pass
+        # remove bias (first position)
+        pos_selected = pos_selected[1:]
+        pos_selected = [x-1 for x in pos_selected]
+        perf_val = perf_val[1:]
+        
+        return pos_selected, perf_val
+
+    def hash_md5(self, x):
+        y = hashlib.md5(str(x).encode()).hexdigest()
+        return y
+
+    def hash_sha256(self, x):
+        z = hashlib.sha256(str(x).encode()).hexdigest()
+        return z
+
+    def hash_sha3_512(self, x):
+        z = hashlib.sha3_512(str(x).encode()).hexdigest()
+        return z
+
+    def get_data2num_model(self, input_data_description):
+
+        types = [x['type'] for x in input_data_description['input_types']]
+        model = None
+        if 'cat' in types:  # there is something to transform
+            model = data2num_model(input_data_description)
+            '''
+            model.input_data_description = input_data_description
+            model.mean = None
+            model.std = None
+
+            onehot_encodings = {}
+            label_encodings = {}
+            #new_data_description = dict(data_description)
+            new_input_types = []
+
+            for k in range(input_data_description['NI']):
+                if input_data_description['input_types'][k]['type'] == 'cat':
+                    categories = input_data_description['input_types'][k]['values']
+                    Nbin= len(categories)
+                    label_encoder = LabelEncoder()
+                    label_encoder.fit(categories)
+                    label_encodings.update({k: label_encoder})
+                    integer_encoded = label_encoder.transform(categories).reshape((-1, 1))
+                    # Creating one-hot-encoding object
+                    onehotencoder = OneHotEncoder(sparse=False)
+                    onehotencoder.fit(integer_encoded)
+                    onehot_encodings.update({k: onehotencoder})
+                    onehot_encoded = onehotencoder.transform(np.array([1, 2]).reshape(-1, 1))
+                    aux = [{'type': 'bin', 'name': 'onehot transformed'}] * Nbin
+                    new_input_types += aux
+                else: # dejamos lo que hay
+                    new_input_types.append(input_data_description['input_types'][k])
+
+            new_input_data_description = {
+                        "NI": len(new_input_types), 
+                        "input_types": new_input_types
+                        }
+
+            model.label_encodings = label_encodings
+            model.onehot_encodings = onehot_encodings
+            model.name = 'data2num'
+            model.new_input_data_description = new_input_data_description
+            '''
+        return model
 
     def process_kwargs(self, kwargs):
         """
@@ -73,10 +298,28 @@ class Common_to_all_objects():
                 self.Nmaxiter = value
             if key == 'NC':
                 self.NC = value
+            if key == 'sigma':
+                self.sigma = value
+            if key == 'NmaxiterGD':
+                self.NmaxiterGD = value
+            if key == 'eta':
+                self.eta = value
             if key == 'learning_rate':
                 self.learning_rate = value
             if key == 'model_architecture':
                 self.model_architecture = value
+            if key == 'optimizer':
+                self.optimizer = value
+            if key == 'loss':
+                self.loss = value
+            if key == 'metric':
+                self.metric = value
+            if key == 'batch_size':
+                self.batch_size = value
+            if key == 'num_epochs':
+                self.num_epochs = value
+            if key == 'model_averaging':
+                self.model_averaging = value
             if key == 'regularization':
                 self.regularization = value
             if key == 'classes':
@@ -133,4 +376,16 @@ class Common_to_all_objects():
                 self.crypt_library = value
             if key == 'conv_stop':
                 self.conv_stop = value
+            if key == 'data_description':
+                self.data_description = value
+            if key == 'input_data_description':
+                self.input_data_description = value
+            if key == 'target_data_description':
+                self.target_data_description = value
+            if key == 'aggregation_type':
+                self.aggregation_type = value
+            if key == 'use_bias':
+                self.use_bias = value
+
+
 

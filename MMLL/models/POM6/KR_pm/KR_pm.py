@@ -99,11 +99,6 @@ class KR_pm_Master(Common_to_all_POMs):
         self.Nworkers = len(workers_addresses)                    # Nworkers
         self.workers_addresses = list(range(self.Nworkers))
         self.workers_addresses = [str(x) for x in self.workers_addresses]
-
-        self.state_dict = {}                        # dictionary storing the execution state
-        for k in range(0, self.Nworkers):
-            self.state_dict.update({self.workers_addresses[k]: ''})
-
         self.send_to = {}
         self.receive_from = {}
         for k in range(self.Nworkers):
@@ -113,20 +108,33 @@ class KR_pm_Master(Common_to_all_POMs):
         self.logger = logger                        # logger
         self.comms = comms                          # comms lib
         self.verbose = verbose                      # print on screen when true
-        self.NI = None
-        self.model = model()
+        self.NI = None       
+
+        self.state_dict = {}                        # dictionary storing the execution state
+        for k in range(0, self.Nworkers):
+            self.state_dict.update({self.workers_addresses[k]: ''})
+        # we extract the model_parameters as extra kwargs, to be all jointly processed
+        try:
+            kwargs.update(kwargs['model_parameters'])
+            del kwargs['model_parameters']
+        except Exception as err:
+            pass
+        self.process_kwargs(kwargs)
 
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
         self.message_counter = 0    # used to number the messages
+        self.cryptonode_address = None
+        
         self.KTK_dict = {}
         self.KTy_dict = {}
         self.NC = self.C.shape[0]
         self.NI = self.C.shape[1]
-        self.model.C = self.C
-        self.model.sigma = np.sqrt(self.NI) * self.fsigma 
         self.newNI_dict = {}
 
+        self.model = model()
+        self.model.C = self.C
+        self.model.sigma = np.sqrt(self.NI) * self.fsigma 
         '''
         print('#########################################################')
         print(self.broadcast_addresses)
@@ -188,7 +196,13 @@ class KR_pm_Master(Common_to_all_POMs):
                     action = 'update_tr_data'
                     data = {}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                    
+                    '''        
+                    print('STOP AT while_update_tr_data')
+                    import code
+                    code.interact(local=locals())
+                    ''' 
+                    MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
@@ -203,8 +217,11 @@ class KR_pm_Master(Common_to_all_POMs):
                     action = 'sending_C'
                     data = {'C': MLmodel.model.C, 'sigma': MLmodel.model.sigma}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
-                    MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
+                    MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                    if MLmodel.selected_workers is None: 
+                        MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
+                    else:
+                        MLmodel.display(MLmodel.name + ': broadcasted C to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
 
                 except Exception as err:
                     print('ERROR AT while_sending_C')
@@ -217,8 +234,12 @@ class KR_pm_Master(Common_to_all_POMs):
                     action = 'compute_KTK'
                     data = None
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
-                    MLmodel.display(MLmodel.name + ': broadcasted compute_KTK to all Workers')
+                    MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                    if MLmodel.selected_workers is None: 
+                        MLmodel.display(MLmodel.name + ': broadcasted compute_KTK to all workers')
+                    else:
+                        MLmodel.display(MLmodel.name + ': broadcasted compute_KTK to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
+                    
                 except Exception as err:
                     print('ERROR AT while_getting_KTK')
                     import code
@@ -362,26 +383,27 @@ class KR_pm_Master(Common_to_all_POMs):
             sender: string
                 id of the sender
         """
-        try:
-            #sender = packet['sender']
-            sender = self.receive_from[packet['sender']]
+        if packet is not None:
+            try:
+                #sender = packet['sender']
+                sender = self.receive_from[packet['sender']]
 
-            if packet['action'][0:3] == 'ACK':
-                self.display(self.name + ': received ACK from %s: %s' % (str(sender), packet['action']))
-                self.state_dict[sender] = packet['action']
+                if packet['action'][0:3] == 'ACK':
+                    self.display(self.name + ': received ACK from %s: %s' % (str(sender), packet['action']))
+                    self.state_dict[sender] = packet['action']
 
-            if packet['action'] == 'ACK_sending_KTK':
-                self.KTK_dict.update({sender: packet['data']['KTK']})
-                self.KTy_dict.update({sender: packet['data']['KTy']})
+                if packet['action'] == 'ACK_sending_KTK':
+                    self.KTK_dict.update({sender: packet['data']['KTK']})
+                    self.KTy_dict.update({sender: packet['data']['KTy']})
 
-            if packet['action'] == 'ACK_update_tr_data':
-                #print('ProcessReceivedPacket_Master ACK_update_tr_data')
-                self.newNI_dict.update({sender: packet['data']['newNI']})
+                if packet['action'] == 'ACK_update_tr_data':
+                    #print('ProcessReceivedPacket_Master ACK_update_tr_data')
+                    self.newNI_dict.update({sender: packet['data']['newNI']})
 
-        except Exception as err:
-            print('ERROR AT ProcessReceivedPacket_Master')
-            import code
-            code.interact(local=locals())         
+            except Exception as err:
+                print('ERROR AT ProcessReceivedPacket_Master')
+                import code
+                code.interact(local=locals())         
 
         return
 
@@ -591,29 +613,30 @@ class KR_pm_Worker(Common_to_all_POMs):
 
         """
         self.terminate = False
-        try:
-            # Exit the process
-            if packet['action'] == 'STOP':
-                self.display(self.name + ' %s: terminated by Master' % (str(self.worker_address)))
-                self.terminate = True
+        if packet is not None:
+            try:
+                # Exit the process
+                if packet['action'] == 'STOP':
+                    self.display(self.name + ' %s: terminated by Master' % (str(self.worker_address)))
+                    self.terminate = True
 
-            if packet['action'] == 'update_tr_data':
-                # We update the training data
-                self.FSMworker.go_setting_tr_data(self, packet)
-                self.FSMworker.done_setting_tr_data(self)
+                if packet['action'] == 'update_tr_data':
+                    # We update the training data
+                    self.FSMworker.go_setting_tr_data(self, packet)
+                    self.FSMworker.done_setting_tr_data(self)
 
-            if packet['action'] == 'compute_KTK':
-                self.FSMworker.go_computing_KTK(self)          
-                self.FSMworker.done_computing_KTK(self)
+                if packet['action'] == 'compute_KTK':
+                    self.FSMworker.go_computing_KTK(self)          
+                    self.FSMworker.done_computing_KTK(self)
 
-            if packet['action'] == 'sending_C':
-                #self.C = packet['data']['C']
-                self.FSMworker.go_storing_C(self, packet)
-                self.FSMworker.done_storing_C(self)
+                if packet['action'] == 'sending_C':
+                    #self.C = packet['data']['C']
+                    self.FSMworker.go_storing_C(self, packet)
+                    self.FSMworker.done_storing_C(self)
 
-        except Exception as err:
-            print('ERROR AT CheckNewPacket_worker')
-            import code
-            code.interact(local=locals())
+            except Exception as err:
+                print('ERROR AT CheckNewPacket_worker')
+                import code
+                code.interact(local=locals())
 
         return self.terminate

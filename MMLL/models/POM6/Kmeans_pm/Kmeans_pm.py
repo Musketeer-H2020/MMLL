@@ -72,6 +72,14 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         self.model_type = model_type
         self.name = self.model_type + '_Master'                 # Name
         self.master_address = master_address
+        self.workers_addresses = workers_addresses
+
+        try:
+            kwargs.update(kwargs['model_parameters'])
+            del kwargs['model_parameters']
+        except Exception as err:
+            pass
+        self.process_kwargs(kwargs)
 
         # Convert workers_addresses -> '0', '1', + send_to dict
         self.broadcast_addresses = workers_addresses
@@ -86,11 +94,12 @@ class Kmeans_pm_Master(Common_to_all_POMs):
 
         self.logger = logger                        # logger
         self.comms = comms                          # comms lib
-        self.state_dict = None                      # State of the main script
         self.verbose = verbose                      # print on screen when true
-        self.state_dict = {}                        # dictionary storing the execution state
         self.NI = None
+
         self.model = model()
+        
+        self.state_dict = {}                        # dictionary storing the execution state
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
         # we extract the model_parameters as extra kwargs, to be all jointly processed
@@ -100,6 +109,7 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         except Exception as err:
             pass
         self.process_kwargs(kwargs)
+
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
         self.message_counter = 0    # used to number the messages
@@ -148,7 +158,7 @@ class Kmeans_pm_Master(Common_to_all_POMs):
                     action = 'update_tr_data'
                     data = {}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                    MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
@@ -167,9 +177,11 @@ class Kmeans_pm_Master(Common_to_all_POMs):
                     for waddr in MLmodel.workers_addresses:
                         MLmodel.comms.send(waddr, packet)
                     '''
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
-                    MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
-
+                    MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                    if MLmodel.selected_workers is None: 
+                        MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
+                    else:
+                        MLmodel.display(MLmodel.name + ': broadcasted C to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
                 except Exception as err:
                     MLmodel.display('ERROR: %s %s' % (str(err), str(type(err))))
                     MLmodel.display('ERROR AT while_sending_C')

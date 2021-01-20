@@ -5,7 +5,7 @@ Linear Regression model under POM4
 '''
 
 __author__ = "Angel Navia-Vázquez  & Francisco González-Serrano"
-__date__ = "Apr. 2020"
+__date__ = "Dec. 2020"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
@@ -72,6 +72,8 @@ class LR_Master(Common_to_all_POMs):
         #self.NC = NC                                # No. Centroids
         #self.Nmaxiter = Nmaxiter
         self.master_address = master_address
+
+
         self.workers_addresses = workers_addresses
         self.cryptonode_address = None
         self.Nworkers = len(workers_addresses)                    # Nworkers
@@ -105,7 +107,8 @@ class LR_Master(Common_to_all_POMs):
         #self.decrypter = self.cr.get_decrypter()  # to be kept as secret  self.encrypter.decrypt()
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
-
+        self.added_bias = False
+        self.train_data_is_ready = False
 
     def create_FSM_master(self):
         """
@@ -120,12 +123,16 @@ class LR_Master(Common_to_all_POMs):
 
         states_master = [
             State(name='waiting_order', on_enter=['while_waiting_order']),
+            State(name='update_tr_data', on_enter=['while_update_tr_data']),
             State(name='store_Xyblinded', on_enter=['while_store_Xyblinded']),
             State(name='mult_XB', on_enter=['while_mult_XB']),
             State(name='decrypt_model', on_enter=['while_decrypt_model'])
         ]
 
         transitions_master = [
+            ['go_update_tr_data', 'waiting_order', 'update_tr_data'],
+            ['go_waiting_order', 'update_tr_data', 'waiting_order'],
+
             ['go_store_Xyblinded', 'waiting_order', 'store_Xyblinded'],
             ['done_store_Xyblinded', 'store_Xyblinded', 'waiting_order'],
 
@@ -150,6 +157,22 @@ class LR_Master(Common_to_all_POMs):
                     code.interact(local=locals())
 
                 return
+
+            def while_update_tr_data(self, MLmodel):
+                try:
+                    action = 'update_tr_data'
+                    data = {}
+                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    MLmodel.comms.broadcast(packet)
+                    MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
+                except Exception as err:
+                    message = "ERROR: %s %s" % (str(err), str(type(err)))
+                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
+                    MLmodel.display('ERROR AT while_update_tr_data')
+                    import code
+                    code.interact(local=locals())
+                return
+
             '''
             def while_send_w_encr(self, MLmodel):
                 try:
@@ -260,17 +283,58 @@ class LR_Master(Common_to_all_POMs):
         self.NI = self.input_data_description['NI']
 
         '''
-        # Adding encrypted bias
-        for waddr in self.X_encr_dict.keys():
-            X = self.X_encr_dict[waddr]
-            NP = X.shape[0]
-            ones = np.ones((NP, 1))
-            ones_encr = self.encrypter.encrypt(ones)
-            self.X_encr_dict[waddr] = np.hstack((ones_encr, X))
+        # Bias already added at the workers...
+        if not self.added_bias:
+            # Adding encrypted bias
+            for waddr in self.X_encr_dict.keys():
+                X = self.X_encr_dict[waddr]
+                NP = X.shape[0]
+                ones = np.ones((NP, 1))
+                ones_encr = self.encrypter.encrypt(ones)
+                self.X_encr_dict[waddr] = np.hstack((ones_encr, X))
+            self.added_bias = True
         '''
+
         self.w = np.random.normal(0, 0.1, (self.NI + 1, 1))
         self.w_encr = self.encrypter.encrypt(self.w)
         self.w_old = np.random.normal(0, 10, (self.NI + 1, 1)) # large to avoid stop at first iteration
+
+        '''
+        if not self.train_data_is_ready: 
+            self.FSMmaster.go_update_tr_data(self)
+            self.run_Master()
+            # Checking the new NI values
+            print(list(self.newNI_dict.values()))
+            newNIs = list(set(list(self.newNI_dict.values())))
+            if len(newNIs) > 1:
+                message = 'ERROR: the training data has different number of features...'
+                self.display(message)
+                self.display(list(self.newNI_dict.values()))
+                raise Exception(message)
+            else:
+                self.reset(newNIs[0])
+                ## Adding bias to validation data, if any
+                if self.Xval_b is not None: 
+                    self.Xval_b = self.add_bias(self.Xval_b).astype(float)
+                    self.yval = self.yval.astype(float)
+            self.train_data_is_ready = True
+
+        self.receivers_list = None
+        if self.selected_workers is not None:
+            self.workers_addresses = self.selected_workers
+        else:
+            self.workers_addresses = self.all_workers_addresses[:]
+
+        '''
+        print(self.workers_addresses)
+
+        self.Nworkers  = len(self.workers_addresses) 
+        self.state_dict = {}                        # dictionary storing the execution state
+        for k in range(0, self.Nworkers):
+            self.state_dict.update({self.workers_addresses[k]: ''})
+        self.receivers_list=[]
+        for worker in self.workers_addresses:
+            self.receivers_list.append(self.send_to[worker])
 
         # Data at self.X_encr_dict, self.y_encr_dict
 
@@ -279,14 +343,15 @@ class LR_Master(Common_to_all_POMs):
 
         self.stop_training = False
         kiter = 0
-        while not self.stop_training:
 
+        self.selected_workers = self.workers_addresses
+
+        while not self.stop_training:
             # Computing wTX
             #self.wTX_encr_dict = self.crypto_mult_X(self.w_encr.T)
             self.Xw_encr_dict = {}
-            for key in self.X_encr_dict:
+            for key in self.selected_workers:
                 self.Xw_encr_dict.update({key: np.dot(self.X_encr_dict[key], self.w)})
-            
 
             if check:
                 X0 = self.decrypter.decrypt(self.X_encr_dict[which])
@@ -299,7 +364,7 @@ class LR_Master(Common_to_all_POMs):
 
             # Computing errors
             self.e_encr_dict = {}
-            for waddr in self.workers_addresses:
+            for waddr in self.selected_workers:
                 #X = self.X_encr_dict[waddr]
                 y = self.y_encr_dict[waddr].reshape(-1, 1)
                 
@@ -325,7 +390,7 @@ class LR_Master(Common_to_all_POMs):
 
             grad_encr = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
             Ntotal = 0
-            for waddr in self.workers_addresses:
+            for waddr in self.selected_workers:
                 eX_encr = self.eX_encr_dict[waddr]
                 Ntotal += eX_encr.shape[0]
                 grad_encr += np.sum(eX_encr, axis=0).reshape((-1, 1))
@@ -358,7 +423,8 @@ class LR_Master(Common_to_all_POMs):
                 self.stop_training = True
            
             message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
-            self.display(message, True)
+            #self.display(message, True)
+            print(message)
             kiter += 1
             self.w_old = self.w.copy()
 
@@ -481,8 +547,8 @@ class LR_Worker(Common_to_all_POMs):
         self.logger = logger                    # logger
         self.name = model_type + '_Worker'    # Name
         self.verbose = verbose                  # print on screen when true
-        #self.Xtr_b = Xtr_b
-        self.Xtr_b = self.add_bias(Xtr_b)
+        self.Xtr_b = Xtr_b
+        #self.Xtr_b = self.add_bias(Xtr_b)
         self.ytr = ytr
         self.NPtr = len(ytr)
         self.create_FSM_worker()
