@@ -13,12 +13,20 @@ from transitions import State
 from transitions.extensions import GraphMachine
 #from pympler import asizeof #asizeof.asizeof(my_object)
 import pickle
+from sklearn import linear_model
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
 
-class model():
+class Model():
+    """
+    Ridge Regression model.
+    """
     def __init__(self):
         self.w = None
+        self.is_trained = False
+        self.supported_formats = ['pkl', 'onnx']
 
-    def predict(self, X_b):
+    def predict(self, X):
         """
         Predicts outputs given the inputs
 
@@ -32,7 +40,66 @@ class model():
         prediction_values: ndarray
 
         """
+        X_b = np.hstack((np.ones((X.shape[0], 1)), X))
         return np.dot(X_b, self.w.ravel())
+
+    def save(self, filename=None):
+        """
+        Saves the trained model to file
+
+        Parameters
+        ----------
+        filename: string
+            path+filename          
+        """
+        if filename is None:
+            print('=' * 80)
+            print('Model Save Error: A valid filename must be provided, otherwise nothing is saved.')            
+            print('=' * 80)
+        else:
+            # Checking filename extension
+            extension = filename.split('.')[-1]
+            if extension not in self.supported_formats:
+                print('=' * 80)
+                print('Model Save Error: Unsupported format. The valid file extensions are:')            
+                print('\t - "pkl": saves the model as a Python3 pickle file')            
+                print('\t - "onnx": saves the model using Open Neural Network Exchange format')            
+                print('=' * 80)
+            else:
+                if not self.is_trained:
+                    print('=' * 80)
+                    print('Model Save Error: model not trained yet, nothing to save.')
+                    print('=' * 80)
+                else:
+                    try:
+                        if extension == 'pkl':
+                            with open(filename, 'wb') as f:
+                                pickle.dump(self, f)
+                            print('=' * 80)
+                            print('Model saved at %s in pickle format.' %filename)
+                            print('=' * 80)
+                        elif extension == 'onnx':
+                            export_model = linear_model.LinearRegression()
+                            export_model.coef_ = self.w[1:].ravel()
+                            NI = export_model.coef_.shape[0]
+                            export_model.intercept_ = self.w[0][0]
+                            # Convert into ONNX format
+                            input_type = [('float_input', FloatTensorType([None, NI]))]
+                            onnx_model = convert_sklearn(export_model, initial_types=input_type)
+                            with open(filename, "wb") as f:
+                                f.write(onnx_model.SerializeToString())
+                            print('=' * 80)
+                            print('Model saved at %s in ONNX format.' %filename)
+                            print('=' * 80)
+                        else:
+                            print('=' * 80)
+                            print('Model Save Error: model cannot be saved at %s.' %filename)
+                            print('=' * 80)
+                    except:
+                        print('=' * 80)
+                        print('Model Save Error: model cannot be saved at %s, please check the provided path/filename.' %filename)
+                        print('=' * 80)
+                        raise
 
 
 class RR_Master(Common_to_all_POMs):
@@ -61,53 +128,9 @@ class RR_Master(Common_to_all_POMs):
         verbose: boolean
             indicates if messages are print or not on screen
         
-        **kwargs: Arbitrary keyword arguments.
-
-
-        -----------------------------------------------------------------
-        Optional or POM dependant arguments
-
-        -----------------------------------------------------------------
-
-        Parameters
-        ---------------------
-        cr: encryption object instance
-            the encryption library to be used in POMs 4 and 5
-
-        cryptonode_address: string
-            address of the crypto node
-
-        Nmaxiter: integer
-            Maximum number of iterations during learning
-
-        NC: integer
-            Number of centroids
-
-        regularization: float
-            Regularization parameter
-
-        classes: list of strings
-            Possible class values in a multiclass problem
-
-        balance_classes: Boolean
-            If True, the algorithm takes into account unbalanced datasets
-
-        C: array of floats
-            Centroids matrix
-
-        nf: integer
-            Number of bits for the floating part
-
-        N: integer
-            Number of
-
-        fsigma: float
-            factor to multiply standard sigma value = sqrt(Number of inputs)
-
-        normalize_data: Boolean
-            If True, data normalization is applied, irrespectively if it has been previously normalized
-
+        kwargs: Keyword arguments.
         """
+
         super().__init__()
         self.pom = 6
         self.model_type = model_type
@@ -133,7 +156,7 @@ class RR_Master(Common_to_all_POMs):
         self.verbose = verbose                      # print on screen when true
         self.state_dict = {}                        # dictionary storing the execution state
         self.NI = None
-        self.model = model()
+        self.model = Model()
         #self.regularization = regularization
         #self.classes = classes
         #self.balance_classes = balance_classes
@@ -155,7 +178,6 @@ class RR_Master(Common_to_all_POMs):
         self.message_counter = 0    # used to number the messages
         self.XTX_dict = {}
         self.XTy_dict = {}
-        self.model = model()
         self.newNI_dict = {}
 
     def create_FSM_master(self):
@@ -201,25 +223,22 @@ class RR_Master(Common_to_all_POMs):
                     MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     MLmodel.display('ERROR AT while_update_tr_data')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_getting_XTX(self, MLmodel):
-                try:
-                    action = 'compute_XTX'
-                    data = None
-                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
- 
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
-                    MLmodel.display(MLmodel.name + ': broadcasted compute_XTX to all Workers')
-                except:
-                    print('ERROR AT while_getting_XTX')
-                    import code
-                    code.interact(local=locals())
+                action = 'compute_XTX'
+                data = None
+                packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                MLmodel.display(MLmodel.name + ': broadcasted compute_XTX to all Workers')
 
                 return
 
@@ -232,10 +251,12 @@ class RR_Master(Common_to_all_POMs):
                         MLmodel.XTy_accum += MLmodel.XTy_dict[waddr].reshape((MLmodel.NI + 1, 1))
 
                     MLmodel.model.w = np.dot(np.linalg.inv(MLmodel.XTX_accum + MLmodel.regularization * np.eye(MLmodel.NI + 1)), MLmodel.XTy_accum)        
-                except:
-                    print('ERROR AT while_updating_w')
-                    import code
-                    code.interact(local=locals())
+                except Exception as err:
+                    #print('ERROR AT while_updating_w')
+                    #raise ValueError('ERROR AT while_updating_w: %s' %str(err))
+                    #import code
+                    #code.interact(local=locals())
+                    raise
                 return
 
             def while_Exit(self, MLmodel):
@@ -282,11 +303,6 @@ class RR_Master(Common_to_all_POMs):
         """
         self.display(self.name + ': Starting training')
 
-        '''
-        print('STOP AT train_Master')
-        import code
-        code.interact(local=locals())
-        '''
         self.FSMmaster.go_update_tr_data(self)
         self.run_Master()
 
@@ -304,29 +320,16 @@ class RR_Master(Common_to_all_POMs):
                 self.Xval_b = self.add_bias(self.Xval_b).astype(float)
                 self.yval = self.yval.astype(float)
 
+        if self.Xval is not None:
+            message = 'WARNING: Validation data is not used during training.'
+            self.display(message, True)
+
         self.FSMmaster.go_getting_XTX(self)
         self.run_Master()
 
         self.display(self.name + ': Training is done')
+        self.model.is_trained = True
         self.model.niter = 1
-
-    def predict_Master(self, X_b):
-        """
-        Predicts outputs given the model and inputs
-
-        Parameters
-        ----------
-        X_b: ndarray
-            Matrix with the input values
-
-        Returns
-        -------
-        prediction_values: ndarray
-
-        """
-        #prediction_values = self.sigm(np.dot(X_b, self.w.ravel()))
-        prediction_values = self.model.predict(X_b)
-        return prediction_values
 
     def Update_State_Master(self):
         """
@@ -373,8 +376,9 @@ class RR_Master(Common_to_all_POMs):
 
         except:
             print('ERROR AT ProcessReceivedPacket_Master')
-            import code
-            code.interact(local=locals())         
+            raise
+            #import code
+            #code.interact(local=locals())         
 
         return
 
@@ -464,13 +468,13 @@ class RR_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-                    #raise
                     import code
                     code.interact(local=locals())
-                    #MLmodel.display('ERROR AT while_computing_XTDaX')
-
+                    '''
             def while_computing_XTX(self, MLmodel):
                 try:
                     XTX = np.dot(MLmodel.Xtr_b.T, MLmodel.Xtr_b)
@@ -484,10 +488,12 @@ class RR_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_XTX' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_XTX')
                     import code
                     code.interact(local=locals())         
-
+                    '''
                 return
 
         states_worker = [
@@ -548,8 +554,10 @@ class RR_Worker(Common_to_all_POMs):
                 self.FSMworker.go_computing_XTX(self)          
                 self.FSMworker.done_computing_XTX(self)
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Worker')
             import code
             code.interact(local=locals())
-
+            '''
         return self.terminate

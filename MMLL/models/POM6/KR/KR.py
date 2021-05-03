@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 '''
-Kernel Regression (public model) under POM6
+Kernel Regression under POM6
 
 '''
 
 __author__ = "Angel Navia-Vázquez"
-__date__ = "Apr. 2020"
+__date__ = "Jan. 2021"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
@@ -14,18 +14,22 @@ from transitions.extensions import GraphMachine
 #from pympler import asizeof #asizeof.asizeof(my_object)
 import pickle
 
-class model():
+class Model():
+    """
+    Kernel Regression model.
+    """
     def __init__(self):
         self.C = None
         self.w = None
+        self.is_trained = False
 
-    def predict(self, X_b):
+    def predict(self, X):
         """
         Predicts outputs given the inputs
 
         Parameters
         ----------
-        X_b: ndarray
+        X: ndarray
             Matrix with the input values
 
         Returns
@@ -34,8 +38,6 @@ class model():
 
         """
 
-
-        X = X_b
         NP = X.shape[0]
         NC = self.C.shape[0]
         XC2 = -2 * np.dot(X, self.C.T)
@@ -50,15 +52,36 @@ class model():
         prediction_values = np.dot(KXC, self.w)
         return prediction_values
 
+    def save(self, filename=None):
+        """
+        Saves the trained model to file
 
-class KR_pm_Master(Common_to_all_POMs):
+        Parameters
+        ----------
+        filename: string
+            path+filename          
+
+        """
+        if not self.is_trained:
+            print('Model Save Error: model not trained yet, nothing to save.')
+        else:
+            try:
+                with open(filename, 'wb') as f:
+                    pickle.dump(self, f)
+                print('Model saved at %s' %filename)
+            except:
+                print('Model Save Error: model cannot be saved, check the provided path/filename.')
+                raise
+
+
+class KR_Master(Common_to_all_POMs):
     """
-    This class implements the Kernel Regression (public model), run at Master node. It inherits from Common_to_all_POMs.
+    This class implements the Kernel Regression, run at Master node. It inherits from Common_to_all_POMs.
     """
 
     def __init__(self, master_address, workers_addresses, model_type, comms, logger, verbose=True, **kwargs):
         """
-        Create a :class:`KR_pm_Master` instance.
+        Create a :class:`KR_Master` instance.
 
         Parameters
         ----------
@@ -77,7 +100,7 @@ class KR_pm_Master(Common_to_all_POMs):
         verbose: boolean
             indicates if messages are print or not on screen
         
-        **kwargs: Arbitrary keyword arguments.
+        kwargs: Keyword arguments.
 
         """
         super().__init__()
@@ -128,21 +151,14 @@ class KR_pm_Master(Common_to_all_POMs):
         
         self.KTK_dict = {}
         self.KTy_dict = {}
-        self.NC = self.C.shape[0]
+        #self.NC = self.C.shape[0]
         self.NI = self.C.shape[1]
         self.newNI_dict = {}
-
-        self.model = model()
+        self.model = Model()
         self.model.C = self.C
         self.model.sigma = np.sqrt(self.NI) * self.fsigma 
-        '''
-        print('#########################################################')
-        print(self.broadcast_addresses)
-        print(self.workers_addresses)
-        print(self.send_to)
-        print(self.receive_from)
-        print('#########################################################')
-        '''
+        self.Kacum_dict = {}
+
 
     def create_FSM_master(self):
         """
@@ -155,17 +171,11 @@ class KR_pm_Master(Common_to_all_POMs):
 
         self.display(self.name + ': creating FSM')
 
-        '''
-        path = '../MMLL/models/POM' + str(self.pom) + '/' + self.model_type + '/' 
-        filename = path + 'POM' + str(self.pom) + '_' + self.model_type + '_FSM_master.pkl'
-        with open(filename, 'rb') as f:
-            [states_master, transitions_master] = pickle.load(f)
-        '''
-
         states_master = [
             State(name='waiting_order', on_enter=['while_waiting_order']),
             State(name='update_tr_data', on_enter=['while_update_tr_data']),
             State(name='getting_KTK', on_enter=['while_getting_KTK']),
+            State(name='selecting_C', on_enter=['while_selecting_C']),
             State(name='sending_C', on_enter=['while_sending_C']),
             State(name='updating_w', on_enter=['while_updating_w'])
         ]
@@ -173,6 +183,9 @@ class KR_pm_Master(Common_to_all_POMs):
         transitions_master = [
             ['go_update_tr_data', 'waiting_order', 'update_tr_data'],
             ['go_waiting_order', 'update_tr_data', 'waiting_order'],
+
+            ['go_selecting_C', 'waiting_order', 'selecting_C'],
+            ['go_waiting_order', 'selecting_C', 'waiting_order'],
 
             ['go_sending_C', 'waiting_order', 'sending_C'],
             ['go_waiting_order', 'sending_C', 'waiting_order'],
@@ -205,11 +218,34 @@ class KR_pm_Master(Common_to_all_POMs):
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     MLmodel.display('ERROR AT while_update_tr_data')
                     import code
                     code.interact(local=locals())
+                    '''
+                return
+
+            def while_selecting_C(self, MLmodel):
+                try:
+                    action = 'selecting_C'
+                    data = {'C': MLmodel.model.C, 'sigma': MLmodel.model.sigma}
+                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                    if MLmodel.selected_workers is None: 
+                        MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
+                    else:
+                        MLmodel.display(MLmodel.name + ': broadcasted C to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
+
+                except Exception as err:
+                    raise
+                    '''
+                    print('ERROR AT while_selecting_C')
+                    import code
+                    code.interact(local=locals())
+                    '''         
                 return
 
             def while_sending_C(self, MLmodel):
@@ -224,9 +260,12 @@ class KR_pm_Master(Common_to_all_POMs):
                         MLmodel.display(MLmodel.name + ': broadcasted C to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
 
                 except Exception as err:
+                    raise
+                    '''
                     print('ERROR AT while_sending_C')
                     import code
-                    code.interact(local=locals())         
+                    code.interact(local=locals())
+                    '''      
                 return
 
             def while_getting_KTK(self, MLmodel):
@@ -241,9 +280,12 @@ class KR_pm_Master(Common_to_all_POMs):
                         MLmodel.display(MLmodel.name + ': broadcasted compute_KTK to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
                     
                 except Exception as err:
+                    raise
+                    '''
                     print('ERROR AT while_getting_KTK')
                     import code
-                    code.interact(local=locals())         
+                    code.interact(local=locals())
+                    '''    
 
                 return
 
@@ -258,9 +300,12 @@ class KR_pm_Master(Common_to_all_POMs):
 
                     MLmodel.model.w = np.dot(np.linalg.inv(MLmodel.KTK_accum + MLmodel.regularization * np.eye(NC + 1)), MLmodel.KTy_accum)        
                 except Exception as err:
+                    raise
+                    '''
                     print('ERROR AT while_updating_w')
                     import code
-                    code.interact(local=locals())         
+                    code.interact(local=locals())
+                    '''       
                 return
 
             def while_Exit(self, MLmodel):
@@ -326,6 +371,26 @@ class KR_pm_Master(Common_to_all_POMs):
                 self.Xval_b = self.add_bias(self.Xval_b).astype(float)
                 self.yval = self.yval.astype(float)
 
+        if self.Xval is not None:
+            message = 'WARNING: Validation data is not used during training.'
+            self.display(message, True)
+
+        '''
+        self.FSMmaster.go_selecting_C(self)
+        self.run_Master()
+
+        # Selecting centroids with largest projection
+        Ncandidates = self.C.shape[0]
+        Kacum_total = np.zeros(Ncandidates)
+        for addr in self.workers_addresses:
+            Kacum_total += self.Kacum_dict[addr]
+
+        index = np.argsort(-Kacum_total)
+        self.C = self.C[index[0: self.NC], :]
+        '''
+        self.model.C = self.C
+        self.NC = self.C.shape[0]
+
         self.FSMmaster.go_sending_C(self)
         self.run_Master()
 
@@ -334,24 +399,7 @@ class KR_pm_Master(Common_to_all_POMs):
 
         self.display(self.name + ': Training is done')
         self.model.niter = 1
-
-
-    def predict_Master(self, X_b):
-        """
-        Predicts outputs given the model and inputs
-
-        Parameters
-        ----------
-        X_b: ndarray
-            Matrix with the input values
-
-        Returns
-        -------
-        prediction_values: ndarray
-
-        """
-        prediction_values = self.model.predict(KXC)
-        return prediction_values
+        self.model.is_trained = True
 
     def Update_State_Master(self):
         """
@@ -361,6 +409,12 @@ class KR_pm_Master(Common_to_all_POMs):
         ----------
             None
         """
+        if self.chekAllStates('ACK_update_tr_data'):
+            self.FSMmaster.go_waiting_order(self)
+
+        if self.chekAllStates('ACK_projecting_C'):
+            self.FSMmaster.go_waiting_order(self)
+
         if self.chekAllStates('ACK_storing_C'):
             self.FSMmaster.go_waiting_order(self)
 
@@ -368,8 +422,6 @@ class KR_pm_Master(Common_to_all_POMs):
             self.FSMmaster.go_updating_w(self)
             self.FSMmaster.go_waiting_order(self)
 
-        if self.chekAllStates('ACK_update_tr_data'):
-            self.FSMmaster.go_waiting_order(self)
 
     def ProcessReceivedPacket_Master(self, packet, sender):
         """
@@ -392,34 +444,39 @@ class KR_pm_Master(Common_to_all_POMs):
                     self.display(self.name + ': received ACK from %s: %s' % (str(sender), packet['action']))
                     self.state_dict[sender] = packet['action']
 
+                if packet['action'] == 'ACK_update_tr_data':
+                    self.newNI_dict.update({sender: packet['data']['newNI']})
+
+                if packet['action'] == 'ACK_projecting_C':
+                    self.Kacum_dict.update({sender: packet['data']['Kacum']})
+
                 if packet['action'] == 'ACK_sending_KTK':
                     self.KTK_dict.update({sender: packet['data']['KTK']})
                     self.KTy_dict.update({sender: packet['data']['KTy']})
 
-                if packet['action'] == 'ACK_update_tr_data':
-                    #print('ProcessReceivedPacket_Master ACK_update_tr_data')
-                    self.newNI_dict.update({sender: packet['data']['newNI']})
 
             except Exception as err:
+                raise
+                '''
                 print('ERROR AT ProcessReceivedPacket_Master')
                 import code
                 code.interact(local=locals())         
-
+                '''
         return
 
 
 #===============================================================
 #                 Worker
 #===============================================================
-class KR_pm_Worker(Common_to_all_POMs):
+class KR_Worker(Common_to_all_POMs):
     '''
-    Class implementing Kernel Regression (public model), run at Worker
+    Class implementing Kernel Regression (private model), run at Worker
 
     '''
 
     def __init__(self, master_address, worker_address, model_type, comms, logger, verbose=True, Xtr_b=None, ytr=None):
         """
-        Create a :class:`KR_pm_Worker` instance.
+        Create a :class:`KR_Worker` instance.
 
         Parameters
         ----------
@@ -494,12 +551,47 @@ class KR_pm_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-                    #raise
                     import code
                     code.interact(local=locals())
                     #MLmodel.display('ERROR AT while_computing_XTDaX')
+                    '''
+            def while_projecting_C(self, MLmodel, packet):
+                # We project X over C and return accumulated
+                try:
+
+                    MLmodel.C = packet['data']['C']
+                    NC = MLmodel.C.shape[0]
+                    MLmodel.sigma = packet['data']['sigma']
+                    NI = MLmodel.Xtr_b.shape[1]
+                    NP = MLmodel.Xtr_b.shape[0]
+
+                    #MLmodel.sigma = np.sqrt(NI) * MLmodel.fsigma
+                    X = MLmodel.Xtr_b
+                    XC2 = -2 * np.dot(X, MLmodel.C.T)
+                    XC2 += np.sum(np.multiply(X, X), axis=1).reshape((NP, 1))
+                    XC2 += np.sum(np.multiply(MLmodel.C, MLmodel.C), axis=1).reshape((1, NC))
+                    # Gauss
+                    KXC = np.exp(-XC2 / 2.0 /  (MLmodel.sigma ** 2))
+                    Kacum = np.sum(KXC, axis = 0)
+
+                    action = 'ACK_projecting_C'
+                    data = {'Kacum': Kacum}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    MLmodel.display(MLmodel.name + ' %s: sent ACK_projecting_C' % (str(MLmodel.worker_address)))
+                    
+                except Exception as err:
+                    raise
+                    '''
+                    print('ERROR AT while_projecting_C')
+                    import code
+                    code.interact(local=locals())         
+                    '''
+                return
 
             def while_computing_KTK(self, MLmodel):
                 try:
@@ -516,10 +608,13 @@ class KR_pm_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_KTK' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     print('ERROR AT while_computing_KTK')
                     import code
                     code.interact(local=locals())         
                     pass
+                    '''
 
             def while_storing_C(self, MLmodel, packet):
                 # We store C and compute KXC
@@ -550,22 +645,18 @@ class KR_pm_Worker(Common_to_all_POMs):
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_storing_C' % (str(MLmodel.worker_address)))
                     
                 except Exception as err:
+                    raise
+                    '''
                     print('ERROR AT while_storing_C')
                     import code
                     code.interact(local=locals())         
-
+                    '''
                 return
-
-        '''
-        path = '../MMLL/models/POM' + str(self.pom) + '/' + self.model_type + '/' 
-        filename = path + 'POM' + str(self.pom) + '_' + self.model_type + '_FSM_worker.pkl'
-        with open(filename, 'rb') as f:
-            [states_worker, transitions_worker] = pickle.load(f)
-        '''
 
         states_worker = [
             State(name='waiting_order', on_enter=['while_waiting_order']),
             State(name='setting_tr_data', on_enter=['while_setting_tr_data']),
+            State(name='projecting_C', on_enter=['while_projecting_C']),
             State(name='storing_C', on_enter=['while_storing_C']),
             State(name='computing_KTK', on_enter=['while_computing_KTK']),
             State(name='computing_KXC', on_enter=['while_computing_KXC']),
@@ -575,6 +666,9 @@ class KR_pm_Worker(Common_to_all_POMs):
         transitions_worker = [
             ['go_setting_tr_data', 'waiting_order', 'setting_tr_data'],
             ['done_setting_tr_data', 'setting_tr_data', 'waiting_order'],
+
+            ['go_projecting_C', 'waiting_order', 'projecting_C'],
+            ['done_projecting_C', 'projecting_C', 'waiting_order'],
 
             ['go_storing_C', 'waiting_order', 'storing_C'],
             ['done_storing_C', 'storing_C', 'waiting_order'],
@@ -629,14 +723,22 @@ class KR_pm_Worker(Common_to_all_POMs):
                     self.FSMworker.go_computing_KTK(self)          
                     self.FSMworker.done_computing_KTK(self)
 
+                if packet['action'] == 'selecting_C':
+                    #self.C = packet['data']['C']
+                    self.FSMworker.go_projecting_C(self, packet)
+                    self.FSMworker.done_projecting_C(self)
+
                 if packet['action'] == 'sending_C':
                     #self.C = packet['data']['C']
                     self.FSMworker.go_storing_C(self, packet)
                     self.FSMworker.done_storing_C(self)
 
             except Exception as err:
+                raise
+                '''
                 print('ERROR AT CheckNewPacket_worker')
                 import code
                 code.interact(local=locals())
+                '''
 
         return self.terminate

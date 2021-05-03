@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-SVM model 
-
+Semiparametric Support Vector Machine model under POM3.
 '''
 
 __author__ = "Marcos Fernández Díaz"
@@ -13,25 +12,50 @@ from scipy.spatial.distance import cdist
 from sklearn.metrics import accuracy_score
 
 from MMLL.models.POM3.CommonML.POM3_CommonML import POM3_CommonML_Master, POM3_CommonML_Worker
+from MMLL.models.Common_to_models import Common_to_models
 from MMLL.models.POM3.Kmeans.Kmeans import Kmeans_Master, Kmeans_Worker
 
 
 
-class model():
+class SVM_model(Common_to_models):
     """
-    This class contains the Kmeans model
+    This class contains the Semiparametric SVM model.
     """
 
-    def __init__(self):
+    def __init__(self, logger):
         """
-        Initializes Kmeans model centroids
+        Create a :class:`SVM_model` instance.
+
+        Parameters
+        ----------
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
         """
+        self.logger = logger
+        self.is_trained = False
+        self.name = 'SVM' 
         self.centroids = None
         self.sigma = None
         self.weights = None
 
 
     def kernelMatrix(self, setDim1, setDim2):
+        """
+        Computes a kernel matrix given two datasets.
+
+        Parameters
+        ----------
+        setDim1: ndarray
+            Array containing M input patterns.
+
+        setDim2: ndarray
+            Array containing N input patterns.
+
+        Returns
+        -------
+        preds: ndarray
+            A MxN kernel matrix, every position contains the kernel evaluation of a data from setDim1 with another from setDim2.
+        """
         sqrtDists = cdist(setDim1, setDim2, 'euclidean')
         gamma = 1 / (self.sigma**2)
         return np.exp(-gamma * np.power(sqrtDists, 2))
@@ -39,17 +63,17 @@ class model():
 
     def predict(self, X_b):
         """
-        Predicts outputs given the model and inputs
+        Uses the model to predict new outputs given the inputs.
 
         Parameters
         ----------
         X_b: ndarray
-            2-D numpy array containing the input patterns
+            Array containing the input patterns.
 
         Returns
         -------
         preds: ndarray
-            1-D array containing the predictions
+            Array containing the predictions.
         """
         Kmn = self.kernelMatrix(X_b, self.centroids)
         softoutput = Kmn.dot(self.weights)
@@ -63,7 +87,7 @@ class model():
 
 class SVM_Master(POM3_CommonML_Master):
     """
-    This class implements SVM, run at Master node. It inherits from POM3_CommonML_Master.
+    This class implements SVM, run at Master node. It inherits from :class:`POM3_CommonML_Master`.
     """
 
     def __init__(self, comms, logger, verbose=False, NC=None, Nmaxiter=None, tolerance =None, sigma=None, C=None, NmaxiterGD=None, eta=None):
@@ -72,33 +96,36 @@ class SVM_Master(POM3_CommonML_Master):
 
         Parameters
         ----------
-        comms: comms object instance
-            Object providing communication functionalities
+        comms: :class:`Comms_master`
+            Object providing communication functionalities.
 
-        logger: class `mylogging.Logger`
-            Logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            Indicates if messages are print or not on screen
+            Indicates whether to print messages on screen nor not.
 
         NC: int
-            Number of clusters
+            Number of support vectors in the semiparametric model.
 
         Nmaxiter: int
-            Maximum number of iterations
+            Maximum number of iterations.
 
         tolerance: float
-            Minimum tolerance for continuing training
+            Minimum tolerance for continuing training.
 
         sigma: float
+            The parameter of the gaussian kernel.
 
-        C: 
+        C: float
+            The cost parameter in the cost function.
             
         NmaxiterGD: int
-            Maximum number of iterations for the SVM
+            Maximum number of iterations for the SVM.
+
         eta: float
-            
-        """
+            The step of the gradient descent algorithm.
+        """        
         self.num_centroids = int(NC)
         self.Nmaxiter = int(Nmaxiter)
         self.tolerance = tolerance
@@ -123,16 +150,13 @@ class SVM_Master(POM3_CommonML_Master):
 
 
     def train_Master_(self):
-        """
-        This is the main training loop, it runs the following actions until the stop condition is met:
-            - Update the execution state
-            - Perform actions according to the state
-            - Process the received packets
+        '''
+        Main loop controlling the training of the algorithm.
 
         Parameters
         ----------
         None
-        """    
+        '''   
         self.weights = np.zeros((self.num_centroids, 1))
         self.iter = 0
         self.is_trained = False 
@@ -179,11 +203,11 @@ class SVM_Master(POM3_CommonML_Master):
     
     def Update_State_Master(self):
         '''
-        We update the state of execution.
-        We control from here the data flow of the training process
-        ** By now there is only one implemented option: direct transmission **
+        Function to control the state of the execution.
 
-        This code needs some improvement...
+        Parameters
+        ----------
+        None
         '''
         if self.checkAllStates('ACK_LAUNCH_KMEANS', self.state_dict):
             for worker in self.workers_addresses:
@@ -199,7 +223,11 @@ class SVM_Master(POM3_CommonML_Master):
     
     def TakeAction_Master(self):
         """
-        Takes actions according to the state
+        Function to take actions according to the state.
+
+        Parameters
+        ----------
+        None
         """
         to = 'MLmodel'
 
@@ -242,8 +270,7 @@ class SVM_Master(POM3_CommonML_Master):
 
 class SVM_Worker(POM3_CommonML_Worker):
     '''
-    Class implementing SVM, run at Worker
-
+    Class implementing a semiparametric SVM, run at Worker node. It inherits from :class:`POM3_CommonML_Worker`.
     '''
 
     def __init__(self, master_address, comms, logger, verbose=False, Xtr_b=None, ytr=None):
@@ -253,30 +280,30 @@ class SVM_Worker(POM3_CommonML_Worker):
         Parameters
         ----------
         master_address: string
-            Identifier of the master instance
+            Identifier of the master instance.
 
-        comms: comms object instance
-            Object providing communication functionalities
+        comms: :class:`Comms_worker`
+            Object providing communication functionalities.
 
-        logger: class:`logging.Logger`
-            Logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            Indicates if messages are print or not on screen
+            Indicates whether to print messages on screen nor not.
 
         Xtr_b: ndarray
-            2-D numpy array containing the input training patterns
+            Array containing the inputs for training.
 
         ytr: ndarray
-            1-D numpy array containing the target training patterns
+            Array containing the labels for training.
         """
         self.Xtr_b = Xtr_b
         self.ytr = ytr
 
-        super().__init__(master_address, comms, logger, verbose)      # Initialize common class for POM3
-        self.name = 'POM3_SVM_Worker'                                 # Name of the class
-        self.model = model()                                          # Model  
-        self.is_trained = False                                       # Flag to know if the model has been trained
+        super().__init__(master_address, comms, logger, verbose)    # Initialize common class for POM3
+        self.name = 'POM3_SVM_Worker'                               # Name of the class
+        self.model = SVM_model(logger)                              # Model  
+        self.is_trained = False                                     # Flag to know if the model has been trained
 
         """
         # Train Kmeans first
@@ -301,13 +328,13 @@ class SVM_Worker(POM3_CommonML_Worker):
 
     def ProcessReceivedPacket_Worker(self, packet):
         """
-        Take an action after receiving a packet
+        Process the received packet at worker.
 
         Parameters
         ----------
-        packet: Dictionary
-            Packet received
-        """
+        packet: dictionary
+            Packet received from the master.
+        """   
         if packet['action'] == 'LAUNCH_KMEANS':
             self.display(self.name + ' %s: Launching Kmeans worker' %self.worker_address)    
     
@@ -375,6 +402,7 @@ class SVM_Worker(POM3_CommonML_Worker):
             pred_tr = self.model.predict(self.Xtr_b)
             accuracy = accuracy_score(self.ytr, pred_tr)
             self.display(self.name + ' %s: Accuracy in training set: %0.4f' %(self.worker_address, accuracy))
+            self.model.is_trained = True
             self.is_trained = True
             self.display(self.name + ' %s: Final model stored' %self.worker_address)
             
@@ -389,6 +417,21 @@ class SVM_Worker(POM3_CommonML_Worker):
    
     
     def get_gradients(self, weights):
+        """
+        Compute the gradients to update the weights using the local data of this worker node.
+        
+        Parameters
+        ----------
+        weights: ndarray
+            The weights of the SVM model.
+
+        Returns
+        -------
+        gradients: ndarray
+            The gradient of every weight.
+        cost_function: float
+            The part of the cost function associated to the local dataset.
+        """
         cost_function = 0
         gradients = np.zeros((self.num_centroids, 1))
         hinge = self.Kmn.dot(weights) * self.Y_col

@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 '''
-Common ML operations to be used by all algorithms in POM1
-
+Common ML operations to be used by all algorithms in POM1.
 '''
 
 __author__ = "Marcos Fernández Díaz"
 __date__ = "December 2020"
 
-import sys
+
 import numpy as np
 
 from MMLL.models.Common_to_POMs_123 import Common_to_POMs_123_Master, Common_to_POMs_123_Worker
@@ -16,7 +15,7 @@ from MMLL.models.Common_to_POMs_123 import Common_to_POMs_123_Master, Common_to_
 
 class POM1_CommonML_Master(Common_to_POMs_123_Master):
     """
-    This class implements the Common ML operations, run at Master node. It inherits from Common_to_POMs_123_Master.
+    This class implements the Common ML operations, run at Master node. It inherits from :class:`Common_to_POMs_123_Master`.
     """
 
     def __init__(self, comms, logger, verbose=False):
@@ -25,15 +24,14 @@ class POM1_CommonML_Master(Common_to_POMs_123_Master):
 
         Parameters
         ----------
-        comms: comms object instance
-            object providing communications
+        comms: :class:`Comms_master`
+            Object providing communications functionalities.
 
-        logger: class:`logging.Logger`
-            logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            indicates if messages are print or not on screen
-
+            Indicates whether to print messages on screen nor not.
         """
         self.comms = comms
         self.logger = logger
@@ -53,7 +51,11 @@ class POM1_CommonML_Master(Common_to_POMs_123_Master):
 
     def reset(self):
         """
-        Create/reset some empty variables needed by the Master Node
+        Create/reset some variables needed by the Master Node.
+
+        Parameters
+        ----------
+        None
         """
         self.display(self.name + ': Resetting local data')
         self.list_centroids = []
@@ -63,6 +65,8 @@ class POM1_CommonML_Master(Common_to_POMs_123_Master):
         self.list_gradients = []
         self.list_weights = []
         self.list_costs = []
+        self.C_reconstruct = []
+        self.rx = []
 
        
         
@@ -73,8 +77,7 @@ class POM1_CommonML_Master(Common_to_POMs_123_Master):
 
 class POM1_CommonML_Worker(Common_to_POMs_123_Worker):
     '''
-    Class implementing the POM1 Common operations, run at Worker
-
+    Class implementing the POM1 Common operations, run at Worker node. It inherits from :class:`Common_to_POMs_123_Worker`.
     '''
 
     def __init__(self, master_address, comms, logger, verbose=False):
@@ -84,16 +87,16 @@ class POM1_CommonML_Worker(Common_to_POMs_123_Worker):
         Parameters
         ----------
         master_address: string
-            Identifier of the master instance
+            Identifier of the master instance.
 
-        comms: comms object instance
-            Object providing communication functionalities
+        comms: :class:`Comms_worker`
+            Object providing communication functionalities.
 
-        logger: class:`mylogging.Logger`
-            Logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            Indicates if messages are print or not on screen
+            Indicates whether to print messages on screen nor not.
         """
         self.master_address = master_address
         self.comms = comms
@@ -109,12 +112,12 @@ class POM1_CommonML_Worker(Common_to_POMs_123_Worker):
 
     def ProcessPreprocessingPacket(self, packet):
         """
-        Take an action after receiving a packet for the preprocessing
+        Process the received packet at worker.
 
         Parameters
         ----------
-        packet: Dictionary
-            Packet received
+        packet: dictionary
+            Packet received from master.
         """        
         if packet['action'] == 'SEND_MEANS':
             self.display(self.name + ' %s: Obtaining means' %self.worker_address)

@@ -5,7 +5,7 @@ Common ML operations to be used by all algorithms in POM4
 '''
 
 __author__ = "Angel Navia-Vázquez"
-__date__ = "Dec. 2020"
+__date__ = "Febr. 2021"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
@@ -45,8 +45,8 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
         verbose: boolean
             indicates if messages are print or not on screen
-        **kwargs: Arbitrary keyword arguments.
 
+        kwargs: Keyword arguments.
 
         """
         self.name = 'POM4_CommonML_Master'               # Name
@@ -248,24 +248,31 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
                     MLmodel.display(MLmodel.name + ' asking encrypter to cryptonode')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_asking_encrypter')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
-            def while_asking_encr_data(self, MLmodel, use_bias):
+            def while_asking_encr_data(self, MLmodel, use_bias, classes):
+
                 try:
                     # Communicating encrypter to workers
-                    data = {'encrypter': MLmodel.encrypter, 'use_bias': use_bias}
+                    data = {'encrypter': MLmodel.encrypter, 'use_bias': use_bias, 'classes': classes}
                     # For checking, REMOVE
                     #data.update({'decrypter': MLmodel.decrypter})
                     packet = {'action': 'ask_encr_data', 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ' sent encrypter to all Workers and asked encr_data')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_asking_encr_data')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
 
@@ -286,7 +293,7 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 return
             '''
 
-            def while_sending_bl_data(self, MLmodel):
+            def while_sending_bl_data(self, MLmodel, classes):
                 try:                    
                     # Encrypted data at MLmodel.X_encr_dict, MLmodel.y_encr_dict
                     # To store at MLmodel
@@ -295,28 +302,28 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                     # To send to crypto
                     MLmodel.X_bl_dict = {}
                     MLmodel.y_bl_dict = {}
-
                     
                     for waddr in MLmodel.workers_addresses:
                         X = MLmodel.X_encr_dict[waddr]
-                        y = MLmodel.y_encr_dict[waddr]
                         NP, NI = X.shape
                         BX = np.random.normal(0, 1, (NP, NI))
-                        By = np.random.normal(0, 1, (NP, 1))
                         MLmodel.BX_dict.update({waddr: BX})
-                        MLmodel.By_dict.update({waddr: By})
                         MLmodel.X_bl_dict.update({waddr: X + BX})
-                        MLmodel.y_bl_dict.update({waddr: y + By})
-                        '''
-                        try:
-                            aux = MLmodel.decrypter.decrypt(X + BX)
-                            aux = MLmodel.decrypter.decrypt(y + By)
-                            print('DECRYPT OK')
-                        except:
-                            print('STOP AT while_sending_bl_data')
-                            import code
-                            code.interact(local=locals())
-                        '''
+                        
+                        if classes is None: # binary case
+                            y = MLmodel.y_encr_dict[waddr]
+                            By = np.random.normal(0, 1, (NP, 1))
+                            MLmodel.By_dict.update({waddr: By})
+                            MLmodel.y_bl_dict.update({waddr: y + By})
+                        else: # multiclass
+                            y = MLmodel.y_encr_dict[waddr] # dict cla
+                            y_bl_dict = {}
+                            By_dict = {}
+                            for cla in classes:
+                                By_dict.update({cla: np.random.normal(0, 1, (NP, 1))})
+                                y_bl_dict.update({cla: y[cla] + By_dict[cla]})
+                            MLmodel.By_dict.update({waddr: By_dict})
+                            MLmodel.y_bl_dict.update({waddr: y_bl_dict})
 
                     action = 'send_Xy_bl'
                     data = {'X_bl_dict': MLmodel.X_bl_dict, 'y_bl_dict': MLmodel.y_bl_dict}
@@ -325,9 +332,12 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                     MLmodel.comms.send(packet,  MLmodel.send_to[MLmodel.cryptonode_address])
 
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_sending_bl_data')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_sending_prep_object(self, MLmodel, model):              
@@ -387,10 +397,13 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                     MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                     MLmodel.display(MLmodel.name + ' broadcasted get_X_minus_mean_squared to all Workers')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_getting_X_minus_mean_squared, POM6_Common')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
             def while_getting_X_minus_mean_squared_roundrobin(self, MLmodel, mean_values, input_data_description, x2_init, which_variables):
@@ -400,10 +413,13 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                     MLmodel.comms.roundrobin(packet, MLmodel.workers_addresses)
                     MLmodel.display(MLmodel.name + 'Started roundrobin: get_X_minus_mean_squared_roundrobin')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_getting_X_minus_mean_squared_roundrobin, POM6_Common')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
             '''
             def while_sending_roundrobin(self, MLmodel, roundrobin_addresses, action, NI=None, xmean=None):
@@ -521,9 +537,12 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 try:
                     print(MLmodel.name + ' COMPLETED')
                 except:
+                    raise
+                    '''
                     print('STOP AT while_Exit')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
         self.FSMmaster = FSM_master()
@@ -563,15 +582,20 @@ class POM4_CommonML_Master(Common_to_all_POMs):
         #self.FSMmaster.go_Exit(self)
         #self.FSMmaster.go_waiting_order(self)
     '''
-    ######## CHECKED
 
     def get_vocabulary(self):
         """
-        Gets from workers their vocabulary
+        Gets the workers vocabulary
 
         Parameters
         ----------
         None
+
+        Returns
+        -------
+        vocab: list of strings
+            Vocabulary.
+
         """
         if self.aggregation_type == 'direct':
             self.vocab_dict = {}
@@ -610,11 +634,12 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
     def get_df(self, vocab):
         """
-        Gets df and Ndocs from workers
+        Gets df and filters vocabulary
 
         Parameters
         ----------
-        None
+        vocab: list of strings
+            Vocabulary to be used
         """
         if self.aggregation_type == 'direct':
             self.display(self.name + ': Asking workers their tf df directly')
@@ -665,6 +690,13 @@ class POM4_CommonML_Master(Common_to_all_POMs):
         Parameters
         ----------
         None
+
+        Returns:
+        ----------
+        count: array
+            Features count.
+        NP: integer
+            Total count.
         """
         if self.aggregation_type == 'direct':
             self.count_dict = {}
@@ -678,9 +710,9 @@ class POM4_CommonML_Master(Common_to_all_POMs):
             count = np.sum(np.array(list(self.count_dict.values())), axis=0)
             
         if self.aggregation_type == 'roundrobin':
-            print('STOP AT get_feat_count, pending roundrobin')
-            import code
-            code.interact(local=locals())
+            print('ERROR AT get_feat_count, pending roundrobin')
+            #import code
+            #code.interact(local=locals())
         
         self.display(self.name + ': getting feat freq is done')
         return count, NP
@@ -691,7 +723,13 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
         Parameters
         ----------
-        None
+        linkage_type: string
+            Type of linkage (full or join).
+
+        Returns
+        -------
+        hashids_global: list of hashids
+            Global hashids.
         """
         hashids_global = None
 
@@ -730,8 +768,8 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
         if self.aggregation_type == 'roundrobin':
             print('get_hashids: Pending roundrobin implementation ')
-            import code
-            code.interact(local=locals())
+            #import code
+            #code.interact(local=locals())
 
         self.display(self.name + ': getting hashids is done')
         return hashids_global
@@ -743,7 +781,18 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
         Parameters
         ----------
-        Common Hashids, list of strings
+        hashids: list of strings
+            Global hashids
+        linkage_type: string
+            Type of linkage (full or join).
+
+        Returns
+        -------
+        input_data_description_dict: dict
+            Updated description of the input data.
+
+        target_data_description_dict: dict
+            Updated description of the target data.
         """
 
         self.input_data_description_dict = {}
@@ -757,11 +806,19 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
     def data2num_at_workers_V(self):
         """
-        Asks workers to transform their data  into numeric
+        Asks workers to transform their data into numeric, vertical partition
 
         Parameters
         ----------
         None
+
+        Returns
+        -------
+        input_data_description_dict: dict
+            Updated description of the input data.
+
+        target_data_description_dict: dict
+            Updated description of the target data.
         """
 
         # New values
@@ -779,6 +836,7 @@ class POM4_CommonML_Master(Common_to_all_POMs):
     def send_ping_workers(self):
         """
         Ping workers to identify the cryptonode
+
         Parameters
         ----------
             None
@@ -788,22 +846,6 @@ class POM4_CommonML_Master(Common_to_all_POMs):
         self.run_Master()
         self.display(self.name + ' : ping is done')
 
-
-
-    ######## UNCHECKED
-
-    '''
-    def send_encrypter(self):
-        """
-        Send encrypter to all nodes
-
-        Parameters
-        ----------
-        None
-        """
-        self.FSMmaster.go_bcasting_encrypter(self)
-        self.run_Master()
-    '''
 
     def ask_encrypter(self):
         """
@@ -817,37 +859,40 @@ class POM4_CommonML_Master(Common_to_all_POMs):
         # We wait for the answer from the cryptonode
         self.run_Master()
 
-    def get_cryptdata(self, use_bias):
-        """
+    def get_cryptdata(self, use_bias=True, classes=None):
+        """, classes=None
         Get encrypted data from workers, under POM4
 
         Parameters
         ----------
-        None
+        use_bias: bool
+            Indicates if bias must be used
+        classes: list of strings
+            list of classes
         """
 
         # Le mandamos al estado para activar el run_Master, pero no hace nada.
-        self.FSMmaster.go_asking_encr_data(self, use_bias)
+        self.FSMmaster.go_asking_encr_data(self, use_bias, classes)
         print('---------- waiting for cryptdata')
         self.run_Master()
 
         # Add blinding and share with cryptonode
-        self.FSMmaster.go_sending_bl_data(self)
+        self.FSMmaster.go_sending_bl_data(self, classes)
+
+        # We need to wait for the cryptonode to store the data
+        crypto_OK = False
+        print('Waiting for the cryptonode...')
+        while not crypto_OK:
+            time.sleep(1)
+            packet, sender = self.CheckNewPacket_master()
+            if packet is not None:
+                if packet['action'] == 'ACK_storing_Xy_bl':
+                    crypto_OK = True
+        print('Cryptonode is ready!')
+
         self.FSMmaster.go_waiting_order(self)
 
 
-    '''
-    def reencrypt_data(self):  # Includes removing blinding
-        """
-        Ask cryptonode to reencrypt the data to a common key
-
-        Parameters
-        ----------
-        None
-        """
-        self.FSMmaster.go_reencrypting_data(self)
-        self.run_Master()
-    '''
     def reset(self, NI):
         """
         Create some empty variables needed by the Master Node
@@ -881,7 +926,8 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
         Parameters
         ----------
-            None
+            prep_object: object instance
+                Instance of the preprocessing object
         """
         self.prep = prep_object
         self.FSMmaster.go_sending_prep_object(self)
@@ -993,6 +1039,13 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 #self.decrypter = packet['data']['decrypter']
                 self.display('Storing encrypter')
                 self.encrypter = packet['data']['encrypter']
+                '''
+                try:
+                    self.decrypter = packet['data']['decrypter']
+                    print('WARNING storing DECRYPTER ONLY FOR DEBUGGING')
+                except:
+                    pass
+                '''
                 # Not needed, processed at ping
                 #self.broadcast_addresses = list(set(self.workers_addresses) -set([sender]))
                 
@@ -1124,11 +1177,13 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 #self.display('ACK_send_ping Master %s %s %s' % (str(sender), packet['action'], packet['data']))               
 
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Master')
             import code
             code.interact(local=locals())
             pass
-
+            '''
         return
 
 
@@ -1168,49 +1223,6 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
         ytr: ndarray
             1-D numpy array containing the target training values
     
-        **kwargs: Arbitrary keyword arguments.
-
-
-        -----------------------------------------------------------------
-        Optional or POM dependant arguments
-
-        -----------------------------------------------------------------
-
-        Parameters
-        ---------------------
-
-        cryptonode_address: string
-            address of the crypto node
-
-        Nmaxiter: integer
-            Maximum number of iterations during learning
-
-        NC: integer
-            Number of centroids
-
-        regularization: float
-            Regularization parameter
-
-        classes: list of strings
-            Possible class values in a multiclass problem
-
-        balance_classes: Boolean
-            If True, the algorithm takes into account unbalanced datasets
-
-        C: array of floats
-            Centroids matrix
-
-        nf: integer
-            Number of bits for the floating part
-
-        N: integer
-            Number of
-
-        fsigma: float
-            factor to multiply standard sigma value = sqrt(Number of inputs)
-
-        normalize_data: Boolean
-            If True, data normalization is applied, irrespectively if it has been previously normalized
         """
         self.master_address = master_address
         self.worker_address = worker_address                    # The id of this Worker
@@ -1251,9 +1263,12 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                 try:
                     MLmodel.display(MLmodel.name + ' %s is waiting...' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('STOP AT while_waiting_order')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_storing_prep_object(self, MLmodel, packet):
@@ -1265,9 +1280,12 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_stored_prep' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('STOP AT while_storing_prep_object')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_local_preprocessing(self, MLmodel):
@@ -1281,15 +1299,19 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_local_prep' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('STOP AT while_local_preprocessing')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
             
             def while_sending_encr_data(self, MLmodel, packet):
                 try:
                     MLmodel.encrypter = packet['data']['encrypter']
                     use_bias = packet['data']['use_bias']
+                    MLmodel.classes = packet['data']['classes']
 
                     MLmodel.display(MLmodel.name + ': stored encrypter, encrypting data...')
                     
@@ -1299,7 +1321,15 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
 
                     # Encrypting data
                     MLmodel.Xtr_b_encr = MLmodel.encrypter.encrypt(MLmodel.Xtr_b.astype(float))
-                    MLmodel.ytr_encr = MLmodel.encrypter.encrypt(MLmodel.ytr.astype(float))
+
+                    if MLmodel.classes is None: # Binary case
+                        MLmodel.ytr_encr = MLmodel.encrypter.encrypt(MLmodel.ytr.astype(float))
+
+                    if MLmodel.classes is not None: # Multiclass
+                        MLmodel.ytr_encr={}
+                        for cla in MLmodel.classes:
+                            ytr = (np.array(MLmodel.ytr == cla).reshape(-1,1)).astype(float)
+                            MLmodel.ytr_encr.update({cla: MLmodel.encrypter.encrypt(ytr)})
 
                     action = 'ACK_send_encr_data'
                     data = {'Xtr_b_encr': MLmodel.Xtr_b_encr, 'ytr_encr': MLmodel.ytr_encr}
@@ -1307,15 +1337,18 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_send_encr_data')
                 except:
-                    print('ERROR AT while_storing_encrypt')
+                    raise
+                    '''
+                    print('ERROR AT while_sending_encr_data')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_storing_prep_object(self, MLmodel, packet):
-                print('STOP AT while_storing_prep_object worker')
-                import code
-                code.interact(local=locals())
+                #print('STOP AT while_storing_prep_object worker')
+                #import code
+                #code.interact(local=locals())
                 MLmodel.prep = packet['data']['prep_object']
                 MLmodel.display(MLmodel.name + ' %s: stored preprocessing object' % (str(MLmodel.worker_address)))
                 action = 'ACK_stored_prep'
@@ -1342,12 +1375,15 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.Xtr_orig = X_prep
                     error = None
                 except Exception as err:
+                    raise
+                    '''
                     error = err
                     # Comment later
                     print('ERROR AT while_local_preprocessing worker')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
 
                 #print(np.mean(MLmodel.Xtr_b, axis = 0))
                 #print(np.std(MLmodel.Xtr_b, axis = 0))
@@ -1436,12 +1472,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_sumX' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     print('ERROR AT while_computing_sumX worker')
                     import code
                     code.interact(local=locals())
                     pass
-
-
+                    '''
 
                 return
 
@@ -1472,10 +1509,12 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_X2_mean_sum' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_X_minus_mean_squared worker POM6_Common')
                     import code
                     code.interact(local=locals())
-                   
+                    '''
                     pass
                 return
 
@@ -1505,10 +1544,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_minX' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_minX')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
             def while_computing_sumX_roundrobin(self, MLmodel, packet):
@@ -1538,10 +1580,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet)
                     MLmodel.display(MLmodel.name + ' %s: sent get_sumX_roundrobin' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_sumX_roundrobin')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
 
@@ -1574,10 +1619,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet)
                     MLmodel.display(MLmodel.name + ' %s: sent get_X_minus_mean_squared_roundrobin' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_X_minus_mean_squared_roundrobin worker POM6_Common')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
             def while_computing_stats(self, MLmodel, packet):
@@ -1637,11 +1685,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent get_Rxyb_rxyb_roundrobin' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_Rxyb_rxyb_roundrobin worker POM6_Common')
                     import code
                     code.interact(local=locals())
-
                     pass
+                    '''
                 return
 
             def while_computing_vocab_direct(self, MLmodel, packet):
@@ -1666,10 +1716,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_vocab_direct' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_vocab_direct')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_computing_tf_df_direct(self, MLmodel, packet):
@@ -1695,30 +1748,82 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_tf_df_direct' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_df_direct')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_checking_data(self, MLmodel, packet):
                 try:
                     MLmodel.display(MLmodel.name + ' %s: is checking data' % (str(MLmodel.worker_address)))
-
-                    input_data_description = packet['data']['input_data_description']
-                    target_data_description = packet['data']['target_data_description']
-                    
                     err = ''
+                    try:
+                        input_data_description = packet['data']['input_data_description']
+                    except:
+                        MLmodel.display(MLmodel.name + ' %s: input_data_description not available, not checking inputs' % (str(MLmodel.worker_address)))
+                        input_data_description = None
+                        err += 'Missing input_data_description; '
+
+                    try:
+                        target_data_description = packet['data']['target_data_description']
+                    except:
+                        target_data_description = None
+
+                    if target_data_description is None:
+                        MLmodel.display(MLmodel.name + ' %s: target_data_description not available, not checking targets' % (str(MLmodel.worker_address)))
+
                     NI = MLmodel.Xtr_b.shape[1]
                     NT = MLmodel.ytr.reshape(-1, 1).shape[1]
 
-                    if NI != input_data_description['NI']:
-                        err += 'Incorrect number of features; '
-                    elif NT != target_data_description['NT']:
-                        err += 'Incorrect number of targets; '
-                    elif MLmodel.Xtr_b.shape[0] != MLmodel.ytr.shape[0]:
-                         err += 'Different number of inputs and targets; '
-                    else:
+                    if target_data_description is not None:
+                        if NT != target_data_description['NT']:
+                            err += 'Incorrect number of targets; '
+
+                        try:
+                            # Checking targets
+                            for k in range(NT):
+                                x = MLmodel.ytr[:, k]
+                                xtype = target_data_description['output_types'][k]['type']
+                                if xtype == 'num':
+                                    try:
+                                        x = x.astype(float)
+                                    except:
+                                        err += 'Target No. %d is not numeric; ' % k
+                                        pass
+                                if xtype == 'cat':
+                                    try:
+                                        x = set(x.astype(str))
+                                        x = list(x - set(input_data_description['input_types'][k]['values']))
+                                        if len(x) > 0:
+                                            err += 'Target No. %d has an unrecognized categorical value; ' % k
+                                    except:
+                                        err += 'Target No. %d is not categorical; ' % k
+                                        pass
+                                if xtype == 'bin':
+                                    try:
+                                        x = x.astype(float)
+                                        x = list(set(x) - set([0.0, 1.0]))
+                                        if len(x) > 0:
+                                            err += 'Target No. %d is not binary; ' % k
+                                    except:
+                                        err += 'Target No. %d is not binary; ' % k
+                                        pass
+
+                        except:
+                            err += 'Unexpected error when processing targets; '
+                            pass
+
+                    if input_data_description is not None:
+                        if NI != input_data_description['NI']:
+                            err += 'Incorrect number of input features; '
+
+                        if MLmodel.Xtr_b.shape[0] != MLmodel.ytr.shape[0]:
+                            err += 'Different number of input and target patterns; '
+
                         try:
                             # Checking inputs
                             for k in range(NI):
@@ -1748,47 +1853,24 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                                     except:
                                         err += 'INput feature No. %d is not binary; ' % k
                                         pass
-                            # Checking targets
-                            for k in range(NT):
-                                x = MLmodel.ytr[:, k]
-                                xtype = target_data_description['output_types'][k]['type']
-                                if xtype == 'num':
-                                    try:
-                                        x = x.astype(float)
-                                    except:
-                                        err += 'Target No. %d is not numeric; ' % k
-                                        pass
-                                if xtype == 'cat':
-                                    try:
-                                        x = set(x.astype(str))
-                                        x = list(x - set(input_data_description['input_types'][k]['values']))
-                                        if len(x) > 0:
-                                            err += 'Target No. %d has an unrecognized categorical value; ' % k
-                                    except:
-                                        err += 'Target No. %d is not categorical; ' % k
-                                        pass
-                                if xtype == 'bin':
-                                    try:
-                                        x = x.astype(float)
-                                        x = list(set(x) - set([0.0, 1.0]))
-                                        if len(x) > 0:
-                                            err += 'Target No. %d is not binary; ' % k
-                                    except:
-                                        err += 'Target No. %d is not binary; ' % k
-                                        pass
+
                         except:
-                            err += 'Unexpected error when processing features; '
+                            err += 'Unexpected error when processing input features; '
                             pass
+
 
                     data = {'err': err}
                     packet = {'action': 'ACK_checking_data', 'sender': MLmodel.worker_address, 'data':data}
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_checking_data' % (str(MLmodel.worker_address)))
                 except Exception as error:
+                    raise
+                    '''
                     print('ERROR AT while_checking_data')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_computing_feat_count_direct(self, MLmodel, packet):
@@ -1802,10 +1884,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_feat_count_direct' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_vocab_direct')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_computing_hashids_direct(self, MLmodel, packet):
@@ -1820,10 +1905,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_hashids_direct' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_hashids_direct')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_record_linkage(self, MLmodel, packet):
@@ -1859,10 +1947,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_record_linkage' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_record_linkage')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_data2num_at_worker_V(self, MLmodel, packet):
@@ -1882,10 +1973,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent data2num_at_worker_V' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_data2num_at_worker_V')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_local_preprocessing_V(self, MLmodel, prep_model):
@@ -1925,12 +2019,15 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.Xtr_orig = X_prep
                     error = None
                 except Exception as err:
+                    raise
+                    '''
                     error = err
                     # Comment later
                     print('ERROR AT while_local_preprocessing_V worker')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
 
                 if prep_model.name == 'missing_data_imputation_V':
                     data = {'X_mean':prep_model.means, 'X_std':None}
@@ -2243,9 +2340,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
         verbose: boolean
             indicates if messages are print or not on screen
-
    
-        **kwargs: Arbitrary keyword arguments.
+        kwargs: Keyword arguments.
 
         """
         self.pom = 4
@@ -2277,45 +2373,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
             # Enter/exit callbacks are defined here
 
             def while_waiting_order(self, MLmodel):
-                try:
-                    MLmodel.display('Crypto is waiting...')
-                except:
-                    print('ERROR AT while_waiting_order')
-                    import code
-                    code.interact(local=locals())
-                return
+                MLmodel.display('Crypto is waiting...')
 
-            '''
-            def while_storing_prep_object(self, MLmodel, packet):
-                try:
-                    MLmodel.prep = packet['data']['prep_object']
-                    MLmodel.display(MLmodel.name + ' %s: stored preprocessing object' % (str(MLmodel.worker_address)))
-                    action = 'ACK_stored_prep'
-                    packet = {'action': action, 'sender': MLmodel.cryptonode_address}
-                    MLmodel.comms.send(packet, MLmodel.master_address)
-                    MLmodel.display(MLmodel.name + ' %s: sent ACK_stored_prep' % (str(MLmodel.worker_address)))
-                except:
-                    print('STOP AT while_storing_prep_object')
-                    import code
-                    code.interact(local=locals())
-                return
-
-            def while_local_preprocessing(self, MLmodel):
-                try:
-                    X = np.copy(MLmodel.Xtr_b)
-                    new_Xtr_b = MLmodel.prep.transform(X)
-                    MLmodel.Xtr_b = np.copy(new_Xtr_b)
-                    MLmodel.display(MLmodel.name + ' %s: locally preprocessing data...' % (str(MLmodel.worker_address)))
-                    action = 'ACK_local_prep'
-                    packet = {'action': action, 'sender': MLmodel.cryptonode_address}
-                    MLmodel.comms.send(packet, MLmodel.master_address)
-                    MLmodel.display(MLmodel.name + ' %s: sent ACK_local_prep' % (str(MLmodel.worker_address)))
-                except:
-                    print('STOP AT while_local_preprocessing')
-                    import code
-                    code.interact(local=locals())
-                return
-            '''
             def while_sending_encrypter(self, MLmodel, packet):
                 try:
 
@@ -2336,6 +2395,10 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     #data = {'decrypter': MLmodel.decrypter, 'encrypter': MLmodel.encrypter, 'sender': MLmodel.cryptonode_address}
                     ##########################################
                     data = {'encrypter': MLmodel.encrypter, 'sender': MLmodel.cryptonode_address}
+                    '''
+                    print('====== WARNING sending decrypter for debugging =======')
+                    data.update({'decrypter': MLmodel.decrypter})
+                    '''
                     packet = {'action': action, 'data': data, 'to': 'CommonML'}
                     # Sending encrypter to Master
                     MLmodel.comms.send(packet, MLmodel.master_address)
@@ -2344,9 +2407,12 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     #MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_encrypter')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_sending_encrypter')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_storing_Xy_bl(self, MLmodel, packet):
@@ -2354,18 +2420,65 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
                     MLmodel.X_bl_dict = {}
                     MLmodel.y_bl_dict = {}
+                    MLmodel.X2_bl_encr_dict = {}
                     keys =  list(packet['data']['X_bl_dict'].keys())
                     for waddr in keys:
-                        MLmodel.X_bl_dict.update({waddr: MLmodel.decrypter.decrypt(packet['data']['X_bl_dict'][waddr])})   
-                        MLmodel.y_bl_dict.update({waddr: MLmodel.decrypter.decrypt(packet['data']['y_bl_dict'][waddr])})   
+                        X_bl = MLmodel.decrypter.decrypt(packet['data']['X_bl_dict'][waddr])
+                        MLmodel.X_bl_dict.update({waddr: X_bl})
+                        MLmodel.X2_bl_encr_dict.update({waddr: MLmodel.encrypter.encrypt(X_bl * X_bl)})   
+                        
+                        y = packet['data']['y_bl_dict'][waddr]
+                        if type(y) is not dict: 
+                            MLmodel.y_bl_dict.update({waddr: MLmodel.decrypter.decrypt(packet['data']['y_bl_dict'][waddr])})   
+                        if type(y) is dict:
+                            y_bl_dict = {}
+                            for cla in y.keys():
+                                y_bl_dict.update({cla: MLmodel.decrypter.decrypt(y[cla])})
+                            MLmodel.y_bl_dict.update({waddr: y_bl_dict})   
                         MLmodel.display('Decrypting blinded data from %s OK' % waddr)
+
                     MLmodel.display(MLmodel.name + ': stored decrypted blinded data')
+                    action = 'ACK_storing_Xy_bl'
+                    data = {None}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    MLmodel.display(MLmodel.name + ': sent ACK_storing_Xy_bl')
 
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_storing_Xy_bl')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
+
+            def while_storing_Kxc_bl(self, MLmodel, packet):
+                try:
+                    # We store the kernel values as the input training data
+                    del MLmodel.X2_bl_encr_dict
+                    MLmodel.X_bl_dict = {}
+
+                    #Kxc_encr_bl_dict = packet['data']['Kxc_encr_bl_dict']
+                    keys =  list(packet['data']['Kxc_encr_bl_dict'].keys())
+                    for waddr in keys:
+                        MLmodel.X_bl_dict.update({waddr: MLmodel.decrypter.decrypt(packet['data']['Kxc_encr_bl_dict'][waddr])})
+                        MLmodel.display('Decrypting and storing blinded kernel data from %s OK' % waddr)
+
+                    action = 'ACK_storing_Kxc_bl'
+                    data = {None}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    MLmodel.display(MLmodel.name + ': sent ACK_storing_Kxc_bl')
+                except:
+                    raise
+                    '''
+                    print('ERROR AT while_storing_Xy_bl')
+                    import code
+                    code.interact(local=locals())
+                    '''
+                return
+
 
             def while_multiplying_XB(self, MLmodel, packet):
 
@@ -2373,44 +2486,52 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     # Result in:
                     XB_bl_encr_dict = {}
                     MLmodel.display(MLmodel.name + ' is multiplying...')
-                    # Warning, Bq_prodpk_bl can be a value or a dictionary...
+
                     B_bl_encr = packet['data']['B_bl']
-                    is_dictionary = type(B_bl_encr) is dict
+                    is_empty = B_bl_encr is None  
 
-                    if is_dictionary:
-                        MLmodel.workers_addresses = list(B_bl_encr.keys())
+                    if is_empty: # If it is empty, we return X_bl_squared
+                        XB_bl_encr_dict = MLmodel.X2_bl_encr_dict
+                    else:
+                        is_dictionary = type(B_bl_encr) is dict
 
-                    if not is_dictionary:
-                        # Same value of B for all X
-                        B_bl = MLmodel.decrypter.decrypt(B_bl_encr)
-                        MQ, NQ = B_bl.shape
-
-                    for waddr in MLmodel.workers_addresses:
                         if is_dictionary:
-                            # Different values of B for every X
-                            ### Overflow???
-                            try:
-                                B_bl = MLmodel.decrypter.decrypt(B_bl_encr[waddr])
-                            except:
-                                print('STOP AT while_multiplying_XB  overflow at crypto???--------')
-                                import code
-                                code.interact(local=locals())
-                                pass
+                            MLmodel.workers_addresses = list(B_bl_encr.keys())
+
+                        if not is_dictionary:
+                            # Same value of B for all X
+                            B_bl = MLmodel.decrypter.decrypt(B_bl_encr)
                             MQ, NQ = B_bl.shape
 
-                        X_bl = MLmodel.X_bl_dict[waddr]
+                        for waddr in MLmodel.workers_addresses:
+                            if is_dictionary:
+                                # Different values of B for every X
+                                ### Overflow???
+                                try:
+                                    B_bl = MLmodel.decrypter.decrypt(B_bl_encr[waddr])
+                                except:
+                                    raise
+                                    '''
+                                    print('STOP AT while_multiplying_XB  overflow at crypto???--------')
+                                    import code
+                                    code.interact(local=locals())
+                                    pass
+                                    '''
+                                MQ, NQ = B_bl.shape
 
-                        MX, NX = X_bl.shape
-                        if (MX == MQ and NQ == 1) or (MX == MQ and NQ == NX):
-                            # B is of size MP, e.g., errors
-                            XB_bl = X_bl * B_bl
-                           
-                        if (NX == NQ and MQ == 1):
-                            # B is of size 1xNI, e.g., weights
-                            XB_bl = B_bl * X_bl
+                            X_bl = MLmodel.X_bl_dict[waddr]
 
-                        XB_bl_encr = MLmodel.encrypter.encrypt(XB_bl)
-                        XB_bl_encr_dict.update({waddr: XB_bl_encr})
+                            MX, NX = X_bl.shape
+                            if (MX == MQ and NQ == 1) or (MX == MQ and NQ == NX):
+                                # B is of size MP, e.g., errors
+                                XB_bl = X_bl * B_bl
+                               
+                            if (NX == NQ and MQ == 1):
+                                # B is of size 1xNI, e.g., weights
+                                XB_bl = B_bl * X_bl
+
+                            XB_bl_encr = MLmodel.encrypter.encrypt(XB_bl)
+                            XB_bl_encr_dict.update({waddr: XB_bl_encr})
                         
                     action = 'ACK_sent_XB_bl_encr_dict'
                     data = {'XB_bl_encr_dict': XB_bl_encr_dict}
@@ -2419,9 +2540,86 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_XB_bl_encr_dict')
 
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_multiplying_XB ############')
                     import code
                     code.interact(local=locals())
+                    '''
+                return
+
+            def while_multiplying_AB(self, MLmodel, packet):
+                # A and B are two dictionaries
+                try:
+                    # Result in:
+                    AB_bl_encr_dict = {}
+                    MLmodel.display(MLmodel.name + ' is multiplying...')
+                    A_encr_bl_dict = packet['data']['A_encr_bl_dict']
+                    B_encr_bl_dict = packet['data']['B_encr_bl_dict']
+
+                    AB_bl_encr_dict = {}
+
+                    for waddr in A_encr_bl_dict.keys():
+                        A_bl = MLmodel.decrypter.decrypt(A_encr_bl_dict[waddr])
+                        B_bl = MLmodel.decrypter.decrypt(B_encr_bl_dict[waddr])
+                        AB_bl = A_bl * B_bl
+                        AB_bl_encr_dict.update({waddr: MLmodel.encrypter.encrypt(AB_bl)})
+
+                    action = 'ACK_sent_AB_bl_encr_dict'
+                    data = {'AB_bl_encr_dict': AB_bl_encr_dict}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    MLmodel.display(MLmodel.name + ': sent ACK_sent_AB_bl_encr_dict')
+
+                except:
+                    raise
+                    '''
+                    print('ERROR AT while_multiplying_AB ############')
+                    import code
+                    code.interact(local=locals())
+                    '''
+                return
+
+            def while_multiplying_XBM(self, MLmodel, packet):
+                try:
+                    # Result in:
+                    MLmodel.XB_bl_encr_dict = {}
+                    MLmodel.display(MLmodel.name + ' is multiplying...')
+                    
+                    B_bl_encr = packet['data']['B_bl']
+
+                    MLmodel.workers_addresses = list(B_bl_encr.keys())
+                    MLmodel.classes = list(B_bl_encr[MLmodel.workers_addresses[0]].keys())
+
+                    for waddr in MLmodel.workers_addresses:
+                        X_bl = MLmodel.X_bl_dict[waddr]
+                        MX, NX = X_bl.shape
+                        XB_bl_encr_dict = {}
+                        for cla in MLmodel.classes: 
+                            B_bl = MLmodel.decrypter.decrypt(B_bl_encr[waddr][cla])
+                            MB, NB = B_bl.shape
+
+                            if (MX == MB and NB == 1) or (MX == MB and NB == NB):
+                                # B is of size MP, e.g., errors
+                                XB_bl = X_bl * B_bl
+
+                            XB_bl_encr = MLmodel.encrypter.encrypt(XB_bl)
+                            XB_bl_encr_dict.update({cla: XB_bl_encr})
+                        MLmodel.XB_bl_encr_dict.update({waddr: XB_bl_encr_dict})
+                        
+                    action = 'ACK_sent_XBM_bl_encr_dict'
+                    data = {'XB_bl_encr_dict': MLmodel.XB_bl_encr_dict}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    MLmodel.display(MLmodel.name + ': sent ACK_sent_XBM_bl_encr_dict')
+
+                except:
+                    raise
+                    '''
+                    print('ERROR AT while_multiplying_XB ############')
+                    import code
+                    code.interact(local=locals())
+                    '''
                 return
 
             def while_decrypting_model(self, MLmodel, packet):
@@ -2437,9 +2635,39 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_decr_bl_model')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_decr_model pom4commonml crypto')
                     import code
                     code.interact(local=locals())
+                    '''
+                return
+
+            def while_decrypting_modelM(self, MLmodel, packet):
+                try:
+                    model_encr_bl_dict = packet['data']['model_bl']
+                    model_decr_bl_dict = {}
+
+                    for key in list(model_encr_bl_dict.keys()):
+                        if key == 'wM':
+                            classes = list(model_encr_bl_dict[key].keys())
+                            tmp_dict = {}
+                            for cla in classes: 
+                                tmp_dict.update({cla: MLmodel.cr.decrypter.decrypt(model_encr_bl_dict[key][cla])})
+                            model_decr_bl_dict.update({key: tmp_dict})
+
+                    action = 'ACK_sent_decr_bl_modelM'
+                    data = {'model_decr_bl_dict': model_decr_bl_dict}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    MLmodel.display(MLmodel.name + ': sent ACK_sent_decr_bl_modelM')
+                except:
+                    raise
+                    '''
+                    print('ERROR AT while_decr_modelM pom4commonml crypto')
+                    import code
+                    code.interact(local=locals())
+                    '''
                 return
 
             def while_compute_exp(self, MLmodel, packet):
@@ -2449,6 +2677,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     for waddr in s_encr_bl_dict.keys():
                         s_bl = MLmodel.decrypter.decrypt(s_encr_bl_dict[waddr])
                         exp_s_bl = np.exp(-s_bl)
+                        which = exp_s_bl < 1e-10
+                        exp_s_bl[which] = 0
                         exp_s_bl_encr = MLmodel.encrypter.encrypt(exp_s_bl)
                         exps_bl_dict.update({waddr: exp_s_bl_encr})
 
@@ -2460,10 +2690,72 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
                 except:
+                    raise
+                    '''
                     print('ERROR AT Common crypto while_compute_exp')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
+                return
+
+            def while_compute_expM(self, MLmodel, packet):
+                try:
+                    s_encr_bl_dict = packet['data']['s_encr_bl_dict']
+                    exps_bl_dict = {}
+
+                    workers = list(s_encr_bl_dict.keys())
+                    classes = list(s_encr_bl_dict[workers[0]])
+                    for waddr in workers:
+                        cla_exps_bl_dict = {}
+                        for cla in classes:
+                            s_bl = MLmodel.decrypter.decrypt(s_encr_bl_dict[waddr][cla])
+                            exp_s_bl = np.exp(-s_bl)
+                            which = exp_s_bl < 1e-10
+                            exp_s_bl[which] = 0
+                            exp_s_bl_encr = MLmodel.encrypter.encrypt(exp_s_bl)
+                            cla_exps_bl_dict.update({cla: exp_s_bl_encr})
+                        exps_bl_dict.update({waddr: cla_exps_bl_dict})
+
+                    action = 'ACK_expM_bl'
+                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    data = {'exps_bl_dict': exps_bl_dict}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    #del packet
+                    MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
+                except:
+                    raise
+                    '''
+                    print('ERROR AT Common crypto while_compute_exp')
+                    import code
+                    code.interact(local=locals())
+                    pass
+                    '''
+                return
+
+            def while_compute_sort(self, MLmodel, packet):
+                try: 
+                    x_encr_bl = packet['data']['x_encr_bl']
+                    x_bl = MLmodel.decrypter.decrypt(x_encr_bl)
+
+                    index = np.argsort(-x_bl)
+
+                    action = 'ACK_sort_bl'
+                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    data = {'index': index}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    #del packet
+                    MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
+                except:
+                    raise
+                    '''
+                    print('ERROR AT Common while_compute_sort')
+                    import code
+                    code.interact(local=locals())
+                    pass
+                    '''
                 return
 
             def while_compute_div(self, MLmodel, packet):
@@ -2487,19 +2779,62 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
                 except:
+                    raise
+                    '''
                     print('ERROR AT Common crypto while_compute_div')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
+                return
+
+            def while_compute_divM(self, MLmodel, packet):
+                try:
+                    num_bl_dict = packet['data']['num_bl_dict']
+                    den_bl_dict = packet['data']['den_bl_dict']
+
+                    workers = list(num_bl_dict.keys())
+                    classes = list(num_bl_dict[workers[0]])
+                    sigm_encr_bl_dict = {}
+                    for waddr in workers:
+                        cla_sigm_encr_bl_dict = {}
+                        for cla in classes:
+                            num_bl = MLmodel.decrypter.decrypt(num_bl_dict[waddr][cla])
+                            den_bl = MLmodel.decrypter.decrypt(den_bl_dict[waddr][cla])
+                            sigm_bl = num_bl / den_bl
+                            sigm_encr_bl = MLmodel.encrypter.encrypt(sigm_bl)
+                            cla_sigm_encr_bl_dict.update({cla: sigm_encr_bl})
+                        sigm_encr_bl_dict.update({waddr: cla_sigm_encr_bl_dict})
+                    
+                    action = 'ACK_divM_bl'
+                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    data = {'sigm_encr_bl_dict': sigm_encr_bl_dict}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    #del packet
+                    MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
+                except:
+                    raise
+                    '''
+                    print('ERROR AT Common crypto while_compute_divM')
+                    import code
+                    code.interact(local=locals())
+                    pass
+                    '''
                 return
 
             def while_compute_argmin(self, MLmodel, packet):
                 try:
                     c2_2XTC_bl_dict = packet['data']['c2_2XTC_bl_dict']
+                    axis = 1
+                    try:
+                        axis = packet['data']['axis']
+                    except: 
+                        pass
                     argmin_dict = {}
                     for waddr in c2_2XTC_bl_dict.keys():
                         distXC_bl = MLmodel.decrypter.decrypt(c2_2XTC_bl_dict[waddr])
-                        argmin_dict.update({waddr: np.argmin(distXC_bl, axis=1)})
+                        argmin_dict.update({waddr: np.argmin(distXC_bl, axis=axis)})
 
                     action = 'ACK_compute_argmin'
                     #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
@@ -2509,10 +2844,37 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
                 except:
+                    raise
+                    '''
                     print('ERROR AT Common crypto while_compute_argmin')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
+                return
+
+            def while_compute_sign(self, MLmodel, packet):
+                try:
+                    sign_bl_dict = {}                    
+                    for waddr in packet['data']['A_encr_bl_dict'].keys():
+                        sign_bl = np.sign(MLmodel.decrypter.decrypt(packet['data']['A_encr_bl_dict'][waddr]))
+                        sign_bl_dict.update({waddr: sign_bl})
+
+                    action = 'ACK_compute_sign'
+                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    data = {'sign_bl_dict': sign_bl_dict}
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    #del packet
+                    MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
+                except:
+                    raise
+                    '''
+                    print('ERROR AT Common crypto while_compute_sign')
+                    import code
+                    code.interact(local=locals())
+                    pass
+                    '''
                 return
 
             def while_answering_ping(self, MLmodel):
@@ -2527,12 +2889,20 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
             State(name='waiting_order', on_enter=['while_waiting_order']),
             State(name='sending_encrypter', on_enter=['while_sending_encrypter']),
             State(name='storing_Xy_bl', on_enter=['while_storing_Xy_bl']),
+            State(name='storing_Kxc_bl', on_enter=['while_storing_Kxc_bl']),
             State(name='multiplying_XB', on_enter=['while_multiplying_XB']),
+            State(name='multiplying_AB', on_enter=['while_multiplying_AB']),
+            State(name='multiplying_XBM', on_enter=['while_multiplying_XBM']),
             State(name='decrypting_model', on_enter=['while_decrypting_model']),
+            State(name='decrypting_modelM', on_enter=['while_decrypting_modelM']),
             State(name='compute_exp', on_enter=['while_compute_exp']),
+            State(name='compute_expM', on_enter=['while_compute_expM']),
             State(name='compute_div', on_enter=['while_compute_div']),
+            State(name='compute_divM', on_enter=['while_compute_divM']),
+            State(name='compute_sort', on_enter=['while_compute_sort']),
             State(name='answering_ping', on_enter=['while_answering_ping']),
             State(name='compute_argmin', on_enter=['while_compute_argmin']),
+            State(name='compute_sign', on_enter=['while_compute_sign']),
             'Exit']
 
         transitions_crypto = [
@@ -2540,19 +2910,35 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
             ['go_sending_encrypter', 'waiting_order', 'sending_encrypter'],
             ['go_waiting_order', 'sending_encrypter', 'waiting_order'],
             ['go_storing_Xy_bl', 'waiting_order', 'storing_Xy_bl'],
+            ['go_storing_Kxc_bl', 'waiting_order', 'storing_Kxc_bl'],
+            ['done_storing_Kxc_bl', 'storing_Kxc_bl', 'waiting_order'],
             ['go_waiting_order', 'storing_Xy_bl', 'waiting_order'],
             ['go_multiplying_XB', 'waiting_order', 'multiplying_XB'],
             ['done_multiplying_XB', 'multiplying_XB', 'waiting_order'],
+            ['go_multiplying_AB', 'waiting_order', 'multiplying_AB'],
+            ['done_multiplying_AB', 'multiplying_AB', 'waiting_order'],
+            ['go_multiplying_XBM', 'waiting_order', 'multiplying_XBM'],
+            ['done_multiplying_XBM', 'multiplying_XBM', 'waiting_order'],
             ['go_decrypting_model', 'waiting_order', 'decrypting_model'],
             ['done_decrypting_model', 'decrypting_model', 'waiting_order'],
+            ['go_decrypting_modelM', 'waiting_order', 'decrypting_modelM'],
+            ['done_decrypting_modelM', 'decrypting_modelM', 'waiting_order'],
             ['go_compute_exp', 'waiting_order', 'compute_exp'],
             ['done_compute_exp', 'compute_exp', 'waiting_order'],
+            ['go_compute_expM', 'waiting_order', 'compute_expM'],
+            ['done_compute_expM', 'compute_expM', 'waiting_order'],
             ['go_compute_div', 'waiting_order', 'compute_div'],
             ['done_compute_div', 'compute_div', 'waiting_order'],
+            ['go_compute_divM', 'waiting_order', 'compute_divM'],
+            ['done_compute_divM', 'compute_divM', 'waiting_order'],
+            ['go_compute_sort', 'waiting_order', 'compute_sort'],
+            ['done_compute_sort', 'compute_sort', 'waiting_order'],
             ['go_answering_ping', 'waiting_order', 'answering_ping'],
             ['done_answering_ping', 'answering_ping', 'waiting_order'],
             ['go_compute_argmin', 'waiting_order', 'compute_argmin'],
-            ['done_compute_argmin', 'compute_argmin', 'waiting_order']
+            ['done_compute_argmin', 'compute_argmin', 'waiting_order'],
+            ['go_compute_sign', 'waiting_order', 'compute_sign'],
+            ['done_compute_sign', 'compute_sign', 'waiting_order']
         ]
 
         self.FSMcrypto = FSM_crypto()
@@ -2578,6 +2964,7 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                 id of the sender
         """
         self.terminate = False
+        #self.display(self.name + ': received %s from worker %s' % (packet['action'], sender), verbose=True)
 
         # Exit the process
         if packet['action'] == 'STOP':
@@ -2592,21 +2979,49 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
             self.FSMcrypto.go_storing_Xy_bl(self, packet)
             self.FSMcrypto.go_waiting_order(self)
 
+        if packet['action'] == 'store_Kxc_bl':
+            self.FSMcrypto.go_storing_Kxc_bl(self, packet)
+            self.FSMcrypto.done_storing_Kxc_bl(self)
+
         if packet['action'] == 'send_mult_XB':
             self.FSMcrypto.go_multiplying_XB(self, packet)
             self.FSMcrypto.done_multiplying_XB(self)
+
+        if packet['action'] == 'send_mult_AB':
+            self.FSMcrypto.go_multiplying_AB(self, packet)
+            self.FSMcrypto.done_multiplying_AB(self)
+
+        if packet['action'] == 'send_mult_XBM':
+            self.FSMcrypto.go_multiplying_XBM(self, packet)
+            self.FSMcrypto.done_multiplying_XBM(self)
 
         if packet['action'] == 'send_model_encr_bl':
             self.FSMcrypto.go_decrypting_model(self, packet)
             self.FSMcrypto.done_decrypting_model(self)
 
+        if packet['action'] == 'send_modelM_encr_bl':
+            self.FSMcrypto.go_decrypting_modelM(self, packet)
+            self.FSMcrypto.done_decrypting_modelM(self)
+
         if packet['action'] == 'ask_exp_bl':
             self.FSMcrypto.go_compute_exp(self, packet)
             self.FSMcrypto.done_compute_exp(self)
 
+        if packet['action'] == 'ask_expM_bl':
+            self.FSMcrypto.go_compute_expM(self, packet)
+            self.FSMcrypto.done_compute_expM(self)
+
         if packet['action'] == 'ask_div_bl':
             self.FSMcrypto.go_compute_div(self, packet)
             self.FSMcrypto.done_compute_div(self)
+
+        if packet['action'] == 'ask_divM_bl':
+            self.FSMcrypto.go_compute_divM(self, packet)
+            self.FSMcrypto.done_compute_divM(self)
+
+        if packet['action'] == 'ask_sort_bl':
+            self.FSMcrypto.go_compute_sort(self, packet)
+            self.FSMcrypto.done_compute_sort(self)
 
         if packet['action'] == 'ping':           
             self.FSMcrypto.go_answering_ping(self)
@@ -2615,6 +3030,10 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
         if packet['action'] == 'ask_argmin_bl':
             self.FSMcrypto.go_compute_argmin(self, packet)
             self.FSMcrypto.done_compute_argmin(self)
+
+        if packet['action'] == 'ask_sign_bl':
+            self.FSMcrypto.go_compute_sign(self, packet)
+            self.FSMcrypto.done_compute_sign(self)
 
         return self.terminate
 

@@ -12,6 +12,12 @@ import numpy as np
 class imputation_model_V():
 
     def __init__(self, input_data_description=None):
+        """
+        Parameters
+        ----------
+        input_data_description: dict
+            Description of the input features
+        """
         self.input_data_description = input_data_description
         self.name = 'missing_data_imputation_V'
 
@@ -47,8 +53,10 @@ class imputation_model_V():
                 X_transf = np.hstack(X_transf)
 
             except:
+                raise
                 print('ERROR AT imputation_iobject')
+                '''
                 import code
                 code.interact(local=locals())
-
+                '''
         return X_transf

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Collection of methods common to POMs 1, 2 and 3. To be inherited by the ML classes
-
+Collection of methods common to POMs 1, 2 and 3. To be inherited by the ML classes.
 '''
 
 __author__ = "Marcos Fernández Díaz"
@@ -25,6 +24,7 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
     def __init__(self):
         """
         Create a :class:`Common_to_POMs_123_Master` instance.
+
         Parameters
         ----------
         None
@@ -35,13 +35,12 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def terminate_workers_(self, workers_addresses_terminate=None):
         """
-        Send order to terminate Workers
+        Send order to terminate workers.
 
         Parameters
         ----------
-        users_addresses_terminate: List of strings
-            Addresses of the workers to be terminated
-
+        users_addresses_terminate: list of strings
+            Addresses of the workers to be terminated.
         """
         packet = {'action': 'STOP', 'to': 'CommonML'}
 
@@ -67,19 +66,19 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def checkAllStates(self, condition, state_dict):
         """
-        Checks if all worker states satisfy a given condition
+        Check if all worker states satisfy a given condition.
 
         Parameters
         ----------
-        condition: String
-            Condition to check
-        state_dict: Dictionary
-            Dictionary whose values need to be compared against condition
+        condition: string
+            Condition to check.
+        state_dict: dictionary
+            Dictionary whose values need to be compared against condition.
 
         Returns
-        ----------
-        all_active: Boolean
-            Flag indicating if all values inside dictionary are equal to condition
+        --------
+        all_active: boolean
+            Flag indicating if all values inside dictionary are equal to condition.
         """
         all_active = True
         for worker in self.workers_addresses:
@@ -92,10 +91,7 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def train_Master(self):
         """
-        This is the main training loop, it runs the following actions until the stop condition is met:
-            - Update the execution state
-            - Perform actions according to the state
-            - Process the received packets
+        TMain loop controlling the training of the algorithm.
 
         Parameters
         ----------
@@ -123,11 +119,11 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def CheckNewPacket_Master(self):
         """
-        Checks if there is a new message in the Master queue
+        Check if there is a new message in the Master queue.
 
         Parameters
         ----------
-            None
+        None
         """
         if self.platform == 'pycloudmessenger':
             packet = None
@@ -174,15 +170,13 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def ProcessReceivedPacket_Master(self, packet, sender):
         """
-        Process the received packet at Master and take some actions, possibly changing the state
-
+Process the received packet at master.
         Parameters
         ----------
-        packet: Dictionary
-            Packet received
-
-        sender: String
-            Id of the sender
+        packet: dictionary
+            Packet received from a worker.
+        sender: string
+            Identification of the sender.
         """
         if packet['action'][0:3] == 'ACK':
             self.state_dict[sender] = packet['action']
@@ -226,6 +220,19 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
 
     def send_preprocessor(self, prep_model):
+        """
+        Function to send a preprocessing object to the workers.
+
+        Parameters
+        ----------
+        prep_model: Preprocessor object
+            Object implementing the preprocessing capabilities.
+
+        Returns
+        -------
+        worker_errors: dictionary
+            Dictionary containing the errors (if any) for the different workers.
+        """
         self.worker_errors = {}
 
         # Send message to every worker
@@ -246,12 +253,17 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def get_stats(self, stats_list):
         """
-        Gets from workers their statistics
+        Get statistics from workers.
 
         Parameters
         ----------
         stats_list: List of strings
             List of statistics to be computed by every worker
+
+        Returns
+        -------
+        stats_dict: dictionary
+            Dictionary containing the statistics for the different workers.
         """
         self.stats_dict = {}
 
@@ -272,6 +284,22 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
 
     def send_check(self, input_data_description, target_data_description):
+        """
+        Function to send input and target descriptions to workers in order to check if their data complies with the specification.
+
+        Parameters
+        ----------
+        input_data_description: dictionary
+            Dictionary describing the input data.
+
+        target_data_description: dictionary
+            Dictionary describing the output data.
+
+        Returns
+        -------
+        worker_errors: dictionary
+            Dictionary containing the errors (if any) for the different workers.
+        """
         self.worker_errors = {}
 
         # Send message to every worker
@@ -292,10 +320,19 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def get_Rxyb_rxyb(self):
         """
-        Obtaining get_Rxyb_rxyb from workers
+        Function to obtain the Self Correlation and Cross-correlation matrices from workers.
+
         Parameters
         ----------
-            None
+        None
+
+        Returns
+        -------
+        Rxy_b: ndarray
+            Self Correlation Matrix.
+
+        rxy_b: ndarray
+            Cross-correlation Matrix.
         """
         self.Rxyb_dict = {}
         self.rxyb_dict = {}
@@ -326,10 +363,16 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def get_vocabulary(self):
         """
-        Gets from workers their vocabulary
+        Gets the vocabulary from workers.
+
         Parameters
         ----------
         None
+
+        Returns
+        -------
+        vocab: dictionary
+            Dictionary containing the vocabulary for every worker.
         """
         self.vocab_dict = {}
 
@@ -365,10 +408,19 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def get_df(self, vocab):
         """
-        Gets df and Ndocs from workers
+        Get df and Ndocs from workers.
+
         Parameters
         ----------
         None
+
+        Returns
+        -------
+        vocab: dictionary
+            Dictionary containing the vocabulary for every worker.
+
+        global_df_dict_filtered: dictionary
+            Dictionary containing the vocabulary for every worker with every word appearing at least 10 times.
         """
         self.Ndocs_dict = {}
         self.df_dict = {}
@@ -410,10 +462,19 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def get_feat_count(self):
         """
-        Gets feature frequency from workers
+        Get feature frequency from workers.
+
         Parameters
         ----------
         None
+
+        Returns
+        -------
+        count: int
+            Number of non-zero observations for all features.
+
+        NP: int
+            Number of total patterns including all the workers.
         """
         self.count_dict = {}
         self.NP_dict = {}
@@ -440,10 +501,22 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def data2num_at_workers_V(self):
         """
-        Asks workers to transform their data  into numeric
+        Ask workers to transform their data into numeric for vertical partitioning.
+
         Parameters
         ----------
         None
+
+        Returns
+        -------
+        input_data_description_dict: dictionary
+            New dictionary describing the input data.
+
+        target_data_description_dict: dictionary
+            New dictionary describing the output data.
+
+        errors_dict: dictionary
+            Dictionary containing the errors (if any) for the different workers.
         """
         self.input_data_description_dict = {}
         self.target_data_description_dict = {}
@@ -468,10 +541,17 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def get_hashids(self, linkage_type):
         """
-        Gets hashids from workers
+        Get hash ids from workers.
+
         Parameters
         ----------
-        None
+        linkage_type: string
+            Type of linkage to use (either 'full' or 'join').
+
+        Returns
+        -------
+        hashids_global: list
+            List of global hash ids.
         """
         hashids_global = None
         self.hashids_dict = {}
@@ -522,10 +602,23 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def linkage_hashids_transform_workers(self, hashids, linkage_type):
         """
-        Record linkage at workers
+        Record linkage at workers.
+
         Parameters
         ----------
-        Common Hashids, list of strings
+        linkage_type: string
+            Type of linkage to use (either 'full' or 'join').
+
+        hashids: list
+            List of hash ids.
+
+        Returns
+        -------
+        input_data_description_dict: dictionary
+            New dictionary describing the input data.
+
+        target_data_description_dict: dictionary
+            New dictionary describing the output data.
         """
 
         self.input_data_description_dict = {}
@@ -551,12 +644,17 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
 
     def send_preprocess_V(self, prep_model):
         """
-        This is the local preprocessing loop, it runs the following actions:
-            - It sends the preprocessing object to the workers 
-            - It sends instruction to the workers to preprocess the data
+        Function to send a preprocessing object for vertical partitioning to the workers.
+
         Parameters
         ----------
-            None
+        prep_model: Preprocessor object
+            Object implementing the preprocessing capabilities.
+
+        Returns
+        -------
+        worker_errors: dictionary
+            Dictionary containing the errors (if any) for the different workers.
         """
         self.worker_errors = {}
         self.mean_dict = {}
@@ -591,6 +689,7 @@ class Common_to_POMs_123_Worker(Common_to_all_objects):
     def __init__(self):
         """
         Create a :class:`Common_to_POMs_123_Worker` instance.
+
         Parameters
         ----------
         None
@@ -601,7 +700,7 @@ class Common_to_POMs_123_Worker(Common_to_all_objects):
 
     def run_worker(self):
         """
-        This is the training executed at every Worker
+        This is the training loop executed at every worker.
 
         Parameters
         ----------
@@ -617,7 +716,7 @@ class Common_to_POMs_123_Worker(Common_to_all_objects):
 
     def CheckNewPacket_worker(self):
         """
-        Checks if there is a new message in the Worker queue
+        Check if there is a new message in the worker queue.
 
         Parameters
         ----------
@@ -675,12 +774,12 @@ class Common_to_POMs_123_Worker(Common_to_all_objects):
 
     def ProcessCommonPacket(self, packet):
         """
-        Take an action after receiving a packet for the preprocessing
+        Take an action after receiving a packet for the preprocessing.
 
         Parameters
         ----------
-        packet: Dictionary
-            Packet received
+        packet: dictionary
+            Packet received from master.
         """
         # Exit the process
         if packet['action'] == 'STOP':

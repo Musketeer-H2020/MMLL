@@ -17,6 +17,12 @@ import torch
 class deep_learning_model():
 
     def __init__(self, data_description):
+        """
+        Parameters
+        ----------
+        input_data_description: dict
+            Description of the input features
+        """
         self.data_description = data_description
 
         NI = self.data_description['NI']

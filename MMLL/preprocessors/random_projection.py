@@ -13,6 +13,18 @@ import scipy
 class random_projection_model():
 
     def __init__(self, input_data_description, NF, projection_type='full'):
+        """
+        Parameters
+        ----------
+        input_data_description: dict
+            Description of the input features
+
+        NF: int
+            Number of features to obtain
+
+        projection_type: string
+            Selected type of projection
+        """
         self.input_data_description = input_data_description
         self.name = 'random_projection_%s' % projection_type
         self.new_input_data_description = {}
@@ -32,7 +44,7 @@ class random_projection_model():
 
     def transform(self, X):
         """
-        Transform data into a tfidf matrix
+        Transform data reducing its dimensionality using random projection
 
         Parameters
         ----------
@@ -124,7 +136,10 @@ class random_projection_model():
                 raise Exception('Wrong input dimension: received %d, expected %d' % (X.shape[1], self.input_data_description['NI']))
                 return None
         except:
-            print('ERROR at transform')
+            print('ERROR at RP transform')
+            raise
+            '''
             import code
             code.interact(local=locals())
+            '''
 

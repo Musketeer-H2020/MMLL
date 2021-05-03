@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Preprocessing object for image reshaping 
+Preprocessing object for image reshaping into a vector
 @author:  Angel Navia Vázquez
 '''
 __author__ = "Angel Navia Vázquez, UC3M."
@@ -15,6 +15,12 @@ from PIL import Image as PIL_Image
 import torch
 
 class image_to_vector_model():
+    """
+    Parameters
+    ----------
+    data_description: dict
+        Description of the input features
+    """
 
     def __init__(self, data_description):
         self.data_description = data_description
@@ -22,7 +28,7 @@ class image_to_vector_model():
 
     def transform(self, X):
         """
-        Transform image
+        Transform image by transforming into 1D vector
 
         Parameters
         ----------

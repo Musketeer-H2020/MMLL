@@ -13,6 +13,15 @@ import scipy
 class feature_extract_model():
 
     def __init__(self, selected_features, input_data_description):
+        """
+        Parameters
+        ----------
+        selected_features: list of indices
+            Features to be retained
+
+        input_data_description: dict
+            Description of the input features
+        """
         self.selected_features = selected_features
         self.input_data_description = input_data_description
         self.name = 'feature_extract'
@@ -28,7 +37,7 @@ class feature_extract_model():
 
     def transform(self, X):
         """
-        Transform data with a log scale
+        Transform data by extracting features
 
         Parameters
         ----------
@@ -60,7 +69,10 @@ class feature_extract_model():
 
         except:
             print('ERROR AT feature_extract_model transform')
+            raise
+            '''
             import code
             code.interact(local=locals())
+            '''
 
         return X_transf

@@ -11,56 +11,69 @@
 * `scipy`
 * `scikit-learn`
 * `matplotlib`
-* `numpy==1.16.4` 
-* `Keras==2.2.4`
-* `tensorflow==1.14.0`
+* `tensorflow===2.4.0`
 * `phe==1.4.0`
 * `dill==0.3.2`
 * `tqdm==4.50.2`
 * `pympler==0.8`
 * `torchvision==0.8.1`
 * `pillow==7.2.0`
-* `tensorflow v1.14.0`
+* `skl2onnx==1.8.0`
 
 ## Content
 
-Currently the library is in beta phase, and it only supports the following Privacy Operation Modes (POMs) and models:
+The library supports the following Privacy Operation Modes (POMs) and models:
 
 ### POM1:
 
 * Kmeans
-* Neural Networks
-* Support Vector Machines (SVM)
+* Neural networks
+* Support Vector Machine
+* Federated Budget Support Vector Machine
+* Distributed Support Vector Machine
 
 ### POM2:
 
 * Kmeans
-* Neural Networks
-* Support Vector Machines (SVM)
+* Neural networks
+* Support Vector Machine
+* Federated Budget Support Vector Machine
 
 ### POM3:
 
 * Kmeans
-* Neural Networks
-* Support Vector Machines (SVM)
+* Neural networks
+* Support Vector Machine
+* Federated Budget Support Vector Machine
 
 ### POM4: 
 
-* Linear Regression (**LR**) 
-* Kmeans (**Kmeans**): 
+* Linear Regression
+* Logistic Classifier
+* Multiclass Logistic Classifier
+* Clustering Kmeans
+* Kernel Regression
+* Budget Distributed Support Vector Machine
 
 ### POM5: 
 
-* Linear Regression (**LR**)
-* Kmeans (**Kmeans**): 
+* Linear Regression
+* Logistic Classifier
+* Multiclass Logistic Classifier
+* Clustering Kmeans
+* Kernel Regression
+* Budget Distributed Support Vector Machine
+* Multiclass Budget Distributed Support Vector Machine
 
 ## POM6: 
 
-* Ridge Regression (**RR**)
-* Kmeans (**Kmeans**): 
-* Binary Logistic Classifier (**LC_pm**)
-* Multiclass Logistic Classifier (**MLC_pm**)
-* Kernel Regression (**KR_pm**)
+* Ridge Regression
+* Logistic Classifier
+* Multiclass Logistic Classifier
+* Clustering Kmeans
+* Kernel Regression
+* Budget Distributed Support Vector Machine
+* Multiclass Budget Distributed Support Vector Machine
 
 ## Usage 
 

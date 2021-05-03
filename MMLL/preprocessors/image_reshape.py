@@ -14,9 +14,27 @@ from tqdm import tqdm   # pip install tqdm
 from PIL import Image as PIL_Image
 import torch
 
+
 class image_reshape_model():
+    """
+    This class represents the main object for reshaping images.
+    """
 
     def __init__(self, data_description, M, N):
+        """
+        Create an image_reshape_model instance.
+
+        Parameters
+        ----------
+        data_description: dict
+            Description of the input features
+
+        M: integer
+            Target number of rows
+
+        N: integer
+            Target number of columns
+        """
         self.data_description = data_description
         self.name = 'image_reshape'
         NI = self.data_description['NI']
@@ -44,7 +62,7 @@ class image_reshape_model():
 
     def transform(self, X):
         """
-        Transform image
+        Transform image by reshaping.
 
         Parameters
         ----------
@@ -54,7 +72,6 @@ class image_reshape_model():
         Returns
         -------
         transformed values: ndarray
-
         """
         N = X.shape[0]
         NC = X.shape[1]

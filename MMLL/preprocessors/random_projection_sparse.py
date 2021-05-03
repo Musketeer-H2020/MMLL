@@ -12,6 +12,16 @@ import numpy as np
 class random_projection_sparse_model():
 
     def __init__(self, input_data_description, NF):
+        """
+        Parameters
+        ----------
+        input_data_description: dict
+            Description of the input features
+
+        NF: int
+            Number of features to extract
+
+        """
         self.input_data_description = input_data_description
         self.name = 'random_sparse_projection'
         self.new_input_data_description = {}
@@ -34,7 +44,7 @@ class random_projection_sparse_model():
 
     def transform(self, X):
         """
-        Transform data into a tfidf matrix
+        Transform sparse data reducing its dimensionality using random projection
 
         Parameters
         ----------

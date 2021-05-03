@@ -12,6 +12,12 @@ import numpy as np
 class logscale_model():
 
     def __init__(self, input_data_description=None):
+        """
+        Parameters
+        ----------
+        input_data_description: dict
+            Description of the input features
+        """
         self.input_data_description = input_data_description
         self.name = 'logscale'
 
@@ -49,9 +55,12 @@ class logscale_model():
                                 else: 
                                     newX[kk, 0] = -np.log(1 - x)
                         except:
+                            raise
+                            '''
                             print('ERROR HERE')
                             import code
                             code.interact(local=locals())
+                            '''
                         X_transf.append(newX)
 
                     if self.input_data_description['input_types'][kinput]['type'] == 'bin':
@@ -66,7 +75,10 @@ class logscale_model():
             
             except:
                 print('ERROR AT logscale')
+                raise
+                '''
                 import code
                 code.interact(local=locals())
+                '''
 
         return X_transf

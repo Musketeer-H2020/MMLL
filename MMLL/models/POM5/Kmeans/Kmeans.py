@@ -13,11 +13,15 @@ from transitions import State
 from transitions.extensions import GraphMachine
 import pickle
 
-class model():
+class Model():
+    """
+    Kmeans model.
+    """
     def __init__(self):
         self.c = None
+        self.is_trained = False
 
-    def predict(self, X_b):
+    def predict(self, X):
         """
         Predicts outputs given the inputs
 
@@ -31,13 +35,33 @@ class model():
         prediction_values: ndarray
 
         """
-        XTC = np.dot(X_b, self.c.T)
-        x2 = np.sum(X_b * X_b, axis=1).reshape((-1, 1))
+        XTC = np.dot(X, self.c.T)
+        x2 = np.sum(X * X, axis=1).reshape((-1, 1))
         c2 = np.sum(self.c * self.c, axis=1).reshape((1, -1))
         D = x2 - 2 * XTC + c2
         predictions = np.argmin(D, axis=1)
         return predictions
 
+    def save(self, filename=None):
+        """
+        Saves the trained model to file
+
+        Parameters
+        ----------
+        filename: string
+            path+filename          
+
+        """
+        if not self.is_trained:
+            print('Model Save Error: model not trained yet, nothing to save.')
+        else:
+            try:
+                with open(filename, 'wb') as f:
+                    pickle.dump(self, f)
+                print('Model saved at %s' %filename)
+            except:
+                print('Model Save Error: model cannot be saved, check the provided path/filename.')
+                raise
 
 class Kmeans_Master(Common_to_all_POMs):
     """
@@ -65,7 +89,7 @@ class Kmeans_Master(Common_to_all_POMs):
         verbose: boolean
             indicates if messages are print or not on screen
         
-        **kwargs: Arbitrary keyword arguments.
+        kwargs: Keyword arguments.
 
         """
         super().__init__()
@@ -96,7 +120,6 @@ class Kmeans_Master(Common_to_all_POMs):
         self.verbose = verbose                      # print on screen when true
         self.state_dict = {}                        # dictionary storing the execution state
         self.NI = None
-        self.model = model()
         #self.regularization = regularization
         #self.classes = classes
         #self.balance_classes = balance_classes
@@ -113,6 +136,7 @@ class Kmeans_Master(Common_to_all_POMs):
         except:
             pass
         self.process_kwargs(kwargs)
+        self.model = Model()
         self.message_counter = 0    # used to number the messages
         self.encrypter = self.cr.get_encrypter()  # to be shared        # self.encrypter.encrypt(np.random.normal(0, 1, (2,3)))
         self.decrypter = self.cr.get_decrypter()  # to be kept as secret  self.encrypter.decrypt()
@@ -185,11 +209,14 @@ class Kmeans_Master(Common_to_all_POMs):
                     MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     MLmodel.display('ERROR AT while_update_tr_data')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_send_C_encr(self, MLmodel):
@@ -201,30 +228,32 @@ class Kmeans_Master(Common_to_all_POMs):
                     #MLmodel.comms.broadcast(packet, MLmodel.workers_addresses)
                     MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
                     MLmodel.display(MLmodel.name + ' send_C_encr to workers')
-                    #print('STOP AT while_send_C_encr')
-                    #import code
                     #code.interact(local=locals())
-
-
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     raise
                     print('ERROR AT while_send_C_encr')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_crypto_loop(self, MLmodel):
                 try:
                     MLmodel.display(MLmodel.name + ' at while_crypto_loop')
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     raise
                     print('ERROR AT while_mult_loop')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_min_bl(self, MLmodel, packet):
@@ -241,12 +270,15 @@ class Kmeans_Master(Common_to_all_POMs):
                     MLmodel.comms.send(packet, sender)
                     MLmodel.display(MLmodel.name + ': sent argmin')
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     raise
                     print('ERROR AT while_min_bl')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_Exit(self, MLmodel):
@@ -318,6 +350,10 @@ class Kmeans_Master(Common_to_all_POMs):
         #self.send_to
         #self.worker_names
         #print(self.worker_names)
+
+        if self.Xval is not None:
+            message = 'WARNING: Validation data is not used during training.'
+            self.display(message, True)
 
         kiter = 0
         while not self.stop_training:
@@ -395,8 +431,9 @@ class Kmeans_Master(Common_to_all_POMs):
             kiter += 1
 
         self.model.c = self.C
-        self.display(self.name + ': Training is done')
         self.model.niter = kiter
+        self.model.is_trained = True
+        self.display(self.name + ': Training is done')
 
     def predict_Master(self, X_b):
         """
@@ -447,6 +484,7 @@ class Kmeans_Master(Common_to_all_POMs):
         try:
             if packet['action'][0:3] == 'ACK':
                 self.state_dict[sender] = packet['action']
+                self.display(self.name + ': received %s from worker %s' % (packet['action'], sender), verbose=True)
 
             if packet['action'] == 'ACK_update_tr_data':
                 #print('ProcessReceivedPacket_Master ACK_update_tr_data')
@@ -460,9 +498,12 @@ class Kmeans_Master(Common_to_all_POMs):
                 self.C_inc_dict.update({sender: packet['data']['C_inc']})
                 self.N_inc_dict.update({sender: packet['data']['N_inc']})
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Master')
             import code
-            code.interact(local=locals())         
+            code.interact(local=locals())    
+            '''     
         return
         
 
@@ -553,12 +594,14 @@ class Kmeans_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-                    #raise
                     import code
                     code.interact(local=locals())
                     #MLmodel.display('ERROR AT while_computing_XTDaX')
+                    '''
 
             def while_computing_distXC(self, MLmodel, packet):
                 try:
@@ -586,12 +629,14 @@ class Kmeans_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ask_min_bl' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-                    raise
                     print('ERROR AT while_computing_distXC')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_computing_incC(self, MLmodel, packet):
@@ -621,12 +666,14 @@ class Kmeans_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_C_inc' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-                    raise
                     print('ERROR AT while_computing_incC')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
         '''
@@ -702,8 +749,10 @@ class Kmeans_Worker(Common_to_all_POMs):
                 self.FSMworker.done_computing_incC(self)
 
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Worker')
             import code
             code.interact(local=locals())
-
+            '''
         return self.terminate

@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 '''
-Preprocessor 
-
+Available normalization strategies under POM1.
 '''
 
-__author__ = "Roberto Diaz"
+__author__ = "Roberto Díaz Morales and Marcos Fernández Díaz"
 __date__ = "April 2020"
 
 # Code to ensure reproducibility in the results
@@ -21,29 +20,32 @@ import pycloudmessenger.ffl.abstractions as fflapi
 
 class Preprocessor_Master(POM1_CommonML_Master):
     """
-    This class implements Kmeans, run at Master node. It inherits from POM1_CommonML_Master.
+    This class implements the normalizer preprocessor, run at Master node. It inherits from :class:`POM1_CommonML_Master`.
     """
 
     def __init__(self, comms, logger, data_description, verbose=False, normalization_type=None, model=None):
         """
-        Create a :class:`Kmeans_Master` instance.
+        Create a :class:`Preprocessor_Master` instance.
 
         Parameters
         ----------
-        Nworkers: integer
-            number of workers innitially associated to the task
+        comms: :class:`Comms_master`
+            Object providing communications functionalities.
 
-        end_users_addresses: list of strings
-            list of the addresses of the workers
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
-        comms: comms object instance
-            object providing communications
-
-        logger: class:`logging.Logger`
-            logging object instance
+        data_description: dictionary
+            Dictionary describing the input data.
 
         verbose: boolean
-            indicates if messages are print or not on screen
+            Indicates whether to print messages on screen nor not.
+
+        normalization_type: string
+            Type of normalization to use (minmax or mean_std).
+
+        model: :class:`MMLL.preprocessors.normalizer`
+            Normalizer object.
         """
         #super().__init__(comms, logger, verbose)
         self.name = 'Preprocessor_Master'           # Name
@@ -77,12 +79,11 @@ class Preprocessor_Master(POM1_CommonML_Master):
 
     def reset(self):
         """
-        Create some empty variables needed by the Master Node
+        Create/reset some variables needed by the Master Node.
 
         Parameters
         ----------
-        NI: integer
-            Number of input features
+        None
         """
         self.display(self.name + ': Resetting local data')
         self.normalized_means = []
@@ -94,11 +95,10 @@ class Preprocessor_Master(POM1_CommonML_Master):
         
     def normalize_Master(self):
         """
-        This is the main training loop, it runs the following actions until 
-        the stop condition is met:
-            - Update the execution state
-            - Process the received packets
-            - Perform actions according to the state
+        This is the main training loop, it runs the following actions until the stop condition is met:
+            - Update the execution state.
+            - Process the received packets.
+            - Perform actions according to the state.
 
         Parameters
         ----------
@@ -119,13 +119,12 @@ class Preprocessor_Master(POM1_CommonML_Master):
     
     def Update_State_Master(self):
         '''
-        We update the state of execution.
-        We control from here the data flow of the training process
-        ** By now there is only one implemented option: direct transmission **
+        Function to control the state of the execution.
 
-        This code needs some improvement...
+        Parameters
+        ----------
+        None
         '''
-
         if self.normalization_type=='global_mean_std':
 
             if self.state_dict['CN'] == 'START_NORMALIZATION':
@@ -158,7 +157,11 @@ class Preprocessor_Master(POM1_CommonML_Master):
     
     def TakeAction_Master(self):
         """
-        Takes actions according to the state
+        Function to take actions according to the state.
+
+        Parameters
+        ----------
+        None
         """
         to = 'Preprocessing'
 
@@ -259,15 +262,15 @@ class Preprocessor_Master(POM1_CommonML_Master):
 
     def ProcessReceivedPacket_Master(self, packet, sender):
         """
-        Process the received packet at Master and take some actions, possibly changing the state
+        Process the received packet at master.
 
         Parameters
         ----------
-            packet: packet object
-                packet received (usually a dict with various content)
+        packet: dictionary
+            Packet received from a worker.
 
-            sender: string<s
-                id of the sender
+        sender: string
+            Identification of the sender.
         """
         if packet['action'][0:3] == 'ACK':
             self.state_dict[sender] = packet['action']

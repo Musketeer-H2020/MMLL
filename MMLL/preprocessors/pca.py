@@ -10,10 +10,24 @@ import numpy as np
 class PCA_model():
 
     def __init__(self):
+        """
+        Parameters
+        ----------
+        None
+        """
         self.P = None
         self.name = 'PCA'
 
     def fit(self, Rxx, NF):
+        """
+        Parameters
+        ----------
+        Rxx: matrix
+            Cross-correlation matrix
+
+        NF: int
+            Number of features to extract
+        """
         self.NF = NF
         #self.eig_vals, self.eig_vecs = np.linalg.eig(Rxx)
         #self.P = self.eig_vecs[:, 0:NF]
@@ -24,7 +38,7 @@ class PCA_model():
     def transform(self, X):
 
         """
-        Transform data reducing its dimensionality
+        Transform data reducing its dimensionality using PCA
 
         Parameters
         ----------
@@ -40,6 +54,9 @@ class PCA_model():
             X_transf = np.dot(X, self.P)
         except:
             print('ERROR AT PCA model transform')
+            raise
+            '''
             import code
             code.interact(local=locals())
+            '''
         return X_transf

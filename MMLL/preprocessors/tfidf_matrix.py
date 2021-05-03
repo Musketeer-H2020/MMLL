@@ -13,6 +13,19 @@ from tqdm import tqdm   # pip install tqdm
 class tfidf_matrix_model():
 
     def __init__(self, vocab, df_dict, input_data_description):
+        """
+        Parameters
+        ----------
+
+        vocab: list of string
+            Vocabulary to ne used
+
+        df_dict: dict
+            Document frequency counts.
+
+        input_data_description: dict
+            Description of the input features
+        """
         self.input_data_description = input_data_description
         self.name = 'tfidf_matrix'
         self.new_input_data_description = {}

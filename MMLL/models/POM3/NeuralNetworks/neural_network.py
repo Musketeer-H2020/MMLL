@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 '''
-Neural Network model
+Neural Network model under POM3.
 '''
 
 __author__ = "Marcos Fernández Díaz"
-__date__ = "November 2020"
+__date__ = "February 2021"
 
+
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disables tensorflow warnings
 
 # Code to ensure reproducibility in the results
 from numpy.random import seed
@@ -13,60 +16,63 @@ seed(1)
 from tensorflow.compat.v1 import set_random_seed
 set_random_seed(2)
 
-import os
 import numpy as np
-from keras import backend as K
-from keras import losses
-from keras.models import model_from_json
 import tensorflow as tf
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-# Disables the warning "Your CPU supports instructions that this TensorFlow binary was not compiled to use: AVX2 FMA", doesn't enable AVX/FMA
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 from MMLL.models.POM3.CommonML.POM3_CommonML import POM3_CommonML_Master, POM3_CommonML_Worker
+from MMLL.models.Common_to_models import Common_to_models
 
 
 
-class model():
+class NN_model(Common_to_models):
     """
-    This class contains the neural network model
+    This class contains the neural network model in the format defined by Keras.
     """
 
-    def __init__(self, model_architecture, optimizer='Adam', loss='categorical_crossentropy', metric='accuracy'):
+    def __init__(self, logger, model_architecture, optimizer='Adam', loss='categorical_crossentropy', metric='accuracy'):
         """
-        Initializes keras model
+        Create a :class:`NN_model` instance.
 
         Parameters
         ----------
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
+
         model_architecture: JSON
-            JSON containing the neural network architecture as defined by Keras (in model.to_json())
-        optimizer: String
-            Type of optimizer to use (must be one from https://keras.io/api/optimizers/)
-        loss: String
-            Type of loss to use (must be one from https://keras.io/api/losses/)
-        metric: String
-            Type of metric to use (must be one from https://keras.io/api/metrics/)
+            Neural network architecture as defined by Keras (in model.to_json()).
+
+        optimizer: string
+            Type of optimizer to use (must be one from https://keras.io/api/optimizers/).
+
+        loss: string
+            Type of loss to use (must be one from https://keras.io/api/losses/).
+
+        metric: string
+            Type of metric to use (must be one from https://keras.io/api/metrics/).
         """
-        self.keras_model = model_from_json(model_architecture)                        # Store the model architecture
+        self.logger = logger
+        self.is_trained = False
+        self.name = 'NN'
+        self.keras_model = tf.keras.models.model_from_json(model_architecture)        # Store the model architecture
         self.keras_model.compile(optimizer=optimizer, loss=loss, metrics=[metric])    # Compile the model
 
 
 
     def predict(self, X_b):
         """
-        Predicts outputs given the model and inputs
+        Uses the neural network model to predict new outputs given the inputs.
 
         Parameters
         ----------
         X_b: ndarray
-            2-D numpy array containing the input patterns
+            Array containing the input patterns.
 
         Returns
         -------
         preds: ndarray
-            1-D array containing the predictions
+            Array containing the predictions.
         """
-        preds = self.keras_model.predict(X_b) # One-hot encoding
+        preds = self.keras_model.predict(X_b)
         return preds
 
 
@@ -74,7 +80,7 @@ class model():
 
 class NN_Master(POM3_CommonML_Master):
     """
-    This class implements Neural nets, run at Master node. It inherits from POM3_CommonML_Master.
+    This class implements Neural Networks, run at Master node. It inherits from :class:`POM3_CommonML_Master`.
     """
     def __init__(self, comms, logger, verbose=False, model_architecture=None, Nmaxiter=10, learning_rate=0.0001, model_averaging='True', optimizer='adam', loss='categorical_crossentropy', metric='accuracy', batch_size=32, num_epochs=1):
         """
@@ -82,41 +88,41 @@ class NN_Master(POM3_CommonML_Master):
 
         Parameters
         ----------
-        comms: comms object instance
-            Object providing communication functionalities
+        comms: :class:`Comms_master`
+            Object providing communication functionalities.
 
-        logger: class:`mylogging.Logger`
-            Logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            Indicates if messages are print or not on screen
+            Indicates whether to print messages on screen nor not.
 
         model_architecture: JSON
-            JSON containing the neural network architecture as defined by Keras (in model.to_json())
+            JSON containing the neural network architecture as defined by Keras (in model.to_json()).
 
         Nmaxiter: int
-            Maximum number of iterations
+            Maximum number of communication rounds.
 
         learning_rate: float
-            Learning rate for training
+            Learning rate for training.
 
-        model_averaging: Boolean
-            Wether to use model averaging (True) or gradient averaging (False)
+        model_averaging: boolean
+            Whether to use model averaging (True) or gradient averaging (False).
 
-        optimizer: String
-            Type of optimizer to use (should be one from https://keras.io/api/optimizers/)
+        optimizer: string
+            Type of optimizer to use (should be one from https://keras.io/api/optimizers/).
 
-        loss: String
-            Type of loss to use (should be one from https://keras.io/api/losses/)
+        loss: string
+            Type of loss to use (should be one from https://keras.io/api/losses/).
 
-        metric: String
-            Type of metric to use (should be one from https://keras.io/api/metrics/)
+        metric: string
+            Type of metric to use (should be one from https://keras.io/api/metrics/).
 
-        batch_size: Int
-            Size of the batch to use for training in each worker locally
+        batch_size: int
+            Size of the batch to use for training in each worker locally.
 
-        num_epochs: Int
-            Number of epochs to train in each worker locally before sending the result to the master
+        num_epochs: int
+            Number of epochs to train in each worker locally before sending the result to the master.
         """
         self.model_architecture = model_architecture
         self.Nmaxiter = Nmaxiter
@@ -130,11 +136,11 @@ class NN_Master(POM3_CommonML_Master):
 
         super().__init__(comms, logger, verbose)                     # Initialize common class for POM3
         self.name = 'POM3_NN_Master'                                 # Name of the class
-        #self.Init_Environment()                                      # Send initialization messages common to all algorithms
-        model = model_from_json(model_architecture)                  # Keras model initialization
+        #self.Init_Environment()                                     # Send initialization messages common to all algorithms
+        ml_model = NN_model(logger, model_architecture, self.optimizer, self.loss, self.metric)      # Keras model initialization
         self.display(self.name + ': Model architecture:')
-        model.summary(print_fn=self.display)                         # Print the model architecture
-        self.model_weights = model.get_weights()                     # Weights of the initial model
+        ml_model.keras_model.summary(print_fn=self.display)          # Print the model architecture
+        self.model_weights = ml_model.keras_model.get_weights()      # Weights of the initial model
         self.iter = 0                                                # Number of iterations already executed
         self.is_trained = False                                      # Flag to know if the model has been trained
 
@@ -142,17 +148,14 @@ class NN_Master(POM3_CommonML_Master):
 
     def train_Master_(self):
         """
-        This is the main training loop, it runs the following actions until the stop condition is met:
-            - Update the execution state
-            - Perform actions according to the state
-            - Process the received packets
+        Main loop controlling the training of the algorithm.
 
         Parameters
         ----------
         None
         """        
-        model = model_from_json(self.model_architecture)
-        self.model_weights = model.get_weights()
+        ml_model = NN_model(self.logger, self.model_architecture, self.optimizer, self.loss, self.metric)
+        self.model_weights = ml_model.keras_model.get_weights()
         self.iter = 0
         self.is_trained = False
 
@@ -206,7 +209,7 @@ class NN_Master(POM3_CommonML_Master):
 
     def Update_State_Master(self):
         '''
-        Function to control the state of the execution
+        Function to control the state of the execution.
 
         Parameters
         ----------
@@ -220,24 +223,24 @@ class NN_Master(POM3_CommonML_Master):
                 self.state_dict[worker] = ''
             self.state_dict['CN'] = 'SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE'
             
+        if self.checkAllStates('SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE', self.state_dict):
+            for worker in self.workers_addresses:
+                self.state_dict[worker] = ''
+            self.state_dict['CN'] = 'COMPILE_INIT'
+
+        if self.checkAllStates('ACK_COMPILE_INIT', self.state_dict):
+            for worker in self.workers_addresses:
+                self.state_dict[worker] = ''
+            self.state_dict['CN'] = 'FIT_INIT'
+
         if self.model_averaging == 'true':
-            if self.checkAllStates('SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE', self.state_dict):
-                for worker in self.workers_addresses:
-                    self.state_dict[worker] = ''
-                self.state_dict['CN'] = 'COMPILE_INIT'
-
-            if self.checkAllStates('ACK_COMPILE_INIT', self.state_dict):
-                for worker in self.workers_addresses:
-                    self.state_dict[worker] = ''
-                self.state_dict['CN'] = 'FIT_INIT'
-
             if self.checkAllStates('ACK_FIT_INIT', self.state_dict):
                 for worker in self.workers_addresses:
                     self.state_dict[worker] = ''
                 self.state_dict['CN'] = 'TRAINING_READY'
 
         else:
-            if self.checkAllStates('SEND_ENCRYPTED_PSEUDO_RANDOM_SEQUENCE', self.state_dict):
+            if self.checkAllStates('ACK_FIT_INIT', self.state_dict):
                 for worker in self.workers_addresses:
                     self.state_dict[worker] = ''
                 self.state_dict['CN'] = 'SET_LEARNING_RATE'
@@ -251,7 +254,7 @@ class NN_Master(POM3_CommonML_Master):
     
     def TakeAction_Master(self):
         """
-        Takes actions according to the state
+        Function to take actions according to the state.
 
         Parameters
         ----------
@@ -312,8 +315,7 @@ class NN_Master(POM3_CommonML_Master):
 
 class NN_Worker(POM3_CommonML_Worker):
     '''
-    Class implementing Neural nets, run at Worker
-
+    Class implementing Neural Networks, run at Worker node. It inherits from :class:`POM3_CommonML_Worker`.
     '''
 
     def __init__(self, master_address, comms, logger, verbose=False, Xtr_b=None, ytr=None):
@@ -323,57 +325,49 @@ class NN_Worker(POM3_CommonML_Worker):
         Parameters
         ----------
         master_address: string
-            Identifier of the master instance
+            Identifier of the master instance.
 
-        comms: comms object instance
-            Object providing communication functionalities
+        comms: :class:`Comms_worker`
+            Object providing communication functionalities.
 
-        logger: class:`mylogging.Logger`
-            Logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            Indicates if messages are print or not on screen
+            Indicates whether to print messages on screen nor not.
 
-        Xtr_b: np.ndarray
-            2-D numpy array containing the inputs for training
+        Xtr_b: ndarray
+            Array containing the inputs for training.
 
-        ytr: np.ndarray
-            2-D numpy array containing the labels for training
+        ytr: ndarray
+            Array containing the labels for training.
         """
         self.Xtr_b = Xtr_b
         self.ytr = ytr
 
         super().__init__(master_address, comms, logger, verbose)      # Initialize common class for POM3
         self.name = 'POM3_NN_Worker'                                  # Name of the class
-        self.num_classes = ytr.shape[1]                               # Number of classes
-        self.num_features = Xtr_b.shape[1]                            # Number of features
-        self.sess = tf.compat.v1.InteractiveSession()                 # Create TF session
-        init = tf.compat.v1.global_variables_initializer()            # Initialize variables
-        self.sess.run(init)                                           # Start TF session
         self.is_trained = False                                       # Flag to know if the model has been trained
         
         
 
     def ProcessReceivedPacket_Worker(self, packet):
         """
-        Take an action after receiving a packet
+        Process the received packet at worker.
 
         Parameters
         ----------
-        packet: Dictionary
-            Packet received
+        packet: dictionary
+            Packet received from the master.
         """        
         if packet['action'] == 'INIT_MODEL':
             self.display(self.name + ' %s: Initializing local model' %self.worker_address)
             model_json = packet['data']['model_json']
-            # Initialize local model
             self.current_index = 0
-            self.model = model(model_json)
+            # Initialize local model
+            self.model = NN_model(self.logger, model_json)
             self.display(self.name + ': Model architecture:')
             self.model.keras_model.summary(print_fn=self.display)
-            self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, self.num_classes])
-            self.loss = losses.categorical_crossentropy(self.label_placeholder, self.model.keras_model.output)
-            self.gradients = K.gradients(self.loss, self.model.keras_model.trainable_weights)
 
             # Store number of weights for sequence generation
             num_weights = 0
@@ -448,7 +442,7 @@ class NN_Worker(POM3_CommonML_Worker):
             # Unencrypt received weights
             model_weights = self.decrypt_list(packet['data']['model_weights'])
             self.display(self.name + ' %s: Computing local gradients' %self.worker_address)
-            gradients = self.get_weight_grad(model_weights, num_data=500)
+            gradients = self.get_weight_grad(model_weights, num_data=self.batch_size)
 
             # Update weights and send them back to the CN
             for index_layer in range(len(model_weights)):
@@ -468,6 +462,7 @@ class NN_Worker(POM3_CommonML_Worker):
             self.display(self.name + ' %s: Final model stored' %self.worker_address)
             [_, accuracy] = self.model.keras_model.evaluate(self.Xtr_b, self.ytr, verbose=self.verbose)
             self.display(self.name + ' %s: Accuracy in training set: %0.4f' %(self.worker_address, accuracy))
+            self.model.is_trained = True
             self.is_trained = True
 
             # Encrypt again final model weights
@@ -482,19 +477,19 @@ class NN_Worker(POM3_CommonML_Worker):
 
     def get_weight_grad(self, model_weights, num_data=None):
         """ 
-        Gets gradient of model for given inputs and outputs for all weights
+        Get gradients of the model.
 
         Parameters
         ----------
-        model_weights: List of arrays
-            Weights of the model
-        num_data: Int
-            Number of data observations used to train in a batch
+        model_weights: list of numpy arrays
+            Actual weights of the model as returned by Keras model.get_weights().
+        num_data: int 
+            Size of the batch.
 
         Returns
-        ----------
-        output_grad: List of arrays
-            Calculated gradients
+        -------
+        output_grad: list of numpy arrays
+            Gradients of the model.
         """
         if num_data==None or num_data>self.Xtr_b.shape[0]:
             x_batch = self.Xtr_b
@@ -506,6 +501,14 @@ class NN_Worker(POM3_CommonML_Worker):
             y_batch = np.take(self.ytr, data_indexes, axis=0)
 
         self.model.keras_model.set_weights(model_weights)        
-        output_grad = self.sess.run(self.gradients, feed_dict={self.label_placeholder: y_batch, self.model.keras_model.input: x_batch})
+
+        with tf.GradientTape(persistent=True) as tape:
+            pred_y = self.model.keras_model(x_batch, training=False) # Make prediction
+            y_batch = tf.convert_to_tensor(y_batch, dtype=tf.float32)
+            model_loss = self.model.keras_model.compiled_loss(y_batch, pred_y)
+
+        output_grad = tape.gradient(model_loss, self.model.keras_model.trainable_weights)
+        output_grad = [layer_grad.numpy() for layer_grad in output_grad] # Convert each layer from EagerTensor to numpy
 
         return output_grad
+

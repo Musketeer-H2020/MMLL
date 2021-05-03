@@ -14,12 +14,15 @@ from transitions.extensions import GraphMachine
 #from pympler import asizeof #asizeof.asizeof(my_object)
 import pickle
 
-class model():
+class Model():
+    """
+    Kmeans model.
+    """
     def __init__(self):
         self.C = None
+        self.is_trained = False
 
-
-    def predict(self, X_b):
+    def predict(self, X):
         """
         Predicts outputs given the inputs
 
@@ -33,13 +36,33 @@ class model():
         prediction_values: ndarray
 
         """
-        XTC = np.dot(X_b, self.c.T)
-        x2 = np.sum(X_b * X_b, axis=1).reshape((-1, 1))
+        XTC = np.dot(X, self.c.T)
+        x2 = np.sum(X * X, axis=1).reshape((-1, 1))
         c2 = np.sum(self.c * self.c, axis=1).reshape((1, -1))
         D = x2 - 2 * XTC + c2
         predictions = np.argmin(D, axis=1)
         return predictions
 
+    def save(self, filename=None):
+        """
+        Saves the trained model to file
+
+        Parameters
+        ----------
+        filename: string
+            path+filename          
+
+        """
+        if not self.is_trained:
+            print('Model Save Error: model not trained yet, nothing to save.')
+        else:
+            try:
+                with open(filename, 'wb') as f:
+                    pickle.dump(self, f)
+                print('Model saved at %s' %filename)
+            except:
+                print('Model Save Error: model cannot be saved, check the provided path/filename.')
+                raise
 
 class Kmeans_Master(Common_to_all_POMs):
     """
@@ -67,7 +90,7 @@ class Kmeans_Master(Common_to_all_POMs):
         verbose: boolean
             indicates if messages are print or not on screen
         
-        **kwargs: Arbitrary keyword arguments.
+        kwargs: Keyword arguments.
 
         """
         super().__init__()
@@ -87,7 +110,6 @@ class Kmeans_Master(Common_to_all_POMs):
         self.verbose = verbose                      # print on screen when true
         self.state_dict = {}                        # dictionary storing the execution state
         self.NI = None
-        self.model = model()
         #self.regularization = regularization
         #self.classes = classes
         #self.balance_classes = balance_classes
@@ -111,6 +133,7 @@ class Kmeans_Master(Common_to_all_POMs):
         #self.decrypter = self.cr.get_decrypter()  # to be kept as secret  self.encrypter.decrypt()
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
+        self.model = Model()
         self.added_bias = False
         self.train_data_is_ready = False
 
@@ -167,97 +190,7 @@ class Kmeans_Master(Common_to_all_POMs):
                     code.interact(local=locals())
                 '''
                 return
-            '''
-            def while_send_w_encr(self, MLmodel):
-                try:
-                    data = {}
-                    data.update({'w_encr': MLmodel.w_encr})
-                    #wdill = MLmodel.dill_it(MLmodel.wq_encr)
-                    #data.update({'wq_encr': wdill})
 
-                    packet = {'action': 'send_w_encr', 'to': 'MLmodel', 'data': data}
-                    MLmodel.comms.broadcast(packet, MLmodel.workers_addresses)
-                    MLmodel.display(MLmodel.name + ' send_w_encr to workers')
-                except:
-                    print('ERROR AT while_send_w_encr')
-                    import code
-                    code.interact(local=locals())
-                return
-            '''
-            '''
-            def while_mult_XB(self, MLmodel, B_bl):
-                try:
-                    data = {'B_bl': B_bl}
-                    packet = {'action': 'send_mult_XB', 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
-                    MLmodel.display(MLmodel.name + ' send_mult_XB to cryptonode')
-                except:
-                    print('ERROR AT LR while_mult_XB')
-                    import code
-                    code.interact(local=locals())
-                    pass
-                return
-
-            def while_compute_exp(self, MLmodel, s_encr_dict):
-                try:
-                    MLmodel.gamma_dict = {}
-                    MLmodel.s_encr_bl_dict = {}
-                    for waddr in s_encr_dict.keys():
-                        NP = MLmodel.s_encr_dict[waddr].shape[0]
-                        MLmodel.gamma_dict.update({waddr: np.random.uniform(1, 2, (NP, 1)).reshape((-1, 1))})                  
-                        MLmodel.s_encr_bl_dict.update({waddr: MLmodel.s_encr_dict[waddr] + MLmodel.gamma_dict[waddr]})
-
-                    action = 'ask_exp_bl'
-                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
-                    data = {'s_encr_bl_dict': MLmodel.s_encr_bl_dict}
-                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.master_address}
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
-                    MLmodel.comms.send(packet, MLmodel.cryptonode_address)
-                    #del packet
-                    MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.master_address), action))
-                except:
-                    print('ERROR AT LR master while_compute_exp')
-                    import code
-                    code.interact(local=locals())
-                    pass
-                return
-
-            def while_compute_div(self, MLmodel, exp_s_encr_dict):
-                try:
-                    MLmodel.r1_dict = {}
-                    MLmodel.r2_dict = {}
-                    MLmodel.num_bl_dict = {}
-                    MLmodel.den_bl_dict = {}
-
-                    for waddr in exp_s_encr_dict.keys():
-                        NP = exp_s_encr_dict[waddr].shape[0]
-                        MLmodel.r1_dict.update({waddr: np.random.uniform(1, 2, (NP, 1)).reshape((-1, 1))})
-                        MLmodel.r2_dict.update({waddr: np.random.uniform(1, 2, (NP, 1)).reshape((-1, 1))})
-                        num = MLmodel.encrypter.encrypt(MLmodel.r1_dict[waddr])
-                        MLmodel.num_bl_dict.update({waddr: num})
-                        den = (1 + exp_s_encr_dict[waddr]) * MLmodel.r2_dict[waddr]
-                        MLmodel.den_bl_dict.update({waddr: den})
-
-                    action = 'ask_div_bl'
-                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
-                    data = {'num_bl_dict': MLmodel.num_bl_dict, 'den_bl_dict': MLmodel.den_bl_dict}
-                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.master_address}
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
-                    MLmodel.comms.send(packet, MLmodel.cryptonode_address)
-                    #del packet
-                    MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.master_address), action))
-                except:
-                    print('ERROR AT LR master while_compute_div')
-                    import code
-                    code.interact(local=locals())
-                    pass
-                return
-
-            '''
             def while_compute_argmin(self, MLmodel, c2_2XTC_dict):
                 try:
                     # Adding blinding, different at every row, same for columns
@@ -279,10 +212,13 @@ class Kmeans_Master(Common_to_all_POMs):
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.master_address), action))
                 except:
+                    raise
+                    '''
                     print('ERROR AT Kmeans master while_compute_argmin')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
 
@@ -306,10 +242,13 @@ class Kmeans_Master(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     MLmodel.display(MLmodel.name + ' send_model_encr_bl to cryptonode')
                 except:
+                    raise
+                    '''
                     print('ERROR AT LR while_decrypt_model')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
             def while_Exit(self, MLmodel):
@@ -366,6 +305,10 @@ class Kmeans_Master(Common_to_all_POMs):
 
         # Data at:
         #self.X_encr_dict
+
+        if self.Xval is not None:
+            message = 'WARNING: Validation data is not used during training.'
+            self.display(message, True)
 
         kiter = 0
         self.stop_training = False
@@ -448,26 +391,10 @@ class Kmeans_Master(Common_to_all_POMs):
             kiter += 1
 
         self.model.c = self.C
-        self.display(self.name + ': Training is done')
         self.model.niter = kiter
+        self.model.is_trained = True
+        self.display(self.name + ': Training is done')
 
-    def predict_Master(self, X_b):
-        """
-        Predicts outputs given the model and inputs
-
-        Parameters
-        ----------
-        X_b: ndarray
-            Matrix with the input values
-
-        Returns
-        -------
-        prediction_values: ndarray
-
-        """
-        #prediction_values = self.sigm(np.dot(X_b, self.w.ravel()))
-        prediction_values = self.model.predict(X_b)
-        return prediction_values
 
     def Update_State_Master(self):
         """
@@ -521,10 +448,12 @@ class Kmeans_Master(Common_to_all_POMs):
                 self.FSMmaster.done_compute_argmin(self)
 
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Master')
             import code
-            code.interact(local=locals())         
-
+            code.interact(local=locals())
+            '''      
         return
 
 
@@ -631,9 +560,12 @@ class Kmeans_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_grads' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_compute_gradients')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
         states_worker = [
@@ -676,10 +608,7 @@ class Kmeans_Worker(Common_to_all_POMs):
                 self.terminate = True
 
             if packet['action'] == 'ACK_sent_encrypter':
-                print('STOP AT  ProcessReceivedPacket_Worker')
-                import code
-                code.interact(local=locals())
-
+                print('ProcessReceivedPacket_Worker ACK_sent_encrypter')
                 #self.FSMworker.go_storing_Pk(self, packet)
                 #self.FSMworker.done_storing_Pk(self)
 
@@ -687,9 +616,12 @@ class Kmeans_Worker(Common_to_all_POMs):
                 self.FSMworker.go_compute_gradients(self, packet)
                 self.FSMworker.done_compute_gradients(self)
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Worker')
             import code
             code.interact(local=locals())
+            '''
 
         return self.terminate
 
@@ -800,8 +732,11 @@ class Kmeans_Crypto(Common_to_all_POMs):
                 self.terminate = True
 
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Crypto')
             import code
             code.interact(local=locals())
+            '''
 
         return self.terminate

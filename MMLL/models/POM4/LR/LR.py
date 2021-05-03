@@ -14,11 +14,15 @@ from transitions.extensions import GraphMachine
 #from pympler import asizeof #asizeof.asizeof(my_object)
 import pickle
 
-class model():
+class Model():
+    """
+    Linear Regression model.
+    """
     def __init__(self):
         self.w = None
+        self.is_trained = False
 
-    def predict(self, X_b):
+    def predict(self, X):
         """
         Predicts outputs given the inputs
 
@@ -32,9 +36,30 @@ class model():
         prediction_values: ndarray
 
         """
+        X_b = np.hstack((np.ones((X.shape[0], 1)), X))
         prediction_values = np.dot(X_b, self.w.ravel())
         return prediction_values
 
+    def save(self, filename=None):
+        """
+        Saves the trained model to file
+
+        Parameters
+        ----------
+        filename: string
+            path+filename          
+
+        """
+        if not self.is_trained:
+            print('Model Save Error: model not trained yet, nothing to save.')
+        else:
+            try:
+                with open(filename, 'wb') as f:
+                    pickle.dump(self, f)
+                print('Model saved at %s' %filename)
+            except:
+                print('Model Save Error: model cannot be saved, check the provided path/filename.')
+                raise
 
 class LR_Master(Common_to_all_POMs):
     """
@@ -62,7 +87,7 @@ class LR_Master(Common_to_all_POMs):
         verbose: boolean
             indicates if messages are print or not on screen
         
-        **kwargs: Arbitrary keyword arguments.
+        kwargs: Keyword arguments.
 
         """
         super().__init__()
@@ -83,7 +108,6 @@ class LR_Master(Common_to_all_POMs):
         self.verbose = verbose                      # print on screen when true
         self.state_dict = {}                        # dictionary storing the execution state
         self.NI = None
-        self.model = model()
         #self.regularization = regularization
         #self.classes = classes
         #self.balance_classes = balance_classes
@@ -107,6 +131,7 @@ class LR_Master(Common_to_all_POMs):
         #self.decrypter = self.cr.get_decrypter()  # to be kept as secret  self.encrypter.decrypt()
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
+        self.model = Model()
         self.added_bias = False
         self.train_data_is_ready = False
 
@@ -152,9 +177,12 @@ class LR_Master(Common_to_all_POMs):
                 try:
                     MLmodel.display(MLmodel.name + ' is waiting...')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_waiting_order')
                     import code
                     code.interact(local=locals())
+                    '''
 
                 return
 
@@ -166,11 +194,14 @@ class LR_Master(Common_to_all_POMs):
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     MLmodel.display('ERROR AT while_update_tr_data')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             '''
@@ -197,10 +228,13 @@ class LR_Master(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     MLmodel.display(MLmodel.name + ' send_mult_XB to cryptonode')
                 except:
+                    raise
+                    '''
                     print('ERROR AT LR while_mult_XB')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
             def while_decrypt_model(self, MLmodel, model_encr):
@@ -223,10 +257,13 @@ class LR_Master(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     MLmodel.display(MLmodel.name + ' send_model_encr_bl to cryptonode')
                 except:
+                    raise
+                    '''
                     print('ERROR AT LR while_decrypt_model')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
             def while_Exit(self, MLmodel):
@@ -346,6 +383,10 @@ class LR_Master(Common_to_all_POMs):
 
         self.selected_workers = self.workers_addresses
 
+        if self.Xval is not None:
+            message = 'WARNING: Validation data is not used during training.'
+            self.display(message, True)
+
         while not self.stop_training:
             # Computing wTX
             #self.wTX_encr_dict = self.crypto_mult_X(self.w_encr.T)
@@ -429,8 +470,9 @@ class LR_Master(Common_to_all_POMs):
             self.w_old = self.w.copy()
 
         self.model.w = self.w
-        self.display(self.name + ': Training is done', True)
         self.model.niter = kiter
+        self.model.is_trained = True
+        self.display(self.name + ': Training is done', True)
 
     def predict_Master(self, X_b):
         """
@@ -490,10 +532,13 @@ class LR_Master(Common_to_all_POMs):
                 self.FSMmaster.done_decrypt_model(self)
 
         except Exception as err:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Master')
             raise
             import code
-            code.interact(local=locals())         
+            code.interact(local=locals())
+            '''         
 
         return
 
@@ -603,9 +648,12 @@ class LR_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_grads' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_compute_gradients')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
         states_worker = [
@@ -647,10 +695,7 @@ class LR_Worker(Common_to_all_POMs):
                 self.terminate = True
 
             if packet['action'] == 'ACK_sent_encrypter':
-                print('STOP AT  ProcessReceivedPacket_Worker')
-                import code
-                code.interact(local=locals())
-
+                print('ProcessReceivedPacket_Worker ACK_sent_encrypter')
                 #self.FSMworker.go_storing_Pk(self, packet)
                 #self.FSMworker.done_storing_Pk(self)
 
@@ -658,9 +703,12 @@ class LR_Worker(Common_to_all_POMs):
                 self.FSMworker.go_compute_gradients(self, packet)
                 self.FSMworker.done_compute_gradients(self)
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Worker')
             import code
             code.interact(local=locals())
+            '''
 
         return self.terminate
 
@@ -777,8 +825,11 @@ class LR_Crypto(Common_to_all_POMs):
                 self.FSMworker.go_compute_gradients(self, packet)
                 self.FSMworker.done_compute_gradients(self)
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Crypto')
             import code
             code.interact(local=locals())
+            '''
 
         return self.terminate

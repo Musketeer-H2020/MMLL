@@ -1,28 +1,33 @@
 # -*- coding: utf-8 -*-
 '''
-Kmeans (public model) under POM6
+Kmeans under POM6
 
 '''
 
 __author__ = "Angel Navia-Vázquez"
-__date__ = "Apr. 2020"
+__date__ = "Jan 2021"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
 from transitions import State
 from transitions.extensions import GraphMachine
+import pickle
 
-class model():
+class Model():
+    """
+    Kmeans model.
+    """
     def __init__(self):
         self.c = None
+        self.is_trained = True
 
-    def predict(self, X_b):
+    def predict(self, X):
         """
         Predicts outputs given the inputs
 
         Parameters
         ----------
-        X_b: ndarray
+        X: ndarray
             Matrix with the input values
 
         Returns
@@ -30,22 +35,43 @@ class model():
         prediction_values: ndarray
 
         """
-        XTC = np.dot(X_b, self.c.T)
-        x2 = np.sum(X_b * X_b, axis=1).reshape((-1, 1))
+        XTC = np.dot(X, self.c.T)
+        x2 = np.sum(X * X, axis=1).reshape((-1, 1))
         c2 = np.sum(self.c * self.c, axis=1).reshape((1, -1))
         D = x2 - 2 * XTC + c2
         predictions = np.argmin(D, axis=1)
         return predictions
 
+    def save(self, filename=None):
+        """
+        Saves the trained model to file
 
-class Kmeans_pm_Master(Common_to_all_POMs):
+        Parameters
+        ----------
+        filename: string
+            path+filename          
+
+        """
+        if not self.is_trained:
+            print('Model Save Error: model not trained yet, nothing to save.')
+        else:
+            try:
+                with open(filename, 'wb') as f:
+                    pickle.dump(self, f)
+                print('Model saved at %s' %filename)
+            except:
+                print('Model Save Error: model cannot be saved, check the provided path/filename.')
+                raise
+
+
+class Kmeans_Master(Common_to_all_POMs):
     """
-    This class implements the Kmeans (public model), run at Master node. It inherits from Common_to_all_POMs.
+    This class implements the Kmeans, run at Master node. It inherits from Common_to_all_POMs.
     """
 
     def __init__(self, master_address, workers_addresses, model_type, comms, logger, verbose=True, **kwargs):
         """
-        Create a :class:`LC_pm_Master` instance.
+        Create a :class:`Kmeans_Master` instance.
 
         Parameters
         ----------
@@ -64,8 +90,6 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         verbose: boolean
             indicates if messages are print or not on screen
         
-        **kwargs: Arbitrary keyword arguments.
-
         """
         super().__init__()
         self.pom = 6
@@ -97,7 +121,7 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         self.verbose = verbose                      # print on screen when true
         self.NI = None
 
-        self.model = model()
+        self.model = Model()
         
         self.state_dict = {}                        # dictionary storing the execution state
         for k in range(0, self.Nworkers):
@@ -115,6 +139,10 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         self.message_counter = 0    # used to number the messages
         self.cryptonode_address = None
         self.newNI_dict = {}
+        self.s_dict = {}
+        self.grads_dict = {}
+        self.Ztr_dict = {}
+        self.NPtr_dict = {}
 
     def create_FSM_master(self):
         """
@@ -130,7 +158,10 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         states_master = [
             State(name='waiting_order', on_enter=['while_waiting_order']),
             State(name='update_tr_data', on_enter=['while_update_tr_data']),
-            State(name='sending_C', on_enter=['while_sending_C']),
+            State(name='computing_DXTC', on_enter=['while_computing_DXTC']),
+            State(name='computing_Cinc', on_enter=['while_computing_Cinc']),
+
+            #State(name='sending_C', on_enter=['while_sending_C']),
             State(name='updating_C', on_enter=['while_updating_C']),
         ]
 
@@ -138,8 +169,14 @@ class Kmeans_pm_Master(Common_to_all_POMs):
             ['go_update_tr_data', 'waiting_order', 'update_tr_data'],
             ['go_waiting_order', 'update_tr_data', 'waiting_order'],
 
-            ['go_sending_C', 'waiting_order', 'sending_C'],
-            ['go_waiting_order', 'sending_C', 'waiting_order'],
+            ['go_computing_DXTC', 'waiting_order', 'computing_DXTC'],
+            ['go_waiting_order', 'computing_DXTC', 'waiting_order'],
+
+            ['go_computing_Cinc', 'waiting_order', 'computing_Cinc'],
+            ['go_waiting_order', 'computing_Cinc', 'waiting_order'],
+
+            #['go_sending_C', 'waiting_order', 'sending_C'],
+            #['go_waiting_order', 'sending_C', 'waiting_order'],
 
             ['go_updating_C', 'waiting_order', 'updating_C'],
             ['go_waiting_order', 'updating_C', 'waiting_order'],
@@ -161,22 +198,127 @@ class Kmeans_pm_Master(Common_to_all_POMs):
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     MLmodel.display('ERROR AT while_update_tr_data')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
+            def while_computing_DXTC(self, MLmodel):
+                try:
+                    action = 'computing_DXTC'
+
+                    MLmodel.ACxaxb_dict = {}
+                    xaxbP_dict = {}
+
+                    for kc in range(MLmodel.NC):
+                        x = MLmodel.model.c_dict[kc].T
+                        NItrain = x.shape[1]
+                        K = int(NItrain / 2)
+                        # Guardar
+                        tmp_dict = {}
+                        tmp_dict.update({'A': np.random.uniform(-10, 10, K).reshape((1, K))})
+                        tmp_dict.update({'C': np.random.uniform(-10, 10, K).reshape((1, K))})
+                        tmp_dict.update({'xa': x[:, 0:K]})
+                        tmp_dict.update({'xb': x[:, K:]})
+                        MLmodel.ACxaxb_dict.update({kc: tmp_dict})
+
+                        # Enviar
+                        #xa_ = MLmodel.xa + MLmodel.A  
+                        #xb_ = MLmodel.xb + MLmodel.C
+                        #P = MLmodel.A + MLmodel.C   # warning, check the sum is nonzero (low prob...)
+                        tmp_dict = {}
+                        tmp_dict.update({'xa_': MLmodel.ACxaxb_dict[kc]['xa'] + MLmodel.ACxaxb_dict[kc]['A']})
+                        tmp_dict.update({'xb_': MLmodel.ACxaxb_dict[kc]['xb'] + MLmodel.ACxaxb_dict[kc]['C']})
+                        tmp_dict.update({'P': MLmodel.ACxaxb_dict[kc]['A'] + MLmodel.ACxaxb_dict[kc]['C']})
+                        xaxbP_dict.update({kc: tmp_dict})
+
+                    # broadcasts xaxbP_dict
+                    action = 'sending_xaxbP'
+                    data = {'xaxbP_dict': xaxbP_dict, 'NC': MLmodel.NC}
+                    del xaxbP_dict
+
+                    #message_id = MLmodel.master_address + '_' + str(MLmodel.message_counter)
+                    #packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address, 'message_id': message_id}
+                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    del data
+                    #MLmodel.message_counter += 1
+                   
+                    if MLmodel.selected_workers is None: 
+                        MLmodel.comms.broadcast(packet)
+                        MLmodel.display(MLmodel.name + ': computing_DXTC with all Workers')
+                    else:
+                        recipients = [MLmodel.send_to[w] for w in MLmodel.selected_workers]
+                        MLmodel.comms.broadcast(packet, recipients)
+                        MLmodel.display(MLmodel.name + ': computing_DXTC with Workers: %s' % str(MLmodel.selected_workers))
+                
+                except Exception as err:
+                    raise
+                    '''
+                    message = "ERROR: %s %s" % (str(err), str(type(err)))
+                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
+                    MLmodel.display('ERROR AT while_computing_DXTC')
+                    import code
+                    code.interact(local=locals())
+                    '''
+                return
+
+            def while_computing_Cinc(self, MLmodel):
+                # received self.s_dict SDP for Xtr, one from every worker
+                # MLmodel.ACxaxb_dict locally stored xa, xb, A, C for every binary classifier
+                try:
+                    action = 'computing_Cinc'
+                    C2 = np.sum(MLmodel.model.c ** 2, axis=1)
+
+                    for addr in MLmodel.workers_addresses:
+                        NPtr = MLmodel.s_dict[addr]['ya_'].shape[0]
+                        DXC = np.zeros((NPtr, MLmodel.NC))
+                        for kc in range(MLmodel.NC):
+                            xa = MLmodel.ACxaxb_dict[kc]['xa']
+                            xb = MLmodel.ACxaxb_dict[kc]['xb']
+                            A = MLmodel.ACxaxb_dict[kc]['A']
+                            C = MLmodel.ACxaxb_dict[kc]['C']
+                            #MLmodel.display('PROC_MASTER_START', verbose=False)
+                            #U = MLmodel.s_dict[addr]['ya_'] * (MLmodel.xa + 2 * MLmodel.A) + MLmodel.s_dict[addr]['yb_'] * (MLmodel.xb + 2 * MLmodel.C) + MLmodel.s_dict[addr]['Q'] * (MLmodel.A + 2 * MLmodel.C)
+                            U = MLmodel.s_dict[addr]['ya_'] * (xa + 2 * A) + MLmodel.s_dict[addr]['yb_'] * (xb + 2 * C) + MLmodel.s_dict[addr]['Q'] * (A + 2 * C)
+                            del xa, xb, A, C
+                            u = np.sum(U, axis=1)  
+                            del U
+                            s = u + MLmodel.s_dict[addr]['v_dict'][kc]
+                            del u
+                            DXC[:, kc] = C2[kc] - 2 * s
+                    
+                        nearest = np.argmin(DXC, axis = 1)
+                        
+                        action = 'sending_nearest'
+                        data = {'nearest': nearest}
+                        packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    
+                        del data
+
+                        MLmodel.comms.send(packet, MLmodel.send_to[addr])
+                
+                except Exception as err:
+                    raise
+                    '''
+                    message = "ERROR: %s %s" % (str(err), str(type(err)))
+                    MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
+                    MLmodel.display('ERROR AT while_computing_Cinc')
+                    import code
+                    code.interact(local=locals())
+                    '''
+                return
+
+            '''
             def while_sending_C(self, MLmodel):
                 try:
                     action = 'sending_C'
                     data = {'C': MLmodel.model.c}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    '''
-                    for waddr in MLmodel.workers_addresses:
-                        MLmodel.comms.send(waddr, packet)
-                    '''
                     MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
                     if MLmodel.selected_workers is None: 
                         MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
@@ -188,24 +330,24 @@ class Kmeans_pm_Master(Common_to_all_POMs):
                     import code
                     code.interact(local=locals())         
                 return
-            
+            '''
+
             def while_updating_C(self, MLmodel):
+                #MLmodel.C_inc_dict
                 try:
-                    #print(MLmodel.c)
-                    users = MLmodel.Cinc_dict.keys()
                     NC = MLmodel.NC
                     NI = MLmodel.NI
                     newC = np.zeros((NC, NI))
                     TotalP = np.zeros((NC, 1))
-                    Dacum = np.zeros((NC, 1))
+                    #Dacum = np.zeros((NC, 1))
 
-                    for user in users:
+                    for user in MLmodel.workers_addresses:
                         cinc = MLmodel.Cinc_dict[user]
                         for kc in range(0, NC):
                             if cinc['Ninc'][kc] > 0:
                                 newC[kc, :] += cinc['C_inc'][kc]
                                 TotalP[kc] += cinc['Ninc'][kc]
-                                Dacum[kc] += cinc['Dist_acum'][kc]
+                                #Dacum[kc] += cinc['Dist_acum'][kc]
 
                     for kc in range(0, NC):
                         if TotalP[kc] > 0:
@@ -234,12 +376,18 @@ class Kmeans_pm_Master(Common_to_all_POMs):
                     MLmodel.display(str(Overpop) + ' ' + str(Underpop))
                     MLmodel.display(str(len(Overpop)) + ' ' + str(len(Underpop)))
                     MLmodel.display('---------------')
+                    # passing MLmodel.model.c to dict
+                    for kc in range(MLmodel.NC):
+                        MLmodel.model.c_dict[kc] = MLmodel.model.c[kc, :].reshape((-1, 1))
+
                 except Exception as err:
+                    raise
+                    '''
                     MLmodel.display('ERROR: %s %s' % (str(err), str(type(err))))
                     MLmodel.display('ERROR AT while_updating_C')
                     import code
-                    code.interact(local=locals())         
-
+                    code.interact(local=locals())
+                    '''         
                 return
 
             def while_Exit(self, MLmodel):
@@ -301,17 +449,42 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         else:
             self.reset(newNIs[0])
             ## Adding bias to validation data, if any
-            if self.Xval_b is not None: 
-                self.Xval_b = self.add_bias(self.Xval_b).astype(float)
-                self.yval = self.yval.astype(float)
+            #if self.Xval_b is not None: 
+            #    self.Xval_b = self.add_bias(self.Xval_b).astype(float)
+            #    self.yval = self.yval.astype(float)
+
+        self.Bob_data_s = False
+
+       # Checking dimensions
+        if int(self.NI / 2) != self.NI / 2: # add one value 
+            self.w_orig_size = self.NI
+            self.NItrain = self.NI + 1
+        else:
+            self.w_orig_size = self.NI
+            self.NItrain = self.NI
+
+        self.model.c_dict = {}
+        self.c_old_dict = {}
+
+        for kc in range(self.NC):
+            self.model.c_dict.update({kc: np.random.normal(0, 0.3, (self.NItrain, 1))})
+            self.c_old_dict.update({kc: np.random.normal(0, 1.0, (self.NItrain, 1))})
+
+        if self.Xval is not None:
+            message = 'WARNING: Validation data is not used during training.'
+            self.display(message, True)
 
         stop_training = False
         kiter = 0
         while not stop_training:
             self.c_old = np.copy(self.model.c)
-            # LOOP ======================
-            # We obtain the dot products
-            self.FSMmaster.go_sending_C(self)
+
+            # We XTw
+            self.FSMmaster.go_computing_DXTC(self)
+            self.run_Master()
+            # We receive  self.s_dict, self.Ztr_dict (once)
+
+            self.FSMmaster.go_computing_Cinc(self)
             self.run_Master()
 
             self.FSMmaster.go_updating_C(self)
@@ -330,6 +503,7 @@ class Kmeans_pm_Master(Common_to_all_POMs):
 
         self.display(self.name + ': Training is done')
         self.model.niter = kiter
+        self.model.is_trained = True
 
     def predict_Master(self, X_b):
         """
@@ -357,10 +531,16 @@ class Kmeans_pm_Master(Common_to_all_POMs):
         ----------
             None
         """
-        if self.chekAllStates('ACK_sending_C_inc'):
-            self.FSMmaster.go_waiting_order(self)
 
         if self.chekAllStates('ACK_update_tr_data'):
+            self.FSMmaster.go_waiting_order(self)
+
+        if self.chekAllStates('ACK_sending_XTC'):
+            if not self.Bob_data_s:
+                self.Bob_data_s = True
+            self.FSMmaster.go_waiting_order(self)
+
+        if self.chekAllStates('ACK_sending_C_inc'):
             self.FSMmaster.go_waiting_order(self)
 
     def ProcessReceivedPacket_Master(self, packet, sender):
@@ -381,12 +561,19 @@ class Kmeans_pm_Master(Common_to_all_POMs):
             self.display(self.name + ': received ACK from %s: %s' % (str(sender), packet['action']))
             self.state_dict[sender] = packet['action']
 
-        if packet['action'] == 'ACK_sending_C_inc':
-            self.Cinc_dict.update({sender : {'C_inc': packet['data']['C_inc'], 'Ninc': packet['data']['Ninc'], 'Dist_acum': packet['data']['Dist_acum']}})
-
         if packet['action'] == 'ACK_update_tr_data':
             #print('ProcessReceivedPacket_Master ACK_update_tr_data from %s' % str(sender))
             self.newNI_dict.update({sender: packet['data']['newNI']})
+
+        if packet['action'] == 'ACK_sending_XTC':
+            if not self.Bob_data_s:
+                self.s_dict.update({sender: {'ya_': packet['data']['ya_'], 'yb_': packet['data']['yb_'], 'Q': packet['data']['Q'], 'v_dict': packet['data']['v_dict']}})
+                #self.Ztr_dict.update({sender: packet['data']['Ztr']})
+            else:
+                self.s_dict[sender]['v_dict'] = packet['data']['v_dict']
+
+        if packet['action'] == 'ACK_sending_C_inc':
+            self.Cinc_dict.update({sender : {'C_inc': packet['data']['C_inc'], 'Ninc': packet['data']['Ninc']}})
 
         return
 
@@ -394,7 +581,7 @@ class Kmeans_pm_Master(Common_to_all_POMs):
 #===============================================================
 #                 Worker
 #===============================================================
-class Kmeans_pm_Worker(Common_to_all_POMs):
+class Kmeans_Worker(Common_to_all_POMs):
     '''
     Class implementing Kmeans (public model), run at Worker
 
@@ -402,7 +589,7 @@ class Kmeans_pm_Worker(Common_to_all_POMs):
 
     def __init__(self, master_address, worker_address, model_type, comms, logger, verbose=True, Xtr_b=None, ytr=None):
         """
-        Create a :class:`Kmeans_pm_Worker` instance.
+        Create a :class:`Kmeans_Worker` instance.
 
         Parameters
         ----------
@@ -445,6 +632,9 @@ class Kmeans_pm_Worker(Common_to_all_POMs):
         self.create_FSM_worker()
         self.message_id = 0    # used to number the messages
         self.cryptonode_address = None
+        self.Bob_data_s = False
+        self.Bob_data_grad = False
+        self.added_bias=False
 
     def create_FSM_worker(self):
         """
@@ -476,66 +666,143 @@ class Kmeans_pm_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     #raise
                     import code
                     code.interact(local=locals())
                     #MLmodel.display('ERROR AT while_computing_XTDaX')
+                    '''
 
-            def while_computing_DXC(self, MLmodel):
+
+            def while_computing_XTC(self, MLmodel, packet):
+
+                #packet['data']['xaxbP_dict']
+                #packet['data']['classes']
+                MLmodel.NC = packet['data']['NC']
+
                 try:
-                    #print('1')
-                    #X = np.random.normal(0, 1, (100000000, 100000000))
-                    #print(aaa)
-                    #print('2')
-                    MLmodel.display(MLmodel.name + ' %s: Computing DXC' % (str(MLmodel.worker_address)))
-                    X = MLmodel.Xtr_b
-                    C = MLmodel.C
-                    # This could be computed only once
-                    normx2 = np.linalg.norm(X, 2, axis=1) ** 2
-                    NP = normx2.shape[0]
-                    normc2 = np.linalg.norm(C, 2, axis = 1) ** 2
-                    NC = normc2.shape[0]
-                    DP = np.dot(X, C.T) 
-                    DXC = np.kron(normx2, np.ones((NC, 1))).T - 2 * DP + np.kron(np.ones((NP, 1)), normc2)
-                    pred = np.argmin(DXC, axis = 1)
+                    #MLmodel.display('PROC_WORKER_START', verbose=False)
+                    # Only once
+                    if not MLmodel.Bob_data_s:
+                        # Checking NI
+                        NI = MLmodel.Xtr_b.shape[1]
+                        MLmodel.NPtr = MLmodel.Xtr_b.shape[0]
+
+                        if NI/2 != int(NI/2):
+                            MLmodel.Xtr_b = np.hstack((MLmodel.Xtr_b, np.random.normal(0, 0.01, (MLmodel.NPtr, 1))))
+
+                        NPtr_train = MLmodel.Xtr_b.shape[0]
+                        NI_train = MLmodel.Xtr_b.shape[1]
+                        # RMD
+                        #MLmodel.Cmat = np.random.normal(0, 1, (NI_train, NI_train))
+                        #MLmodel.Dmat = np.linalg.inv(MLmodel.Cmat)
+                        #MLmodel.Ztr = np.dot(MLmodel.Xtr_b, MLmodel.Cmat)
+
+                        K = int(NI_train / 2)
+
+                        #y = MLmodel.Xtr_b
+                        MLmodel.yas = MLmodel.Xtr_b[:, 0:K]
+                        MLmodel.ybs = MLmodel.Xtr_b[:, K:]
+                        #del y
+
+                        MLmodel.Bs = np.random.uniform(-10, 10, (NPtr_train, K))
+                        MLmodel.Ds = np.random.uniform(-10, 10, (NPtr_train, K))
+                        # Send once
+                        MLmodel.Qs = MLmodel.Bs - MLmodel.Ds    # warning, check the sum is nonzero (low prob...)
+                        MLmodel.ya_s = MLmodel.Bs - MLmodel.yas  
+                        MLmodel.yb_s = MLmodel.Ds - MLmodel.ybs
+
+                    r = np.random.uniform(-10, 10, MLmodel.NPtr)
+                    v_dict = {}
+                    for kc in range(MLmodel.NC):
+                        xa_ = packet['data']['xaxbP_dict'][kc]['xa_']
+                        xb_ = packet['data']['xaxbP_dict'][kc]['xb_']
+                        P = packet['data']['xaxbP_dict'][kc]['P']
+                        V = xa_ * (2 * MLmodel.yas - MLmodel.Bs) + xb_ * (2 * MLmodel.ybs - MLmodel.Ds) + P * (MLmodel.Ds - 2 * MLmodel.Bs)
+                        # Dot product masking
+                        v = np.sum(V, axis=1) + r
+                        v_dict.update({kc: v})
+                    del xa_, xb_, P, V
+
+                    # send to Master ya_, yb_, Q, v
+                    action = 'ACK_sending_XTC'
+                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    if not MLmodel.Bob_data_s:
+                        data = {'ya_': MLmodel.ya_s, 'yb_': MLmodel.yb_s, 'Q': MLmodel.Qs, 'v_dict': v_dict}
+                        MLmodel.Bob_data_s = True
+                    else:
+                        data = {'v_dict': v_dict}
+
+                    del v_dict
+
+                    packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    del data
+
+                    #from pympler import asizeof #asizeof.asizeof(my_object)
+                    #import dill
+                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
+
+                    #MLmodel.display('PROC_WORKER_END', verbose=False)
+                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+                    #MLmodel.message_counter += 1
+                    MLmodel.comms.send(packet, MLmodel.master_address)
+                    del packet#, size_bytes
+                    MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_XTC' % (str(MLmodel.worker_address)))
+                except:
+                    raise
+                    '''
+                    print('ERROR AT while_computing_XTC')
+                    import code
+                    code.interact(local=locals())
+                    '''
+                return
+
+            def while_computing_incC(self, MLmodel, packet):
+                try:
+                    pred = packet['data']['nearest']
+                    MLmodel.display(MLmodel.name + ' %s: Computing incC' % (str(MLmodel.worker_address)))
+                    
                     C_inc = []
                     Ninc = []
-                    Dist_acum = []
-                    for kc in range(0, NC):
+                    #Dist_acum = []
+
+                    for kc in range(0, MLmodel.NC):
                         cuales = pred == kc
                         Nchunk = np.sum(cuales)
 
                         if Nchunk > 2:
-                            c_kc = np.sum(X[cuales,:], axis=0)
+                            c_kc = np.sum(MLmodel.Xtr_b[cuales,:], axis=0)
                         else:
                             c_kc = None
                             Nchunk = 0
 
                         C_inc.append(c_kc)
                         Ninc.append(Nchunk)
-                        # Computing accumulated error per centroid
-                        Dacum = np.sum(DXC[cuales, kc])
-                        Dist_acum.append(Dacum)
 
                     action = 'ACK_sending_C_inc'
-                    data = {'C_inc': C_inc, 'Ninc':Ninc, 'Dist_acum':Dist_acum}
+                    data = {'C_inc': C_inc, 'Ninc':Ninc}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_C_inc' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     MLmodel.display('ERROR: %s %s' % (str(err), str(type(err))))
-                    MLmodel.display('ERROR AT while_computing_DXC')
+                    MLmodel.display('ERROR AT while_computing_incC')
                     import code
-                    code.interact(local=locals())         
-
+                    code.interact(local=locals())   
+                    '''      
                 return
 
         states_worker = [
             State(name='waiting_order', on_enter=['while_waiting_order']),
             State(name='setting_tr_data', on_enter=['while_setting_tr_data']),
-            State(name='computing_DXC', on_enter=['while_computing_DXC']),
+            State(name='computing_XTC', on_enter=['while_computing_XTC']),
+
+            State(name='computing_incC', on_enter=['while_computing_incC']),
             State(name='Exit', on_enter=['while_Exit']),
            ]
 
@@ -543,8 +810,11 @@ class Kmeans_pm_Worker(Common_to_all_POMs):
             ['go_setting_tr_data', 'waiting_order', 'setting_tr_data'],
             ['done_setting_tr_data', 'setting_tr_data', 'waiting_order'],
 
-            ['go_computing_DXC', 'waiting_order', 'computing_DXC'],
-            ['done_computing_DXC', 'computing_DXC', 'waiting_order'],
+            ['go_computing_XTC', 'waiting_order', 'computing_XTC'],
+            ['done_computing_XTC', 'computing_XTC', 'waiting_order'],
+
+            ['go_computing_incC', 'waiting_order', 'computing_incC'],
+            ['done_computing_incC', 'computing_incC', 'waiting_order'],
 
             ['go_exit', 'waiting_order', 'Exit']
             ]
@@ -580,10 +850,13 @@ class Kmeans_pm_Worker(Common_to_all_POMs):
             self.display(self.name + ' %s: terminated by Master' % (str(self.worker_address)))
             self.terminate = True
 
-        if packet['action'] == 'sending_C':
-            self.C = packet['data']['C']
-            self.FSMworker.go_computing_DXC(self)
-            self.FSMworker.done_computing_DXC(self)
+        if packet['action'] == 'sending_xaxbP':
+            self.FSMworker.go_computing_XTC(self, packet)
+            self.FSMworker.done_computing_XTC(self)
+
+        if packet['action'] == 'sending_nearest':
+            self.FSMworker.go_computing_incC(self, packet)
+            self.FSMworker.done_computing_incC(self)
 
         if packet['action'] == 'update_tr_data':
             # We update the training data

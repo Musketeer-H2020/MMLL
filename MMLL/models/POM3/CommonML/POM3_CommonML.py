@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Common ML operations to be used by all algorithms in POM3
-
+Common ML operations to be used by all algorithms in POM3.
 '''
 
 __author__ = "Marcos Fernández Díaz"
@@ -32,15 +31,14 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
 
         Parameters
         ----------
-        comms: comms object instance
-            object providing communications
+        comms: :class:`Comms_master`
+            Object providing communications functionalities.
 
-        logger: class:`logging.Logger`
-            logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            indicates if messages are print or not on screen
-
+            Indicates whether to print messages on screen nor not.
         """
         self.comms = comms
         self.logger = logger
@@ -66,7 +64,7 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
 
     def reset(self):
         """
-        Create some empty variables needed by the Master Node
+        Create/reset some variables needed by the Master Node.
 
         Parameters
         ----------
@@ -83,15 +81,13 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
 
         Parameters
         ----------
-        unencrypted_list: List of arrays
-            List to encrypt
-        public_key: phe.paillier.PaillierPublicKey
-            Public key to use for encryption
+        unencrypted_list: list of arrays
+            List to encrypt.
 
         Returns
         ----------
-        encrypted_list: List of arrays
-            Encrypted list
+        encrypted_list: list of arrays 
+            Encrypted list.
         """     
         self.display(self.name + ': Encrypting data...')
         encrypted_list = list()
@@ -110,21 +106,21 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
     
     def transform_encrypted_domain_workers(self, encrypted_data, worker_origin, worker_destination, verbose=True):
         """
-        Transforms encrypted data from domain of worker_origin to worker_destination
+        Function to transform encrypted data from domain of worker_origin to worker_destination.
 
         Parameters
         ----------
-        encrypted_data: List of arrays 
-            Encrypted data using public key of worker_origin
+        encrypted_data: list of arrays 
+            Encrypted data using public key of worker_origin.
         worker_origin: int 
-            Index of the worker who encrypted the data
+            Index of the worker who encrypted the data.
         worker_destination: int 
-            Index of the worker to transform the encrypted data to
+            Index of the worker to transform the encrypted data to.
 
         Returns
         ----------
-        transformed_data: List of arrays 
-            List of encrypted data in the domain of worker_destination
+        transformed_data: list of arrays 
+            List of encrypted data in the domain of worker_destination.
         """
         if verbose:
             self.display(self.name + ': Transforming encrypted data from worker %s to worker %s...' %(worker_origin, worker_destination))
@@ -150,19 +146,19 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
 
     def send_worker_and_wait_receive(self, packet, worker):
         """
-        Sends a message to an specific worker and waits for the reply
+        Send a message to an specific worker and wait for the reply.
 
         Parameters
         ----------
         packet: dictionary
-            Message to be sent to the worker
+            Message to be sent to the worker.
         worker: string
-            Address of the worker to communicate with
+            Address of the worker to communicate with.
 
         Returns
         ----------
-        packet: Dictionary
-            Received packet from worker
+        packet: dictionary
+            Received packet from worker.
         """
         self.comms.send(packet, worker)
         self.display(self.name + ': Sent %s to worker %s' %(packet['action'], worker))
@@ -293,9 +289,9 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
         """
         This is the main initialization loop, it runs the following actions until 
         the stop condition is met:
-            - Update the execution state
-            - Perform actions according to the state
-            - Process the received packets
+            - Update the execution state.
+            - Perform actions according to the state.
+            - Process the received packets.
 
         Parameters
         ----------
@@ -346,7 +342,11 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
 
     def Update_State_Common_Master(self):
         '''
-        Function to control the state of the execution
+        Function to control the state of the execution.
+
+        Parameters
+        ----------
+        None
         '''
         if self.state_dict['CN'] == 'START_INITIALIZATION':
             self.state_dict['CN'] = 'SET_PRECISION'
@@ -383,7 +383,11 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
     
     def TakeAction_Common_Master(self):
         """
-        Takes actions according to the state
+        Function to take actions according to the state.
+
+        Parameters
+        ----------
+        None
         """
         to = 'Preprocessing'
 
@@ -443,15 +447,15 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
 
     def ProcessReceivedPacket_Master_(self, packet, sender):
         """
-        Process the received packet at Master and take some actions, possibly changing the state
+        Process the received packet at master.
 
         Parameters
         ----------
-        packet: Dictionary
-            Packet received
+        packet: dictionary
+            Packet received from a worker.
 
-        sender: String
-            Id of the sender
+        sender: string
+            Identification of the sender.
         """
         if self.state_dict['CN'] == 'WAIT_NUM_FEATURES':
             if packet['action'] == 'SET_NUM_FEATURES':
@@ -481,8 +485,7 @@ class POM3_CommonML_Master(Common_to_POMs_123_Master):
 
 class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
     '''
-    Class implementing the POM3 Common operations, run at Worker
-
+    Class implementing the POM3 Common operations, run at Worker node. It inherits from :class:`Common_to_POMs_123_Worker`.
     '''
 
     def __init__(self, master_address, comms, logger, verbose=False):
@@ -492,16 +495,16 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
         Parameters
         ----------
         master_address: string
-            Identifier of the master instance
+            Identifier of the master instance.
 
-        comms: comms object instance
-            Object providing communication functionalities
+        comms: :class:`Comms_worker`
+            Object providing communication functionalities.
 
-        logger: class:`logging.Logger`
-            logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            indicates if messages are print or not on screen
+            Indicates whether to print messages on screen nor not.
         """
         self.master_address = master_address
         self.comms = comms
@@ -523,19 +526,18 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
     
     def generate_keypair(self, key_size=2048):
         '''
-        Function to generate a pair of public/private key
+        Function to generate a pair of public/private keys.
 
         Parameters
         ----------
-        key_size: Int
-            Size of the key in bits
+        None
 
         Returns
         ----------
-        public_key: phe.paillier.PaillierPublicKey
-            Public key for the worker
+        public_key: paillier.PaillierPublicKey
+            Public key of the worker.
         private_key: phe.paillier.PaillierPrivateKey
-            Private key for the worker
+            Private key of the worker.
         '''
         public_key, private_key = paillier.generate_paillier_keypair(n_length=key_size)    
         return public_key, private_key
@@ -548,13 +550,13 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
 
         Parameters
         ----------
-        unencrypted_list: List of arrays 
-            List with values to encrypt
+        unencrypted_list: list of arrays 
+            List with values to encrypt.
 
         Returns
         ----------
-        encrypted_list: List of arrrays
-            Encrypted list
+        encrypted_list: list of arrays 
+            Encrypted list.
         """     
         self.display(self.name + ' %s: Encrypting data...' %self.worker_address)
         encrypted_list = list()
@@ -577,13 +579,13 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
 
         Parameters
         ----------
-        encrypted_list: List of arrays 
-            List to decrypt
+        encrypted_list: list of arrays 
+            List to decrypt.
 
         Returns
         ----------
-        unencrypted_list: List of arrrays
-            Decrypted list
+        unencrypted_list: list of arrays 
+            Decrypted list.
         """
         self.display(self.name + ' %s: Unencrypting data...' %self.worker_address)
         unencrypted_list = list()
@@ -598,6 +600,7 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
         pool.close()
         return unencrypted_list
     
+
     
     def encrypt_list_rvalues(self, unencrypted_list):
         """
@@ -606,12 +609,12 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
         Parameters
         ----------
         unencrypted_list: list of arrays 
-            List to encrypt
+            List with values to encrypt.
 
         Returns
         ----------
-        encrypted_list: List of arrrays
-            Encrypted list
+        encrypted_list: list of arrays 
+            Encrypted list.
         """   
         self.display(self.name + ' %s: Encrypting data...' %self.worker_address)
         encrypted_list = list()
@@ -637,13 +640,13 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
 
         Parameters
         ----------
-        unencrypted_list: List of arrays 
-            List to encrypt
+        unencrypted_list: list of arrays 
+            List with values to encrypt.
 
         Returns
         ----------
-        encrypted_list: List
-            Encrypted list
+        encrypted_list: list of arrays 
+            Encrypted list.
         """   
         self.display(self.name + ' %s: Encrypting data...' %self.worker_address)
         pool = multiprocessing.Pool(processes=self.num_cores)
@@ -660,13 +663,13 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
 
         Parameters
         ----------
-        seq_length: Int
-            Lenght of the list of obfuscation values
+        seq_length: int
+            Lenght of the list of obfuscation values.
 
         Returns
         ----------
-        r_values: List
-            List with obfuscation values
+        r_values: list
+            List with obfuscation values.
         """   
         self.display(self.name + ' %s: Generating random sequence ri for encryption...' %self.worker_address)
         # R values for encryption
@@ -686,12 +689,12 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
 
         Parameters
         ----------
-        seq_length: Int
-            Lenght of the list of obfuscation values
+        seq_length: int
+            Lenght of the list of obfuscation values.
 
         Returns
         ----------
-        Xi: List
+        Xi: list
             List with pseudo random sequence.
         """  
         self.display(self.name + ' %s: Generating pseudo random sequence Xi...' %self.worker_address)
@@ -705,12 +708,12 @@ class POM3_CommonML_Worker(Common_to_POMs_123_Worker):
 
     def ProcessPreprocessingPacket(self, packet):
         """
-        Take an action after receiving a packet for the preprocessing
+        Take an action after receiving a packet for the preprocessing.
 
         Parameters
         ----------
-        packet: Dictionary
-            Packet received
+        packet: dictionary
+            Packet received from master.
         """
         if packet['action'] == 'SEND_MEANS':
             self.display(self.name + ' %s: Obtaining means' %self.worker_address)

@@ -12,13 +12,22 @@ import numpy as np
 class outlier_clipping_model():
 
     def __init__(self, input_data_description, times_sigma):
+        """
+        Parameters
+        ----------
+        input_data_description: dict
+            Description of the input features
+
+        times_sigma: float
+            Maximal allowed variation with respect to data standard deviation
+        """
         self.input_data_description = input_data_description
         self.times_sigma = times_sigma
         self.name = 'outlier_clipping'
 
     def transform(self, X):
         """
-        Transform data with a log scale
+        Transform data by removing outliers
 
         Parameters
         ----------
@@ -68,7 +77,10 @@ class outlier_clipping_model():
 
         except:
             print('ERROR AT outlier_clipping_model')
+            raise
+            '''
             import code
             code.interact(local=locals())
+            '''
 
         return X_transf

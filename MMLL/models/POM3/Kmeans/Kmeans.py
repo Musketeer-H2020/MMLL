@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Kmeans model 
-
+Kmeans model under POM3.
 '''
 
 __author__ = "Marcos Fernández Díaz"
@@ -13,37 +12,46 @@ __date__ = "January 2021"
 #seed(1)
 
 import numpy as np
+from math import floor
 
 from MMLL.models.POM3.CommonML.POM3_CommonML import POM3_CommonML_Master, POM3_CommonML_Worker
+from MMLL.models.Common_to_models import Common_to_models
 
 
 
-class model():
-
+class Kmeans_model(Common_to_models):
     """
-    This class contains the Kmeans model
+    This class contains the Kmeans model.
     """
 
-    def __init__(self):
+    def __init__(self, logger):
         """
-        Initializes Kmeans model centroids
+        Create a :class:`Kmeans_model` instance.
+
+        Parameters
+        ----------
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
         """
+        self.logger = logger
+        self.is_trained = False
+        self.name = 'Kmeans'
         self.centroids = None
 
 
     def predict(self, X_b):
         """
-        Predicts outputs given the model and inputs
+        Uses the Kmeans model to predict new outputs given the inputs.
 
         Parameters
         ----------
         X_b: ndarray
-            2-D numpy array containing the input patterns
+            Array containing the input patterns.
 
         Returns
         -------
         preds: ndarray
-            1-D array containing the predictions
+            Array containing the predictions.
         """
         # Calculate the vector with euclidean distances between all observations and the defined centroids        
         dists = dists = np.sqrt(np.abs(-2 * np.dot(self.centroids, X_b.T) + np.sum(X_b**2, axis=1) + np.sum(self.centroids**2, axis=1)[:, np.newaxis])) # Shape of vector (num_centroids, num_observations_X_b)
@@ -57,7 +65,7 @@ class model():
 
 class Kmeans_Master(POM3_CommonML_Master):
     """
-    This class implements Kmeans, run at Master node. It inherits from POM3_CommonML_Master.
+    This class implements Kmeans, run at Master node. It inherits from :class:`POM3_CommonML_Master`.
     """
 
     def __init__(self, comms, logger, verbose=False, NC=None, Nmaxiter=None, tolerance=None):
@@ -66,23 +74,23 @@ class Kmeans_Master(POM3_CommonML_Master):
 
         Parameters
         ----------
-        comms: comms object instance
-            Object providing communication functionalities
+        comms: :class:`Comms_master`
+            Object providing communication functionalities.
 
-        logger: class:`mylogging.Logger`
-            Logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            Indicates if messages are print or not on screen
+            Indicates whether to print messages on screen nor not.
 
         NC: int
-            Number of clusters
+            Number of clusters.
 
         Nmaxiter: int
-            Maximum number of iterations
+            Maximum number of iterations.
 
         tolerance: float
-            Minimum tolerance for continuing training
+            Minimum tolerance for continuing training.
         """
         self.num_centroids = int(NC)
         self.Nmaxiter = int(Nmaxiter)
@@ -99,11 +107,7 @@ class Kmeans_Master(POM3_CommonML_Master):
 
     def train_Master_(self):
         """
-        This is the main training loop, it runs the following actions until 
-        the stop condition is met:
-            - Update the execution state
-            - Perform actions according to the state
-            - Process the received packets
+        Main loop controlling the training of the algorithm.
 
         Parameters
         ----------
@@ -195,7 +199,11 @@ class Kmeans_Master(POM3_CommonML_Master):
     
     def Update_State_Master(self):
         '''
-        Function to control the state of the execution
+        Function to control the state of the execution.
+
+        Parameters
+        ----------
+        None
         '''
         if self.state_dict['CN'] == 'START_TRAIN':
             self.state_dict['CN'] = 'SET_NUM_CENTROIDS'
@@ -219,7 +227,11 @@ class Kmeans_Master(POM3_CommonML_Master):
     
     def TakeAction_Master(self):
         """
-        Takes actions according to the state
+        Function to take actions according to the state.
+
+        Parameters
+        ----------
+        None
         """
         to = 'MLmodel'
         
@@ -267,8 +279,7 @@ class Kmeans_Master(POM3_CommonML_Master):
 
 class Kmeans_Worker(POM3_CommonML_Worker):
     '''
-    Class implementing Kmeans, run at Worker
-
+    Class implementing Kmeans, run at Worker node. It inherits from :class:`POM3_CommonML_Worker`.
     '''
 
     def __init__(self, master_address, comms, logger, verbose=False, Xtr_b=None):
@@ -278,38 +289,38 @@ class Kmeans_Worker(POM3_CommonML_Worker):
         Parameters
         ----------
         master_address: string
-            Identifier of the master instance
+            Identifier of the master instance.
 
-        comms: comms object instance
-            Object providing communication functionalities
+        comms: :class:`Comms_worker`
+            Object providing communication functionalities.
 
-        logger: class:`mylogging.Logger`
-            Logging object instance
+        logger: :class:`mylogging.Logger`
+            Logging object instance.
 
         verbose: boolean
-            Indicates if messages are print or not on screen
+            Indicates whether to print messages on screen nor not.
 
         Xtr_b: ndarray
-            2-D numpy array containing the input training patterns
+            Array containing the inputs for training.
         """
         self.Xtr_b = Xtr_b
 
-        super().__init__(master_address, comms, logger, verbose)      # Initialize common class for POM3
-        self.name = 'POM3_Kmeans_Worker'                              # Name of the class
-        self.num_features = Xtr_b.shape[1]                            # Number of features
-        self.model = model()                                          # Model    
-        self.is_trained = False                                       # Flag to know if the model has been trained
+        super().__init__(master_address, comms, logger, verbose)    # Initialize common class for POM3
+        self.name = 'POM3_Kmeans_Worker'                            # Name of the class
+        self.num_features = Xtr_b.shape[1]                          # Number of features
+        self.model = Kmeans_model(logger)                           # Model    
+        self.is_trained = False                                     # Flag to know if the model has been trained
         
         
 
     def ProcessReceivedPacket_Worker(self, packet):
         """
-        Take an action after receiving a packet
+        Process the received packet at worker.
 
         Parameters
         ----------
-        packet: Dictionary
-            Packet received
+        packet: dictionary
+            Packet received from the master.
         """        
         if packet['action'] == 'SET_NUM_CENTROIDS':
             self.display(self.name + ' %s: Storing number of centroids' %self.worker_address)
@@ -356,10 +367,15 @@ class Kmeans_Worker(POM3_CommonML_Worker):
             encrypted_accumulated_centroids = packet['data']['accumulated_centroids']
             accumulated_centroids = np.asarray(self.decrypt_list(encrypted_accumulated_centroids))
             
+            # Random point initialization (data leakage in POM1)  
             # Suffle randomly the observations in the training set
-            np.random.shuffle(self.Xtr_b)
-            centroids_local = self.Xtr_b[:self.num_centroids, :] # Take the first K observations, this avoids selecting the same point twice
-            accumulated_centroids += centroids_local/self.num_workers
+            # np.random.shuffle(self.Xtr_b)
+            # centroids_local = self.Xtr_b[:self.num_centroids, :] # Take the first K observations, this avoids selecting the same point twice
+            # accumulated_centroids += centroids_local/self.num_workers
+
+            # Naive sharding initialization (no leakage in POM1)
+            centroids = self.naive_sharding(self.Xtr_b, self.num_centroids)
+            accumulated_centroids += centroids/self.num_workers
 
             # Encrypt centroids before sending them to the master
             encrypted_accumulated_centroids = np.asarray(self.encrypt_list_rvalues(list(accumulated_centroids)))
@@ -423,6 +439,7 @@ class Kmeans_Worker(POM3_CommonML_Worker):
             self.display(self.name + ' %s: Receiving final model' %self.worker_address)
             encrypted_centroids = packet['data']['centroids']
             self.model.centroids = np.asarray(self.decrypt_list(encrypted_centroids))
+            self.model.is_trained = True
             self.is_trained = True
             self.display(self.name + ' %s: Final model stored' %self.worker_address)
 
@@ -432,3 +449,68 @@ class Kmeans_Worker(POM3_CommonML_Worker):
             packet = {'action': action, 'data': data}            
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
+
+
+
+    def naive_sharding(self, ds, k):
+        """
+        Create cluster centroids using deterministic naive sharding algorithm.
+    
+        Parameters
+        ----------
+        ds : numpy array
+            The dataset to be used for centroid initialization.
+        k : int
+            The desired number of clusters for which centroids are required.
+
+        Returns
+        -------
+        centroids : numpy array
+            Collection of k centroids as a numpy array.
+        """        
+        n = ds.shape[1]
+        m = ds.shape[0]
+        centroids = np.zeros((k,n))
+    
+        # Sum all elements of each row, add as col to original dataset, sort
+        composite = np.sum(ds, axis=1)
+        composite = np.expand_dims(composite, axis=1)
+        ds = np.append(composite, ds, axis=1)
+        ds.sort(axis=0)
+    
+        # Step value for dataset sharding
+        step = floor(m/k)
+    
+        # Vectorize mean ufunc for numpy array
+        vfunc = np.vectorize(self._get_mean)
+    
+        # Divide matrix rows equally by k-1 (so that there are k matrix shards)
+        # Sum columns of shards, get means; these columnar means are centroids
+        for j in range(k):
+            if j == k-1:
+                centroids[j:] = vfunc(np.sum(ds[j*step:,1:], axis=0), step)
+            else:
+                centroids[j:] = vfunc(np.sum(ds[j*step:(j+1)*step,1:], axis=0), step)
+    
+        return centroids
+
+
+
+    def _get_mean(self, sums, step):
+        """
+        Vectorizable ufunc for getting means of summed shard columns.
+        
+        Parameters
+        ----------
+        sums : float
+            The summed shard columns.
+        step : int
+            The number of instances per shard.
+        Returns
+        -------
+        sums/step (means) : numpy array
+            The means of the shard columns.
+        """
+
+        return sums/step
+

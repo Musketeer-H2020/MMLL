@@ -13,17 +13,21 @@ from transitions import State
 from transitions.extensions import GraphMachine
 import pickle
 
-class model():
+class Model():
+    """
+    Linear Regression model.
+    """
     def __init__(self):
         self.w = None
+        self.is_trained = False
 
-    def predict(self, X_b):
+    def predict(self, X):
         """
         Predicts outputs given the inputs
 
         Parameters
         ----------
-        X_b: ndarray
+        X: ndarray
             Matrix with the input values
 
         Returns
@@ -31,8 +35,30 @@ class model():
         prediction_values: ndarray
 
         """
+        X_b = np.hstack((np.ones((X.shape[0], 1)), X))
         prediction_values = np.dot(X_b, self.w.ravel())
         return prediction_values
+
+    def save(self, filename=None):
+        """
+        Saves the trained model to file
+
+        Parameters
+        ----------
+        filename: string
+            path+filename          
+
+        """
+        if not self.is_trained:
+            print('Model Save Error: model not trained yet, nothing to save.')
+        else:
+            try:
+                with open(filename, 'wb') as f:
+                    pickle.dump(self, f)
+                print('Model saved at %s' %filename)
+            except:
+                print('Model Save Error: model cannot be saved, check the provided path/filename.')
+                raise
 
 
 class LR_Master(Common_to_all_POMs):
@@ -61,7 +87,7 @@ class LR_Master(Common_to_all_POMs):
         verbose: boolean
             indicates if messages are print or not on screen
         
-        **kwargs: Arbitrary keyword arguments.
+        kwargs: Keyword arguments.
 
         """
         super().__init__()
@@ -92,7 +118,7 @@ class LR_Master(Common_to_all_POMs):
         self.verbose = verbose                      # print on screen when true
         self.state_dict = {}                        # dictionary storing the execution state
         self.NI = None
-        self.model = model()
+        self.model = Model()
         #self.regularization = regularization
         #self.classes = classes
         #self.balance_classes = balance_classes
@@ -168,11 +194,14 @@ class LR_Master(Common_to_all_POMs):
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
                     MLmodel.display('ERROR AT while_update_tr_data')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_send_w_encr(self, MLmodel):
@@ -191,9 +220,12 @@ class LR_Master(Common_to_all_POMs):
                         MLmodel.comms.broadcast(packet, recipients)
                         MLmodel.display(MLmodel.name + ': broadcasted w to Workers: %s' % str(MLmodel.selected_workers))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_send_w_encr')
                     import code
                     code.interact(local=locals())
+                    '''
 
                 return
 
@@ -312,7 +344,9 @@ class LR_Master(Common_to_all_POMs):
         self.grads_dict = {}
         
         self.stop_training = False
-        kiter = 0
+        self.kiter = 0
+        self.mseval = 1000
+
         while not self.stop_training:
             self.FSMmaster.go_send_w_encr(self)
             self.run_Master()
@@ -325,72 +359,68 @@ class LR_Master(Common_to_all_POMs):
                 grad_decr = self.decrypter.decrypt(grad_encr)
                 grad += grad_decr
 
-            self.w_old = self.w.copy()
+            self.kiter += 1
+            if self.kiter == self.Nmaxiter:
+                self.stop_training = True
 
-            # Pending ...
-            self.Xval_b = None
-            if self.Xval_b is not None:
-                # We explore alfa values to find a minimum in the validation error
-                E_val = []
-                alphas = np.arange(-5, 5, 0.001)
-                w_new = self.w + grad
-                w_old = self.w
-                for alpha in alphas:
-                    w_tmp = alpha * w_new + (1 - alpha) * w_old
-                    o_val = np.dot(self.Xval_b, w_tmp).ravel()
-                    e_val = np.mean((self.yval - o_val) ** 2)
-                    E_val.append(e_val)
-                    #s_val = np.dot(MLmodel.Xval_b, w_tmp).ravel()
-                    #o_val = self.sigm(s_val)
-                    #ce_val = np.mean(self.cross_entropy(o_val, MLmodel.yval, MLmodel.epsilon))
-                    #CE_val.append(ce_val)
-                min_pos = np.argmin(E_val)
-                alpha_opt = alphas[min_pos]
-                self.display(self.name + ': optimal alpha = %s' % str(alpha_opt)[0:7])
-                self.w = alpha_opt * w_new + (1 - alpha_opt) * w_old
-            else:
+            if self.Xval is None:  # A validation set is not provided
+                self.w_old = self.w.copy()
                 self.w += self.mu * grad
+    
+                # stopping
+                inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
 
-            # stopping
-            inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
-            # Stop if convergence is reached
-            if inc_w < 0.005:
-                self.stop_training = True
-            if kiter == self.Nmaxiter:
-                self.stop_training = True
+                # Stop if convergence is reached
+                if inc_w < self.conv_stop:
+                    self.stop_training = True
+    
+                message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, self.kiter, inc_w)
+                #self.display(message, verbose=True)
+                print(message)
+            else:
+                MSE_val = []
+                mus = np.arange(0, 10.0, 0.0001)
+                Xw = np.dot(self.add_bias(self.Xval), self.w)
+                Xgrad = np.dot(self.add_bias(self.Xval), grad)
 
-            message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
-            #self.display(message, verbose=True)
-            print(message)
-            
-            kiter += 1
-            #print(self.w)
+                for mu in mus:
+                    s_val = Xw + mu * Xgrad
+                    o_val = s_val.ravel()
+                    mse_val = np.mean((o_val - self.yval.ravel())**2)
+                    MSE_val.append(mse_val)
 
-            #self.wq = self.cr.vQ(self.w)
-            #self.wq_encr = self.cr.vEncrypt(self.wq)
+                del Xw, Xgrad, s_val, o_val
+
+                min_pos = np.argmin(MSE_val)
+                mu_opt = mus[min_pos]
+                del mus
+                self.w_old = self.w.copy()
+                self.w = self.w + mu_opt * grad
+                del grad
+                # stopping
+                inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
+
+                self.mseval_old = self.mseval
+
+                self.mseval = MSE_val[min_pos]
+                del MSE_val
+                print('Optimal mu = %f, MSE val=%f' % (mu_opt, self.mseval))
+
+                inc_mseval = (self.mseval_old - self.mseval)/ self.mseval
+                # Stop if convergence is reached
+                if inc_mseval < self.conv_stop and inc_w < 0.1:
+                    self.stop_training = True
+
+                message = 'Maxiter = %d, iter = %d, inc_MSE_val = %f, inc_w = %f' % (self.Nmaxiter, self.kiter, inc_mseval, inc_w)
+                #self.display(message, verbose=True)
+                print(message)
+
             self.w_encr = self.encrypter.encrypt(self.w)
 
         self.model.w = self.w
         self.display(self.name + ': Training is done', verbose=True)
-        self.model.niter = kiter
-
-    def predict_Master(self, X_b):
-        """
-        Predicts outputs given the model and inputs
-
-        Parameters
-        ----------
-        X_b: ndarray
-            Matrix with the input values
-
-        Returns
-        -------
-        prediction_values: ndarray
-
-        """
-        #prediction_values = self.sigm(np.dot(X_b, self.w.ravel()))
-        prediction_values = self.model.predict(X_b)
-        return prediction_values
+        self.model.niter = self.kiter
+        self.model.is_trained = True
 
     def Update_State_Master(self):
         """
@@ -422,6 +452,7 @@ class LR_Master(Common_to_all_POMs):
             #sender = self.receive_from[sender]
             if packet['action'][0:3] == 'ACK':
                 self.state_dict[sender] = packet['action']
+                self.display(self.name + ': received %s from worker %s' % (packet['action'], sender), verbose=True)
 
             if packet['action'] == 'ACK_grads':
                 self.grads_dict.update({sender: packet['data']['grad_encr']})
@@ -431,9 +462,12 @@ class LR_Master(Common_to_all_POMs):
                 self.newNI_dict.update({sender: packet['data']['newNI']})
 
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Master')
             import code
-            code.interact(local=locals())         
+            code.interact(local=locals())
+            '''     
 
         return
 
@@ -523,12 +557,14 @@ class LR_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     message = "ERROR: %s %s" % (str(err), str(type(err)))
                     MLmodel.display('\n ' + '='*50 + '\n' + message + '\n ' + '='*50 + '\n' )
-                    #raise
                     import code
                     code.interact(local=locals())
                     #MLmodel.display('ERROR AT while_computing_XTDaX')
+                    '''
 
             def while_compute_gradients(self, MLmodel, packet):
                 try:
@@ -558,9 +594,12 @@ class LR_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_grads' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_compute_gradients')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
         states_worker = [
             State(name='waiting_order', on_enter=['while_waiting_order']),
@@ -624,8 +663,11 @@ class LR_Worker(Common_to_all_POMs):
                 self.FSMworker.go_compute_gradients(self, packet)
                 self.FSMworker.done_compute_gradients(self)
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Worker')
             import code
             code.interact(local=locals())
+            '''
 
         return self.terminate

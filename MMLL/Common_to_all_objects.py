@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 '''
-Collection of methods common to all objects, to be inherited by other classes'''
+Collection of methods common to all objects, to be inherited by other classes
+'''
 
-__author__ = "Angel Navia-Vázquez"
+__author__ = "Angel Navia-Vázquez and Marcos Fernández Díaz"
 __date__ = "Mar 2020"
 
 
@@ -25,7 +26,7 @@ from scipy.stats import kurtosis, skew
 
 class Common_to_all_objects():
     """
-    This class implements some basic methods andcommon to all objects.
+    This class implements some basic methods and common to all objects.
     """
 
     def __init__(self):
@@ -35,17 +36,21 @@ class Common_to_all_objects():
         Parameters
         ----------
         None
-
         """
         self.verbose = True
         return
 
     def display(self, message, verbose=None):
         """
-        Write message to log file and display on screen if verbose=True
+        Write message to log file and display on screen if verbose=True.
 
-        :param message: string message to be shown/logged
-        :type message: str
+        Parameters
+        ----------
+        message: string
+            Message to be displayed.
+
+        verbose: boolean
+            Indicates whether to print messages on screen nor not.
         """
         if verbose is not None:
             if verbose:
@@ -59,10 +64,44 @@ class Common_to_all_objects():
             pass
             
     def add_bias(self, X):
+        """
+        Adds a first column of value 1.
+
+        Parameters
+        ----------
+        X: ndarray
+            Matrix with the input values.
+
+        Returns
+        -------
+        X_b: ndarray
+            Matrix with the bias added.
+        """
+
         # We add first column of ones, to deal with bias
-        return np.hstack((np.ones((X.shape[0], 1)), X))
+        X_b = np.hstack((np.ones((X.shape[0], 1)), X.astype(float)))
+        return X_b
 
     def compute_stats(self, X, y, stats_list):
+        """
+        Compute statistics on data.
+
+        Parameters
+        ----------
+        X: ndarray
+            Matrix with the input values.
+
+        X: ndarray
+            Vector with the target values.
+
+        stats_list: list of strings
+            Statistics to be computed.
+
+        Returns
+        -------
+        stats_dict: dict
+            Computed statistics.
+        """
         stats_dict = {}
 
         X = X.astype(float)
@@ -139,7 +178,38 @@ class Common_to_all_objects():
 
     def compute_gfs(self, Rxy_b, rxy_b, Xval, yval, NF=None, stop_incr=None, regularization=0.0001):
         '''
-        Feature Selection by a brute force greedy approach using linear models
+        Feature Selection by a brute force greedy approach using linear models.
+
+        Parameters
+        ----------
+        Rxy_b: ndarray
+            Self Correlation Matrix.
+
+        rxy_b: ndarray
+            Cross-correlation Vector.
+
+        Xval: ndarray
+            Validation input data .
+
+        yval: ndarray
+            Validation target data.
+
+        NF: integer
+            Number of features to extract.
+
+        stop_incr: float
+            Threshold to stop extracting features.
+
+        regularization: float
+            Regularization value to be used in the linear model.
+
+        Returns
+        -------
+        pos_selected: list of int
+            Positions of the selected features.
+
+        perf_val: list of float
+            Performance on the validation set.
         '''
         try: 
             NI = Rxy_b.shape[0]
@@ -218,19 +288,70 @@ class Common_to_all_objects():
         return pos_selected, perf_val
 
     def hash_md5(self, x):
+        '''
+        Compute hash value using MD5.
+
+        Parameters
+        ----------
+        x: string
+            Input value.
+
+        Returns
+        -------
+        z: string
+            Hash value.
+        '''
         y = hashlib.md5(str(x).encode()).hexdigest()
         return y
 
     def hash_sha256(self, x):
+        '''
+        Compute hash value using SHA256.
+
+        Parameters
+        ----------
+        x: string
+            input value.
+
+        Returns
+        -------
+        z: string
+            Hash value.
+        '''
         z = hashlib.sha256(str(x).encode()).hexdigest()
         return z
 
     def hash_sha3_512(self, x):
+        '''
+        Compute hash value using SHA512.
+
+        Parameters
+        ----------
+        x: string
+            Input value.
+
+        Returns
+        -------
+        z: string
+            Hash value.
+        '''
         z = hashlib.sha3_512(str(x).encode()).hexdigest()
         return z
 
     def get_data2num_model(self, input_data_description):
+        '''
+        Obtain model to convert data to numeric.
 
+        Parameters
+        ----------
+        input_data_description: dictionary
+            Description of the input data.
+
+        Returns
+        -------
+        model: :class:`datanum_model`
+            Model to transform the data.
+        '''
         types = [x['type'] for x in input_data_description['input_types']]
         model = None
         if 'cat' in types:  # there is something to transform
@@ -277,7 +398,7 @@ class Common_to_all_objects():
 
     def process_kwargs(self, kwargs):
         """
-        Process the variable arguments and assign the new variables
+        Process the variable arguments and assign the new variables.
 
         Parameters
         ----------
@@ -386,6 +507,18 @@ class Common_to_all_objects():
                 self.aggregation_type = value
             if key == 'use_bias':
                 self.use_bias = value
-
-
+            if key == 'num_epochs_worker':
+                self.num_epochs_worker = value
+            if key == 'eps':
+                self.eps = value
+            if key == 'nesterov':
+                self.nesterov = value
+            if key == 'momentum':
+                self.momentum = value
+            if key == 'minvalue':
+                self.minvalue = value
+            if key == 'maxvalue':
+                self.maxvalue = value
+            if key == 'Tmax':
+                self.Tmax = value
 

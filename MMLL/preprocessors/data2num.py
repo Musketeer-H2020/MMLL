@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Preprocessing object for data normalization
+Preprocessing object for data transformation to numeric
 @author:  Angel Navia Vázquez
 '''
 __author__ = "Angel Navia Vázquez, UC3M."
@@ -14,6 +14,12 @@ from sklearn.preprocessing import LabelEncoder
 class data2num_model():
 
     def __init__(self, input_data_description = None):
+        """
+        Parameters
+        ----------
+        input_data_description: dict
+            Description of the input features
+        """
         self.input_data_description = input_data_description 
         self.name = 'data2num'
 
@@ -47,7 +53,7 @@ class data2num_model():
 
     def transform(self, X):
         """
-        Transform data given mean and std
+        Transform data into numeric
 
         Parameters
         ----------
@@ -82,8 +88,11 @@ class data2num_model():
                         newX = X[:, kinput].astype(float).reshape((-1, 1))
                 except:
                     print('ERROR at datanum, not a numeric value in numeric feature.')
+                    raise
+                    '''
                     import code
                     code.interact(local=locals())
+                    '''
 
                 X_transf.append(newX)
 
@@ -123,7 +132,9 @@ class data2num_model():
             X_transf = np.hstack(X_transf)
         except:
             print('ERROR AT masternode model transform')
+            raise
+            '''
             import code
             code.interact(local=locals())
-
+            '''
         return X_transf

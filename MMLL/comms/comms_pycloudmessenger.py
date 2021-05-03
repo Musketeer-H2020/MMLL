@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 '''
-Comms interface to pycloudmessenger with roundrobin functionality
-@author:  Angel Navia Vázquez
+Comms interface to pycloudmessenger with roundrobin functionality.
+@author:  Angel Navia Vázquez, Marcos Fernández Díaz.
 '''
-__author__ = "Angel Navia Vázquez, UC3M."
+__author__ = "Angel Navia Vázquez, Marcos Fernández Díaz"
 
 import random, string
 import time
@@ -18,6 +18,18 @@ except:
 '''
 
 def get_current_task_name(self):
+    """
+    Function to retrieve the current task name from local disk.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    task_name: string
+        The current task name currently created from the master.
+    """
     task_available = False
     while not task_available:
         try:
@@ -31,12 +43,20 @@ def get_current_task_name(self):
     return self.task_name
 
 
+
 class Comms_master:
     """
+    This class provides an interface with the communication object, run at Master node.
     """
 
     def __init__(self, commsffl):
         """
+        Create a :class:`Comms_master` instance.
+
+        Parameters
+        ----------
+        commsffl: :class:`ffl.Factory.aggregator`
+            Object providing communication functionalities at Master for pycloudmessenger.
         """
         #self.comms = Comms_master(commsffl)
         #self.context_master = context_master
@@ -47,7 +67,18 @@ class Comms_master:
         workers = self.commsffl.get_participants()
         self.workers_ids = list(workers.keys())
 
+
     def send(self, message, destiny):
+        """
+        Send a packet to a given destination.
+
+        Parameters
+        ----------
+        message: dict
+            Packet to be sent.
+        destiny: string
+            Address of the recipient for the message.
+        """
         try:
             with self.commsffl:
                 # self.send_to maps between worker_id and pseudo_id 
@@ -60,7 +91,18 @@ class Comms_master:
             print('\n')
             raise
 
+
     def broadcast(self, message, receivers_list=None):
+        """
+        Send a packet to a set of workers.
+
+        Parameters
+        ----------
+        message: dict
+            Packet to be sent.
+        receivers_list: list of strings
+            Addresses of the recipients for the message.
+        """
         # receivers_list are not used here, pycloudmessenger already knows all the recipients
         try:
             if receivers_list is None:
@@ -78,7 +120,18 @@ class Comms_master:
             print('\n')
             raise
 
+
     def roundrobin(self, message, receivers_list=None):
+        """
+        Send a packet to a set of workers using the roundrobin protocol (ring communications).
+
+        Parameters
+        ----------
+        message: dict
+            Packet to be sent.
+        receivers_list: list of strings
+            Addresses of the recipients for the message.
+        """
         # receivers_list are not used here, pycloudmessenger already knows all the recipients
         try:
             with self.commsffl:
@@ -93,6 +146,19 @@ class Comms_master:
 
 
     def receive(self, timeout=1):
+        """
+        Wait for a packet to arrive or until timeout expires.
+
+        Parameters
+        ----------
+        timeout: float
+            Time to wait for a packet in seconds.
+
+        Returns
+        -------
+        message: dict
+            Received packet.
+        """
         try:
             message = None
             packet = None
@@ -132,17 +198,40 @@ class Comms_master:
 
 
     def receive_poms_123(self, timeout=10):
+        """
+        Wait for a packet to arrive or until timeout expires. Used in POMs 1, 2 and 3.
+
+        Parameters
+        ----------
+        timeout: float
+            Time to wait for a packet in seconds.
+
+        Returns
+        -------
+        packet: dict
+            Received packet.
+        """
         with self.commsffl:
             packet = self.commsffl.receive(timeout)            
         return packet
 
 
+
 class Comms_worker:
     """
+    This class provides an interface with the communication object, run at Worker node.
     """
 
     def __init__(self, commsffl, worker_real_name='Anonymous'):
         """
+        Create a :class:`Comms_worker` instance.
+
+        Parameters
+        ----------
+        commsffl: :class:`ffl.Factory.participant`
+            Object providing communication functionalities for pycloudmessenger.
+        worker_real_name: string
+            Real name of the worker.
         """
         self.id = worker_real_name  # unused by now...
         #self.task_name = task_name
@@ -150,7 +239,18 @@ class Comms_worker:
         self.name = 'pycloudmessenger'
         self.commsffl = commsffl
 
+
     def send(self, message, address=None):
+        """
+        Send a packet to the master.
+
+        Parameters
+        ----------
+        message: dict
+            Packet to be sent.
+        address: string
+            Address of the recipient for the message.
+        """
         try:
             # address is not used here, a worker can only send to the master        
             with self.commsffl:
@@ -163,10 +263,21 @@ class Comms_worker:
             print('\n')
             raise
 
-    def receive(self, timeout=0.1):
-        
-        #print('Listening...')
 
+    def receive(self, timeout=0.1):
+        """
+        Wait for a packet to arrive or until timeout expires.
+
+        Parameters
+        ----------
+        timeout: float
+            Time to wait for a packet in seconds.
+
+        Returns
+        -------
+        message: dict
+            Received packet.
+        """
         message = None
         try:
             with self.commsffl:
@@ -198,6 +309,19 @@ class Comms_worker:
 
 
     def receive_poms_123(self, timeout=10):
+        """
+        Wait for a packet to arrive or until timeout expires. Used in POMs 1, 2 and 3.
+
+        Parameters
+        ----------
+        timeout: float
+            Time to wait for a packet in seconds.
+
+        Returns
+        -------
+        packet: dict
+            Received packet.
+        """
         with self.commsffl:
             packet = self.commsffl.receive(timeout)            
         return packet

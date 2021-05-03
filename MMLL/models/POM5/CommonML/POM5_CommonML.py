@@ -46,51 +46,8 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
         verbose: boolean
             indicates if messages are print or not on screen
-        **kwargs: Arbitrary keyword arguments.
 
-
-        -----------------------------------------------------------------
-        Optional or POM dependant arguments
-
-        -----------------------------------------------------------------
-
-        Parameters
-        ---------------------
-        cr: encryption object instance
-            the encryption library to be used in POMs 4 and 5
-
-        cryptonode_address: string
-            address of the crypto node
-
-        Nmaxiter: integer
-            Maximum number of iterations during learning
-
-        NC: integer
-            Number of centroids
-
-        regularization: float
-            Regularization parameter
-
-        classes: list of strings
-            Possible class values in a multiclass problem
-
-        balance_classes: Boolean
-            If True, the algorithm takes into account unbalanced datasets
-
-        C: array of floats
-            Centroids matrix
-
-        nf: integer
-            Number of bits for the floating part
-
-        N: integer
-            Number of
-
-        fsigma: float
-            factor to multiply standard sigma value = sqrt(Number of inputs)
-
-        normalize_data: Boolean
-            If True, data normalization is applied, irrespectively if it has been previously normalized
+        kwargs: Keyword arguments.
 
         """
         self.name = 'POM5_CommonML_Master'               # Name
@@ -262,12 +219,7 @@ class POM5_CommonML_Master(Common_to_all_POMs):
                 return
 
             def while_waiting_order(self, MLmodel):
-                try:
-                    MLmodel.display(MLmodel.name + ' is waiting...')
-                except:
-                    print('STOP AT while_waiting_order')
-                    import code
-                    code.interact(local=locals())
+                MLmodel.display(MLmodel.name + ' is waiting...')
                 return
 
             def while_bcasting_encrypter(self, MLmodel):
@@ -282,9 +234,12 @@ class POM5_CommonML_Master(Common_to_all_POMs):
                     MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                     MLmodel.display(MLmodel.name + ' sent encrypter to all Workers')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_bcasting_encrypter')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_sending_prep_object(self, MLmodel, model):              
@@ -344,10 +299,13 @@ class POM5_CommonML_Master(Common_to_all_POMs):
                     MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                     MLmodel.display(MLmodel.name + ' broadcasted get_X_minus_mean_squared to all Workers')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_getting_X_minus_mean_squared, POM6_Common')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
             def while_getting_X_minus_mean_squared_roundrobin(self, MLmodel, mean_values, input_data_description, x2_init, which_variables):
@@ -357,10 +315,13 @@ class POM5_CommonML_Master(Common_to_all_POMs):
                     MLmodel.comms.roundrobin(packet, MLmodel.workers_addresses)
                     MLmodel.display(MLmodel.name + 'Started roundrobin: get_X_minus_mean_squared_roundrobin')
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_getting_X_minus_mean_squared_roundrobin, POM6_Common')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
             '''
             def while_sending_roundrobin(self, MLmodel, roundrobin_addresses, action, NI=None, xmean=None):
@@ -507,11 +468,17 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
     def get_vocabulary(self):
         """
-        Gets from workers their vocabulary
+        Gets the workers vocabulary
 
         Parameters
         ----------
         None
+
+        Returns
+        -------
+        vocab: list of strings
+            Vocabulary.
+
         """
         if self.aggregation_type == 'direct':
             self.vocab_dict = {}
@@ -550,11 +517,12 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
     def get_df(self, vocab):
         """
-        Gets df and Ndocs from workers
+        Gets df and filters vocabulary
 
         Parameters
         ----------
-        None
+        vocab: list of strings
+            Vocabulary to be used
         """
         if self.aggregation_type == 'direct':
             self.display(self.name + ': Asking workers their tf df directly')
@@ -605,6 +573,13 @@ class POM5_CommonML_Master(Common_to_all_POMs):
         Parameters
         ----------
         None
+
+        Returns:
+        ----------
+        count: array
+            Features count.
+        NP: integer
+            Total count.
         """
         if self.aggregation_type == 'direct':
             self.count_dict = {}
@@ -618,9 +593,9 @@ class POM5_CommonML_Master(Common_to_all_POMs):
             count = np.sum(np.array(list(self.count_dict.values())), axis=0)
             
         if self.aggregation_type == 'roundrobin':
-            print('STOP AT get_feat_count, pending roundrobin')
-            import code
-            code.interact(local=locals())
+            print('ERROR AT get_feat_count, pending roundrobin')
+            #import code
+            #code.interact(local=locals())
         
         self.display(self.name + ': getting feat freq is done')
         return count, NP
@@ -631,7 +606,14 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
         Parameters
         ----------
-        None
+        linkage_type: string
+            Type of linkage (full or join).
+
+        Returns
+        -------
+        hashids_global: list of hashids
+            Global hashids.
+
         """
         hashids_global = None
 
@@ -670,8 +652,8 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
         if self.aggregation_type == 'roundrobin':
             print('get_hashids: Pending roundrobin implementation ')
-            import code
-            code.interact(local=locals())
+            #import code
+            #code.interact(local=locals())
 
         self.display(self.name + ': getting hashids is done')
         return hashids_global
@@ -683,7 +665,18 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
         Parameters
         ----------
-        Common Hashids, list of strings
+        hashids: list of strings
+            Global hashids
+        linkage_type: string
+            Type of linkage (full or join).
+
+        Returns
+        -------
+        input_data_description_dict: dict
+            Updated description of the input data.
+
+        target_data_description_dict: dict
+            Updated description of the target data.
         """
 
         self.input_data_description_dict = {}
@@ -697,11 +690,19 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
     def data2num_at_workers_V(self):
         """
-        Asks workers to transform their data  into numeric
+        Asks workers to transform their data into numeric, vertical partition
 
         Parameters
         ----------
         None
+
+        Returns
+        -------
+        input_data_description_dict: dict
+            Updated description of the input data.
+
+        target_data_description_dict: dict
+            Updated description of the target data.
         """
 
         # New values
@@ -715,13 +716,6 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
         self.display(self.name + ': data2num at workers is done')
         return self.input_data_description_dict, self.target_data_description_dict, self.errors_dict
-
-
-
-    ######## CHECKED
-
-
-
 
     ######## UNCHECKED
 
@@ -738,20 +732,6 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
 
 
-    '''
-    def get_params(self):
-        """
-        Obtain common cryptographic parameters to be shared, under POM4
-
-        Parameters
-        ----------
-        None
-        """
-        self.FSMmaster.go_asking_encrypt_params(self)
-        self.run_Master()
-    '''
-
-
     def get_cryptdata(self):
         """
         Get encrypted data from workers, under POM4
@@ -763,16 +743,6 @@ class POM5_CommonML_Master(Common_to_all_POMs):
         self.FSMmaster.go_asking_encrypted_data(self)
         self.run_Master()
 
-    def reencrypt_data(self):  # Includes removing blinding
-        """
-        Ask cryptonode to reencrypt the data to a common key
-
-        Parameters
-        ----------
-        None
-        """
-        self.FSMmaster.go_reencrypting_data(self)
-        self.run_Master()
 
     def reset(self, NI):
         """
@@ -807,7 +777,8 @@ class POM5_CommonML_Master(Common_to_all_POMs):
 
         Parameters
         ----------
-            None
+            prep_object: preprocessing instance
+                Preprocessing object to be used.
         """
         self.prep = prep_object
         self.FSMmaster.go_sending_prep_object(self)
@@ -1035,10 +1006,13 @@ class POM5_CommonML_Master(Common_to_all_POMs):
                     pass
 
         except:
+            raise
+            '''
             print('ERROR AT ProcessReceivedPacket_Master')
             import code
             code.interact(local=locals())
             pass
+            '''
 
         return
 
@@ -1079,49 +1053,6 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
         ytr: ndarray
             1-D numpy array containing the target training values
     
-        **kwargs: Arbitrary keyword arguments.
-
-
-        -----------------------------------------------------------------
-        Optional or POM dependant arguments
-
-        -----------------------------------------------------------------
-
-        Parameters
-        ---------------------
-
-        cryptonode_address: string
-            address of the crypto node
-
-        Nmaxiter: integer
-            Maximum number of iterations during learning
-
-        NC: integer
-            Number of centroids
-
-        regularization: float
-            Regularization parameter
-
-        classes: list of strings
-            Possible class values in a multiclass problem
-
-        balance_classes: Boolean
-            If True, the algorithm takes into account unbalanced datasets
-
-        C: array of floats
-            Centroids matrix
-
-        nf: integer
-            Number of bits for the floating part
-
-        N: integer
-            Number of
-
-        fsigma: float
-            factor to multiply standard sigma value = sqrt(Number of inputs)
-
-        normalize_data: Boolean
-            If True, data normalization is applied, irrespectively if it has been previously normalized
         """
         self.master_address = master_address
         self.worker_address = worker_address                    # The id of this Worker
@@ -1165,9 +1096,12 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_stored_prep' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('STOP AT while_storing_prep_object')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_storing_encrypter(self, MLmodel, packet):
@@ -1182,15 +1116,18 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_encrypter')
                 except:
+                    raise
+                    '''
                     print('STOP AT while_storing_encrypter')
                     import code
                     code.interact(local=locals())
+                    '''
                 return
 
             def while_storing_prep_object(self, MLmodel, packet):
-                print('STOP AT while_storing_prep_object worker')
-                import code
-                code.interact(local=locals())
+                #print('STOP AT while_storing_prep_object worker')
+                #import code
+                #code.interact(local=locals())
                 MLmodel.prep = packet['data']['prep_object']
                 MLmodel.display(MLmodel.name + ' %s: stored preprocessing object' % (str(MLmodel.worker_address)))
                 action = 'ACK_stored_prep'
@@ -1217,12 +1154,15 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.Xtr_orig = X_prep
                     error = None
                 except Exception as err:
+                    raise
+                    '''
                     error = err
                     # Comment later
                     print('ERROR AT while_local_preprocessing worker')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
 
                 #print(np.mean(MLmodel.Xtr_b, axis = 0))
                 #print(np.std(MLmodel.Xtr_b, axis = 0))
@@ -1311,11 +1251,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_sumX' % (str(MLmodel.worker_address)))
                 except Exception as err:
+                    raise
+                    '''
                     print('ERROR AT while_computing_sumX worker')
                     import code
                     code.interact(local=locals())
                     pass
-
+                    '''
 
 
                 return
@@ -1347,10 +1289,12 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_X2_mean_sum' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_X_minus_mean_squared worker POM6_Common')
                     import code
                     code.interact(local=locals())
-                   
+                    '''
                     pass
                 return
 
@@ -1380,10 +1324,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_minX' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_minX')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
             def while_computing_sumX_roundrobin(self, MLmodel, packet):
@@ -1413,10 +1360,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet)
                     MLmodel.display(MLmodel.name + ' %s: sent get_sumX_roundrobin' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_sumX_roundrobin')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
 
@@ -1449,10 +1399,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet)
                     MLmodel.display(MLmodel.name + ' %s: sent get_X_minus_mean_squared_roundrobin' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_X_minus_mean_squared_roundrobin worker POM6_Common')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
                 return
 
             def while_computing_stats(self, MLmodel, packet):
@@ -1512,11 +1465,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent get_Rxyb_rxyb_roundrobin' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_Rxyb_rxyb_roundrobin worker POM6_Common')
                     import code
                     code.interact(local=locals())
-
                     pass
+                    '''
                 return
 
             def while_computing_vocab_direct(self, MLmodel, packet):
@@ -1541,10 +1496,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_vocab_direct' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_vocab_direct')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_computing_tf_df_direct(self, MLmodel, packet):
@@ -1570,30 +1528,82 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_tf_df_direct' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_df_direct')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_checking_data(self, MLmodel, packet):
                 try:
                     MLmodel.display(MLmodel.name + ' %s: is checking data' % (str(MLmodel.worker_address)))
-
-                    input_data_description = packet['data']['input_data_description']
-                    target_data_description = packet['data']['target_data_description']
-                    
                     err = ''
+                    try:
+                        input_data_description = packet['data']['input_data_description']
+                    except:
+                        MLmodel.display(MLmodel.name + ' %s: input_data_description not available, not checking inputs' % (str(MLmodel.worker_address)))
+                        input_data_description = None
+                        err += 'Missing input_data_description; '
+
+                    try:
+                        target_data_description = packet['data']['target_data_description']
+                    except:
+                        target_data_description = None
+
+                    if target_data_description is None:
+                        MLmodel.display(MLmodel.name + ' %s: target_data_description not available, not checking targets' % (str(MLmodel.worker_address)))
+
                     NI = MLmodel.Xtr_b.shape[1]
                     NT = MLmodel.ytr.reshape(-1, 1).shape[1]
 
-                    if NI != input_data_description['NI']:
-                        err += 'Incorrect number of features; '
-                    elif NT != target_data_description['NT']:
-                        err += 'Incorrect number of targets; '
-                    elif MLmodel.Xtr_b.shape[0] != MLmodel.ytr.shape[0]:
-                         err += 'Different number of inputs and targets; '
-                    else:
+                    if target_data_description is not None:
+                        if NT != target_data_description['NT']:
+                            err += 'Incorrect number of targets; '
+
+                        try:
+                            # Checking targets
+                            for k in range(NT):
+                                x = MLmodel.ytr[:, k]
+                                xtype = target_data_description['output_types'][k]['type']
+                                if xtype == 'num':
+                                    try:
+                                        x = x.astype(float)
+                                    except:
+                                        err += 'Target No. %d is not numeric; ' % k
+                                        pass
+                                if xtype == 'cat':
+                                    try:
+                                        x = set(x.astype(str))
+                                        x = list(x - set(input_data_description['input_types'][k]['values']))
+                                        if len(x) > 0:
+                                            err += 'Target No. %d has an unrecognized categorical value; ' % k
+                                    except:
+                                        err += 'Target No. %d is not categorical; ' % k
+                                        pass
+                                if xtype == 'bin':
+                                    try:
+                                        x = x.astype(float)
+                                        x = list(set(x) - set([0.0, 1.0]))
+                                        if len(x) > 0:
+                                            err += 'Target No. %d is not binary; ' % k
+                                    except:
+                                        err += 'Target No. %d is not binary; ' % k
+                                        pass
+
+                        except:
+                            err += 'Unexpected error when processing targets; '
+                            pass
+
+                    if input_data_description is not None:
+                        if NI != input_data_description['NI']:
+                            err += 'Incorrect number of input features; '
+
+                        if MLmodel.Xtr_b.shape[0] != MLmodel.ytr.shape[0]:
+                            err += 'Different number of input and target patterns; '
+
                         try:
                             # Checking inputs
                             for k in range(NI):
@@ -1623,47 +1633,24 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                                     except:
                                         err += 'INput feature No. %d is not binary; ' % k
                                         pass
-                            # Checking targets
-                            for k in range(NT):
-                                x = MLmodel.ytr[:, k]
-                                xtype = target_data_description['output_types'][k]['type']
-                                if xtype == 'num':
-                                    try:
-                                        x = x.astype(float)
-                                    except:
-                                        err += 'Target No. %d is not numeric; ' % k
-                                        pass
-                                if xtype == 'cat':
-                                    try:
-                                        x = set(x.astype(str))
-                                        x = list(x - set(input_data_description['input_types'][k]['values']))
-                                        if len(x) > 0:
-                                            err += 'Target No. %d has an unrecognized categorical value; ' % k
-                                    except:
-                                        err += 'Target No. %d is not categorical; ' % k
-                                        pass
-                                if xtype == 'bin':
-                                    try:
-                                        x = x.astype(float)
-                                        x = list(set(x) - set([0.0, 1.0]))
-                                        if len(x) > 0:
-                                            err += 'Target No. %d is not binary; ' % k
-                                    except:
-                                        err += 'Target No. %d is not binary; ' % k
-                                        pass
+
                         except:
-                            err += 'Unexpected error when processing features; '
+                            err += 'Unexpected error when processing input features; '
                             pass
+
 
                     data = {'err': err}
                     packet = {'action': 'ACK_checking_data', 'sender': MLmodel.worker_address, 'data':data}
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_checking_data' % (str(MLmodel.worker_address)))
                 except Exception as error:
+                    raise
+                    '''
                     print('ERROR AT while_checking_data')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_computing_feat_count_direct(self, MLmodel, packet):
@@ -1677,10 +1664,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_feat_count_direct' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_vocab_direct')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_computing_hashids_direct(self, MLmodel, packet):
@@ -1695,10 +1685,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_send_hashids_direct' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_computing_hashids_direct')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_record_linkage(self, MLmodel, packet):
@@ -1734,10 +1727,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_record_linkage' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_record_linkage')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_data2num_at_worker_V(self, MLmodel, packet):
@@ -1757,10 +1753,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent data2num_at_worker_V' % (str(MLmodel.worker_address)))
                 except:
+                    raise
+                    '''
                     print('ERROR AT while_data2num_at_worker_V')
                     import code
                     code.interact(local=locals())                   
                     pass
+                    '''
                 return
 
             def while_local_preprocessing_V(self, MLmodel, prep_model):
@@ -1800,12 +1799,15 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     MLmodel.Xtr_orig = X_prep
                     error = None
                 except Exception as err:
+                    raise
+                    '''
                     error = err
                     # Comment later
                     print('ERROR AT while_local_preprocessing_V worker')
                     import code
                     code.interact(local=locals())
                     pass
+                    '''
 
                 if prep_model.name == 'missing_data_imputation_V':
                     data = {'X_mean':prep_model.means, 'X_std':None}
