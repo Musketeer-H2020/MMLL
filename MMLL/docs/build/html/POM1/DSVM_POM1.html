@@ -1,0 +1,258 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Distributed Support Vector Machine &#8212; MMLL 2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Privacy Operation Mode 2" href="../POM2/POM2.html" />
+    <link rel="prev" title="Federated Budget Support Vector Machine" href="FBSVM_POM1.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="distributed-support-vector-machine">
+<h1>Distributed Support Vector Machine<a class="headerlink" href="#distributed-support-vector-machine" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<span class="target" id="module-MMLL.models.POM1.DSVM.DSVM"></span><p>Distributed Support Vector Machine model under POM1.</p>
+<dl class="py class">
+<dt id="MMLL.models.POM1.DSVM.DSVM.DSVM_Master">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM1.DSVM.DSVM.</span></code><code class="sig-name descname"><span class="pre">DSVM_Master</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">NC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nmaxiter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tolerance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">C</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">NI</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">minvalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maxvalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="Common_POM1.html#MMLL.models.POM1.CommonML.POM1_CommonML.POM1_CommonML_Master" title="MMLL.models.POM1.CommonML.POM1_CommonML.POM1_CommonML_Master"><code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.models.POM1.CommonML.POM1_CommonML.POM1_CommonML_Master</span></code></a></p>
+<p>This class implements DSVM, run at Master node. It inherits from <code class="xref py py-class docutils literal notranslate"><span class="pre">POM1_CommonML_Master</span></code>.</p>
+<p>Create a <a class="reference internal" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_Master" title="MMLL.models.POM1.DSVM.DSVM.DSVM_Master"><code class="xref py py-class docutils literal notranslate"><span class="pre">DSVM_Master</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>comms</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Comms_master</span></code>) – Object providing communication functionalities.</p></li>
+<li><p><strong>logger</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">mylogging.Logger</span></code>) – Logging object instance.</p></li>
+<li><p><strong>verbose</strong> (<em>boolean</em>) – Indicates whether to print messages on screen nor not.</p></li>
+<li><p><strong>NC</strong> (<em>int</em>) – Number of support vectors in the semiparametric model.</p></li>
+<li><p><strong>Nmaxiter</strong> (<em>int</em>) – Maximum number of iterations.</p></li>
+<li><p><strong>tolerance</strong> (<em>float</em>) – Minimum tolerance for continuing training.</p></li>
+<li><p><strong>sigma</strong> (<em>float</em>) – The parameter of the gaussian kernel.</p></li>
+<li><p><strong>C</strong> (<em>float</em>) – The cost parameter in the cost function.</p></li>
+<li><p><strong>eps</strong> (<em>float</em>) – Threshold to update the a variables in the IRWLS algorithm.</p></li>
+<li><p><strong>NI</strong> (<em>int</em>) – Number of data features.</p></li>
+<li><p><strong>minvalue</strong> (<em>float</em>) – The centroids are initialized randomly from an uniforme distribution. This is the minimum value.</p></li>
+<li><p><strong>maxvalue</strong> (<em>float</em>) – The centroids are initialized randomly from an uniforme distribution. This is the maximum value.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.models.POM1.DSVM.DSVM.DSVM_Master.ProcessReceivedPacket_Master_">
+<code class="sig-name descname"><span class="pre">ProcessReceivedPacket_Master_</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">packet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sender</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_Master.ProcessReceivedPacket_Master_" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process the received packet at master.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>packet</strong> (<em>dictionary</em>) – Packet received from a worker.</p></li>
+<li><p><strong>sender</strong> (<em>string</em>) – Identification of the sender.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM1.DSVM.DSVM.DSVM_Master.TakeAction_Master">
+<code class="sig-name descname"><span class="pre">TakeAction_Master</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_Master.TakeAction_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Function to take actions according to the state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM1.DSVM.DSVM.DSVM_Master.Update_State_Master">
+<code class="sig-name descname"><span class="pre">Update_State_Master</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_Master.Update_State_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Function to control the state of the execution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="MMLL.models.POM1.DSVM.DSVM.DSVM_Worker">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM1.DSVM.DSVM.</span></code><code class="sig-name descname"><span class="pre">DSVM_Worker</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">master_address</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xtr_b</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ytr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_Worker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="Common_POM1.html#MMLL.models.POM1.CommonML.POM1_CommonML.POM1_CommonML_Worker" title="MMLL.models.POM1.CommonML.POM1_CommonML.POM1_CommonML_Worker"><code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.models.POM1.CommonML.POM1_CommonML.POM1_CommonML_Worker</span></code></a></p>
+<p>Class implementing DSVM, run at Worker. It inherits from <code class="xref py py-class docutils literal notranslate"><span class="pre">POM1_CommonML_Worker</span></code>.</p>
+<p>Create a <a class="reference internal" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_Worker" title="MMLL.models.POM1.DSVM.DSVM.DSVM_Worker"><code class="xref py py-class docutils literal notranslate"><span class="pre">DSVM_Worker</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>master_address</strong> (<em>string</em>) – Identifier of the master instance.</p></li>
+<li><p><strong>comms</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Comms_worker</span></code>) – Object providing communication functionalities.</p></li>
+<li><p><strong>logger</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">mylogging.Logger</span></code>) – Logging object instance.</p></li>
+<li><p><strong>verbose</strong> (<em>boolean</em>) – Indicates whether to print messages on screen nor not.</p></li>
+<li><p><strong>Xtr_b</strong> (<em>ndarray</em>) – Array containing the inputs for training.</p></li>
+<li><p><strong>ytr</strong> (<em>ndarray</em>) – Array containing the labels for training.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.models.POM1.DSVM.DSVM.DSVM_Worker.ProcessReceivedPacket_Worker">
+<code class="sig-name descname"><span class="pre">ProcessReceivedPacket_Worker</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">packet</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_Worker.ProcessReceivedPacket_Worker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process the received packet at worker.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>packet</strong> (<em>dictionary</em>) – Packet received from the master.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="MMLL.models.POM1.DSVM.DSVM.DSVM_model">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM1.DSVM.DSVM.</span></code><code class="sig-name descname"><span class="pre">DSVM_model</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logger</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.models.Common_to_models.Common_to_models</span></code></p>
+<p>This class contains the Distributed SVM model.</p>
+<p>Create a <a class="reference internal" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_model" title="MMLL.models.POM1.DSVM.DSVM.DSVM_model"><code class="xref py py-class docutils literal notranslate"><span class="pre">DSVM_model</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>logger</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">mylogging.Logger</span></code>) – Logging object instance.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.models.POM1.DSVM.DSVM.DSVM_model.predict">
+<code class="sig-name descname"><span class="pre">predict</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_b</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM1.DSVM.DSVM.DSVM_model.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use the model to predict new outputs given for an unlabeled dataset.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>X_b</strong> (<em>ndarray</em>) – Array containing the input patterns.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>preds</strong> – Array containing the predictions.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">MMLL</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../nodes.html">Nodes</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../MLmodels.html">Machine learning models</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="POM1.html">Privacy Operation Mode 1</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="Common_POM1.html">Common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Kmeans_POM1.html">Kmeans</a></li>
+<li class="toctree-l3"><a class="reference internal" href="NN_POM1.html">Neural networks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="SVM_POM1.html">Support Vector Machine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="FBSVM_POM1.html">Federated Budget Support Vector Machine</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Distributed Support Vector Machine</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../POM2/POM2.html">Privacy Operation Mode 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM3/POM3.html">Privacy Operation Mode 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM4/POM4.html">Privacy Operation Mode 4</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM5/POM5.html">Privacy Operation Mode 5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM6/POM6.html">Privacy Operation Mode 6</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../comms.html">Communications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../preprocessors.html">Preprocessors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../optimizers.html">Optimizers</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../MLmodels.html">Machine learning models</a><ul>
+  <li><a href="POM1.html">Privacy Operation Mode 1</a><ul>
+      <li>Previous: <a href="FBSVM_POM1.html" title="previous chapter">Federated Budget Support Vector Machine</a></li>
+      <li>Next: <a href="../POM2/POM2.html" title="next chapter">Privacy Operation Mode 2</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Univ. Carlos III and Tree Technologies.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/POM1/DSVM_POM1.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

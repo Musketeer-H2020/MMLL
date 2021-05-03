@@ -1,0 +1,665 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Master Node &#8212; MMLL 2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Worker Node" href="workernode.html" />
+    <link rel="prev" title="Nodes" href="../nodes.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="master-node">
+<h1>Master Node<a class="headerlink" href="#master-node" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<span class="target" id="module-MMLL.nodes.MasterNode"></span><p>MasterNode Class.</p>
+<dl class="py class">
+<dt id="MMLL.nodes.MasterNode.MasterNode">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.nodes.MasterNode.</span></code><code class="sig-name descname"><span class="pre">MasterNode</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pom</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.Common_to_all_objects.Common_to_all_objects</span></code></p>
+<p>This class represents the main process associated to the Master Node, and serves to
+coordinate the training procedure under the different POMs.</p>
+<p>Creates a <a class="reference internal" href="#MMLL.nodes.MasterNode.MasterNode" title="MMLL.nodes.MasterNode.MasterNode"><code class="xref py py-class docutils literal notranslate"><span class="pre">MasterNode</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pom</strong> (<em>int</em>) – The selected Privacy Operation Mode.</p></li>
+<li><p><strong>comms</strong> (<em>comms object instance</em>) – Object providing communications.</p></li>
+<li><p><strong>logger</strong> (class:<cite>logging.Logger</cite>) – Logging object instance.</p></li>
+<li><p><strong>verbose</strong> (<em>boolean</em>) – Indicates if messages are print or not on screen.</p></li>
+<li><p><strong>**kwargs</strong> (<em>Variable keyword arguments.</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.check_data_at_workers">
+<code class="sig-name descname"><span class="pre">check_data_at_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data_description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_data_description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.check_data_at_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checking data at workers. Returns None if everything is OK.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_data_description</strong> (<em>dict</em>) – Description of the input features.</p></li>
+<li><p><strong>target_data_description</strong> (<em>dict</em>) – Description of the targets.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>err</strong> (<em>string</em>) – Error message, if any.</p></li>
+<li><p><strong>bad_workers</strong> (<em>list</em>) – List of workers with bad data.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.compute_statistics">
+<code class="sig-name descname"><span class="pre">compute_statistics</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stats_list</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.compute_statistics" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute statistics of given data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>X</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Input data, one pattern per row.</p></li>
+<li><p><strong>y</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Target data, one target per row.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>stats_list</strong> – The list of statistics that have to be computed (rxy, meanx, medianx, npatterns, stdx, skewx, kurx, perc25, perc75, staty).</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.create_model_Master">
+<code class="sig-name descname"><span class="pre">create_model_Master</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.create_model_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create the model object to be used for training at the Master side.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_type</strong> (<em>str</em>) – Type of model to be used.</p></li>
+<li><p><strong>model_parameters</strong> (<em>dictionary</em>) – <p>Parameters needed by the different models, for example it may contain:</p>
+<dl class="simple">
+<dt>Nmaxiter: int</dt><dd><p>Maximum number of iterations during learning.</p>
+</dd>
+<dt>NC: int</dt><dd><p>Number of centroids.</p>
+</dd>
+<dt>regularization: float</dt><dd><p>Regularization parameter.</p>
+</dd>
+<dt>C: array of floats</dt><dd><p>Centroids matrix.</p>
+</dd>
+<dt>nf: int</dt><dd><p>Number of bits for the floating part.</p>
+</dd>
+<dt>fsigma: float</dt><dd><p>Factor to multiply standard sigma value = sqrt(Number of inputs).</p>
+</dd>
+<dt>normalize_data: Boolean</dt><dd><p>If True, data normalization is applied, irrespectively if it has been previously normalized.</p>
+</dd>
+</dl>
+</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.data2num_transform_workers">
+<code class="sig-name descname"><span class="pre">data2num_transform_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data_description</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.data2num_transform_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert data to numerical vector.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>input_data_description</strong> (<em>dict</em>) – Description of the input features.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>model</strong> (<em>transformation model</em>) – Model to transform data.</p></li>
+<li><p><strong>new_input_data_description</strong> (<em>dict</em>) – New dictionary describing the input data.</p></li>
+<li><p><strong>worker_errors</strong> (<em>dict</em>) – Dictionary containing the errors (if any) for the different workers.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.data2num_transform_workers_V">
+<code class="sig-name descname"><span class="pre">data2num_transform_workers_V</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data_description</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.data2num_transform_workers_V" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert data to numerical vector in vertical partitioning.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>input_data_description</strong> (<em>dict</em>) – Description of the input features.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>model</strong> (<em>transformation model</em>) – Model to transform data.</p></li>
+<li><p><strong>new_input_data_description</strong> (<em>dict</em>) – New dictionary describing the input data.</p></li>
+<li><p><strong>worker_errors</strong> (<em>dict</em>) – Dictionary containing the errors (if any) for the different workers.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.deep_learning_transform_workers">
+<code class="sig-name descname"><span class="pre">deep_learning_transform_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_description</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.deep_learning_transform_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert images to numerical vector using Deep Learning.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>data_description</strong> (<em>dict</em>) – Description of the input features.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>model</strong> (<em>DL model</em>) – The DL model to apply to future data.</p></li>
+<li><p><strong>new_input_data_description</strong> (<em>dict</em>) – Updated description of the input features.</p></li>
+<li><p><strong>worker_errors</strong> (<em>list of string</em>) – List of errors while preprocessing data at workers.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Xval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">selected_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Train the Machine Learning Model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Xval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>yval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation targets, one target per row.</p></li>
+<li><p><strong>selected_workers</strong> (<em>list of ids</em>) – List of selected workers to operate with.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.get_data_value_aposteriori">
+<code class="sig-name descname"><span class="pre">get_data_value_aposteriori</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Xval</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yval</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">baseline_auc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.get_data_value_aposteriori" title="Permalink to this definition">¶</a></dt>
+<dd><p>Obtain “A posterior” Data Value estimation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Xval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>yval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation targets, one target per row.</p></li>
+<li><p><strong>baseline_auc</strong> (<em>float</em>) – Minimum value of AUC.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>dv</strong> (<em>list</em>) – List of data value estimation values for each worker.</p></li>
+<li><p><strong>best_workers</strong> (<em>list</em>) – List of strings with the worker addresses.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.get_data_value_apriori">
+<code class="sig-name descname"><span class="pre">get_data_value_apriori</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Xval</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yval</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stats_list</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.get_data_value_apriori" title="Permalink to this definition">¶</a></dt>
+<dd><p>Obtain “A priori” Data Value estimation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Xval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>yval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation targets, one target per row.</p></li>
+<li><p><strong>stats_list</strong> (<em>list of string</em>) – The list of statistics that have to be computed (rxy, meanx, medianx, npatterns, stdx, skewx, kurx, perc25, perc75, staty).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.get_feat_freq_transformer">
+<code class="sig-name descname"><span class="pre">get_feat_freq_transformer</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_description</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Max_freq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">NF</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.get_feat_freq_transformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get features freq from all workers, generate transformer and transform data at workers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_description</strong> (<em>dict</em>) – Description of the input features.</p></li>
+<li><p><strong>Max_freq</strong> (<em>float</em>) – Maximal allowed frequency to select a word.</p></li>
+<li><p><strong>NF</strong> (<em>int</em>) – Number of features to retain.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>feature_extractor</strong> (<em>object</em>) – Feature extractor model.</p></li>
+<li><p><strong>new_input_data_description</strong> (<em>dict</em>) – Updated description of the input features.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.get_model">
+<code class="sig-name descname"><span class="pre">get_model</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.get_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the ML model as an object, if it is trained, returns None otherwise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Machine learning model if it has been trained, None otherwise.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ML model</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.get_statistics_workers">
+<code class="sig-name descname"><span class="pre">get_statistics_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stats_list</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.get_statistics_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the statistics from the workers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>stats_list</strong> (<em>list of string</em>) – The list of statistics that have to be computed (rxy, meanx, medianx, npatterns, stdx, skewx, kurx, perc25, perc75, staty).</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>stats_dict_workers</strong> – Statistics of every worker.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.get_task_alignment">
+<code class="sig-name descname"><span class="pre">get_task_alignment</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Xval</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yval</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.get_task_alignment" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the task alignment of the workers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Xval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>yval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation targets, one target per row.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>ta_dict</strong> – Task alignment estimation of every worker.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.get_vocabulary_workers">
+<code class="sig-name descname"><span class="pre">get_vocabulary_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_description</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init_vocab_dict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.get_vocabulary_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get vocabulary from all workers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_description</strong> (<em>dict</em>) – Description of the input features.</p></li>
+<li><p><strong>init_vocab_dict</strong> (<em>dict</em>) – Initial vocabulary.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>vocab</strong> – Dictionary containing the vocabulary for every worker.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>global_df_dict_filtered: dict</dt><dd><p>Dictionary containing the vocabulary for every worker with every word appearing at least 10 times.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.mn_ask_encrypter">
+<code class="sig-name descname"><span class="pre">mn_ask_encrypter</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.mn_ask_encrypter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Obtain encrypter from cryptonode, under POM 4.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.mn_get_encrypted_data">
+<code class="sig-name descname"><span class="pre">mn_get_encrypted_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">use_bias</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.mn_get_encrypted_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Obtain Encrypted data from workers, under POM 4.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>use_bias</strong> (<em>boolean</em>) – Indicates if a bias must be added.</p></li>
+<li><p><strong>classes</strong> (<em>list of string</em>) – List of possible classes.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.normalizer_fit_transform_workers">
+<code class="sig-name descname"><span class="pre">normalizer_fit_transform_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data_description</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">transform_num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'global_mean_std'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">which_variables</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'num'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.normalizer_fit_transform_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Adjust the normalizer parameters and transform the training data in the workers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_data_description</strong> (<em>dict</em>) – Description of the input features.</p></li>
+<li><p><strong>transform_num</strong> (<em>string</em>) – Type of normalization of the numerical inputs. Binary inputs are not transformed, and
+categorical inputs are transformed using a one-hot encoding.</p></li>
+<li><p><strong>which_variables</strong> (<em>string</em>) – Indicates to which type of features we have to apply the normalization.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Object to normalize new data.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>normalizer model</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.pca_fit_transform_workers">
+<code class="sig-name descname"><span class="pre">pca_fit_transform_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data_description</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">NF</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.pca_fit_transform_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute a PCA transformation based on workers data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_data_description</strong> (<em>dict</em>) – Description of the input features.</p></li>
+<li><p><strong>method</strong> (<em>string</em>) – Type of aggregation method to be used (direct/roundrobin).</p></li>
+<li><p><strong>NF</strong> (<em>int</em>) – Number of features to retain.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>pca_model</strong> (<em>model</em>) – The trained PCA model.</p></li>
+<li><p><strong>new_input_data_description</strong> (<em>dict</em>) – The new description of the input features.</p></li>
+<li><p><strong>workers_errors</strong> (<em>list of string</em>) – The list of errors at every worker. Under normal operation it is an empty list.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.ping_workers">
+<code class="sig-name descname"><span class="pre">ping_workers</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.ping_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send ping message to workers to get address info.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.preprocess_data_at_workers">
+<code class="sig-name descname"><span class="pre">preprocess_data_at_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prep</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.preprocess_data_at_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send preprocessing object to workers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>prep</strong> (<em>object</em>) – Preprocessing object.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>worker_errors</strong> – Dictionary containing the errors (if any) for the different workers.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.preprocess_data_at_workers_V">
+<code class="sig-name descname"><span class="pre">preprocess_data_at_workers_V</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prep</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.preprocess_data_at_workers_V" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send preprocessing object to workers for vertical partitioning.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>prep</strong> (<em>object</em>) – Preprocessing object.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>worker_errors</strong> – Dictionary containing the errors (if any) for the different workers.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.rank_features_gfs">
+<code class="sig-name descname"><span class="pre">rank_features_gfs</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Xval</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yval</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data_description</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">NF</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_incr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.rank_features_gfs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute a greedy feature selection based on workers data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Xval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>yval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation targets, one target per row.</p></li>
+<li><p><strong>input_data_description</strong> (<em>dict</em>) – Description of the input features.</p></li>
+<li><p><strong>method</strong> (<em>string</em>) – Type of aggregation method to be used (direct/roundrobin).</p></li>
+<li><p><strong>NF</strong> (<em>int</em>) – Number of features to retain.</p></li>
+<li><p><strong>stop_incr</strong> (<em>float</em>) – Stop adding features if this tolerance value is reached.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>ranked_inputs</strong> (<em>list of ints</em>) – List of ranked inputs.</p></li>
+<li><p><strong>performance_evolution</strong> (<em>list of floats</em>) – Model performance as a function of the selected inputs.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.record_linkage_transform_workers">
+<code class="sig-name descname"><span class="pre">record_linkage_transform_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">linkage_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'full'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.record_linkage_transform_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform data at workers such that features are aligned.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>linkage_type</strong> (<em>string</em>) – Choose the type of linkage: full/join.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>input_data_description_dict</strong> (<em>dict</em>) – New dictionary describing the input data.</p></li>
+<li><p><strong>target_data_description_dict</strong> (<em>dict</em>) – New dictionary describing the output data.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.set_test_data">
+<code class="sig-name descname"><span class="pre">set_test_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xtst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ytst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.set_test_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set data to be used for testing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset_name</strong> (<em>string</em>) – Dataset name.</p></li>
+<li><p><strong>Xtst</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>ytst</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation targets, one target per row.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.set_test_data_raw">
+<code class="sig-name descname"><span class="pre">set_test_data_raw</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xtst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ytst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.set_test_data_raw" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set data to be used for validation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset_name</strong> (<em>string</em>) – Dataset name.</p></li>
+<li><p><strong>Xtst</strong> (<em>list of lists</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>ytst</strong> (<em>list of lists</em>) – Validation targets, one target per row.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.set_validation_data">
+<code class="sig-name descname"><span class="pre">set_validation_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.set_validation_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set data to be used for validation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset_name</strong> (<em>string</em>) – Dataset name.</p></li>
+<li><p><strong>Xval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>yval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation targets, one target per row.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.set_validation_data_raw">
+<code class="sig-name descname"><span class="pre">set_validation_data_raw</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.set_validation_data_raw" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set data to be used for validation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset_name</strong> (<em>string</em>) – Dataset name.</p></li>
+<li><p><strong>Xval</strong> (<em>list of lists</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>yval</strong> (<em>list of lists</em>) – Validation targets, one target per row.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.stop_workers">
+<code class="sig-name descname"><span class="pre">stop_workers</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.stop_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Stop workers and start a new training.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.MasterNode.MasterNode.terminate_workers">
+<code class="sig-name descname"><span class="pre">terminate_workers</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">workers_addresses_terminate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.MasterNode.MasterNode.terminate_workers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Terminate selected workers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>workers_addresses_terminate</strong> (<em>list of strings</em>) – List of addresses of workers that must be terminated. If the list is empty, all the workers will stop.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">MMLL</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../nodes.html">Nodes</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Master Node</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="workernode.html">Worker Node</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cryptonode.html">Crypto Node</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../MLmodels.html">Machine learning models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../comms.html">Communications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../preprocessors.html">Preprocessors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../optimizers.html">Optimizers</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../nodes.html">Nodes</a><ul>
+      <li>Previous: <a href="../nodes.html" title="previous chapter">Nodes</a></li>
+      <li>Next: <a href="workernode.html" title="next chapter">Worker Node</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Univ. Carlos III and Tree Technologies.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/nodes/masternode.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,246 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Worker Node &#8212; MMLL 2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Crypto Node" href="cryptonode.html" />
+    <link rel="prev" title="Master Node" href="masternode.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="worker-node">
+<h1>Worker Node<a class="headerlink" href="#worker-node" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<span class="target" id="module-MMLL.nodes.WorkerNode"></span><p>WorkerNode class.</p>
+<dl class="py class">
+<dt id="MMLL.nodes.WorkerNode.WorkerNode">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.nodes.WorkerNode.</span></code><code class="sig-name descname"><span class="pre">WorkerNode</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pom</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.WorkerNode.WorkerNode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.Common_to_all_objects.Common_to_all_objects</span></code></p>
+<p>This class represents the main process associated to every Worker Node, and it responds to the commands sent by the master to carry out the training procedure under all POMs.</p>
+<p>Create a <a class="reference internal" href="#MMLL.nodes.WorkerNode.WorkerNode" title="MMLL.nodes.WorkerNode.WorkerNode"><code class="xref py py-class docutils literal notranslate"><span class="pre">WorkerNode</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pom</strong> (<em>integer</em>) – The selected Privacy Operation Mode.</p></li>
+<li><p><strong>comms</strong> (<em>comms object instance</em>) – Object providing communications.</p></li>
+<li><p><strong>logger</strong> (class:<cite>logging.Logger</cite>) – Logging object instance.</p></li>
+<li><p><strong>verbose</strong> (<em>boolean</em>) – Indicates if messages are print or not on screen.</p></li>
+<li><p><strong>**kwargs</strong> (<em>Arbitrary keyword arguments.</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.nodes.WorkerNode.WorkerNode.create_model_worker">
+<code class="sig-name descname"><span class="pre">create_model_worker</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_type</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.WorkerNode.WorkerNode.create_model_worker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create the model object to be used for training at the Worker side.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>model_type</strong> (<em>string</em>) – Type of model to be used.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.WorkerNode.WorkerNode.get_model">
+<code class="sig-name descname"><span class="pre">get_model</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.WorkerNode.WorkerNode.get_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the ML model as an object, if it is trained, it returns None otherwise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>model</strong> – Machine learning model if it has been trained, None otherwise.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ML model</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.WorkerNode.WorkerNode.get_preprocessors">
+<code class="sig-name descname"><span class="pre">get_preprocessors</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.WorkerNode.WorkerNode.get_preprocessors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the normalizer parameters and transform the training data in the workers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>preprocessors</strong> – Normalizer object.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>object</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.WorkerNode.WorkerNode.run">
+<code class="sig-name descname"><span class="pre">run</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.WorkerNode.WorkerNode.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the main execution loop at the worker.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.WorkerNode.WorkerNode.set_test_data">
+<code class="sig-name descname"><span class="pre">set_test_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xtst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ytst</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.WorkerNode.WorkerNode.set_test_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set data to be used for testing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset_name</strong> (<em>string</em>) – The name of the dataset.</p></li>
+<li><p><strong>Xtst</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Test data, one pattern per row.</p></li>
+<li><p><strong>ytst</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Test targets, one target per row.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.WorkerNode.WorkerNode.set_training_data">
+<code class="sig-name descname"><span class="pre">set_training_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xtr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ytr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data_description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_data_description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.WorkerNode.WorkerNode.set_training_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set data to be used for training.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset_name</strong> (<em>string</em>) – The name of the dataset.</p></li>
+<li><p><strong>Xtr</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Training input data, one pattern per row.</p></li>
+<li><p><strong>ytr</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Training targets, one target per row.</p></li>
+<li><p><strong>input_data_description</strong> (<em>dict</em>) – Description of the input features.</p></li>
+<li><p><strong>target_data_description</strong> (<em>dict</em>) – Description of the targets.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.nodes.WorkerNode.WorkerNode.set_validation_data">
+<code class="sig-name descname"><span class="pre">set_validation_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.nodes.WorkerNode.WorkerNode.set_validation_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set data to be used for validation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset_name</strong> (<em>string</em>) – The name of the dataset.</p></li>
+<li><p><strong>Xval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation data, one pattern per row.</p></li>
+<li><p><strong>yval</strong> (<em>list of lists</em><em> or </em><em>numpy array</em>) – Validation targets, one target per row.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">MMLL</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../nodes.html">Nodes</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="masternode.html">Master Node</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Worker Node</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cryptonode.html">Crypto Node</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../MLmodels.html">Machine learning models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../comms.html">Communications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../preprocessors.html">Preprocessors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../optimizers.html">Optimizers</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../nodes.html">Nodes</a><ul>
+      <li>Previous: <a href="masternode.html" title="previous chapter">Master Node</a></li>
+      <li>Next: <a href="cryptonode.html" title="next chapter">Crypto Node</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Univ. Carlos III and Tree Technologies.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/nodes/workernode.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
