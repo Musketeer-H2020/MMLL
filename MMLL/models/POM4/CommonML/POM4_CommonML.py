@@ -1234,14 +1234,14 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
         self.logger = logger                    # logger
         self.name = 'POM4_CommonML_Worker'           # Name
         self.verbose = verbose                  # print on screen when true
-        #self.Xtr_b = Xtr_b
-        #self.Xtr_b = self.add_bias(Xtr_b)
-        #self.ytr = ytr
         self.Xtr_b = Xtr_b
-        self.ytr = ytr
         self.Xtr_orig = Xtr_b
-        self.ytr_orig = ytr
-
+        if model_type is not 'Kmeans':
+            self.ytr = ytr
+            self.ytr_orig = ytr
+        else:
+            self.ytr = None
+            self.ytr_orig = None            
         self.create_FSM_worker()
 
 
@@ -1764,9 +1764,16 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     try:
                         input_data_description = packet['data']['input_data_description']
                     except:
-                        MLmodel.display(MLmodel.name + ' %s: input_data_description not available, not checking inputs' % (str(MLmodel.worker_address)))
+                        MLmodel.display(MLmodel.name + ' %s: input_data_description not available, not checking inputs.' % (str(MLmodel.worker_address)))
                         input_data_description = None
                         err += 'Missing input_data_description; '
+
+                    try:
+                        NI = MLmodel.Xtr_b.shape[1]
+                    except:
+                        MLmodel.display(MLmodel.name + ' %s: missing input_data.' % (str(MLmodel.worker_address)))
+                        err += 'Missing input data; '
+                        raise
 
                     try:
                         target_data_description = packet['data']['target_data_description']
@@ -1776,10 +1783,12 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     if target_data_description is None:
                         MLmodel.display(MLmodel.name + ' %s: target_data_description not available, not checking targets' % (str(MLmodel.worker_address)))
 
-                    NI = MLmodel.Xtr_b.shape[1]
-                    NT = MLmodel.ytr.reshape(-1, 1).shape[1]
+                    try:
+                        NT = MLmodel.ytr.reshape(-1, 1).shape[1]
+                    except:
+                        NT = None    
 
-                    if target_data_description is not None:
+                    if target_data_description is not None and NT is not None:
                         if NT != target_data_description['NT']:
                             err += 'Incorrect number of targets; '
 
@@ -1817,12 +1826,13 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                             err += 'Unexpected error when processing targets; '
                             pass
 
-                    if input_data_description is not None:
+                    if input_data_description is not None and NI is not None:
                         if NI != input_data_description['NI']:
                             err += 'Incorrect number of input features; '
 
-                        if MLmodel.Xtr_b.shape[0] != MLmodel.ytr.shape[0]:
-                            err += 'Different number of input and target patterns; '
+                        if NT is not None:
+                            if MLmodel.Xtr_b.shape[0] != MLmodel.ytr.shape[0]:
+                                err += 'Different number of input and target patterns; '
 
                         try:
                             # Checking inputs

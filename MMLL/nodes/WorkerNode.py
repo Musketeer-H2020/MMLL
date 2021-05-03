@@ -303,7 +303,7 @@ class WorkerNode(Common_to_all_objects):
 
                 elif model_type == 'Kmeans':
                     from MMLL.models.POM4.Kmeans.Kmeans import Kmeans_Worker
-                    self.workerMLmodel = Kmeans_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.logger, self.verbose, self.Xtr_b, self.ytr, cryptonode_address=self.cryptonode_address)
+                    self.workerMLmodel = Kmeans_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.logger, self.verbose, self.Xtr_b, cryptonode_address=self.cryptonode_address)
                     self.display('WorkerNode %s: Created %s model' % (str(self.worker_address), model_type))
 
                 elif model_type == 'KR':
