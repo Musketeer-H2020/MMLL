@@ -1322,14 +1322,20 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                     # Encrypting data
                     MLmodel.Xtr_b_encr = MLmodel.encrypter.encrypt(MLmodel.Xtr_b.astype(float))
 
-                    if MLmodel.classes is None: # Binary case
-                        MLmodel.ytr_encr = MLmodel.encrypter.encrypt(MLmodel.ytr.astype(float))
+                    try:
+                        if MLmodel.classes is None: # Binary case
+                            MLmodel.ytr_encr = MLmodel.encrypter.encrypt(MLmodel.ytr.astype(float))
 
-                    if MLmodel.classes is not None: # Multiclass
-                        MLmodel.ytr_encr={}
-                        for cla in MLmodel.classes:
-                            ytr = (np.array(MLmodel.ytr == cla).reshape(-1,1)).astype(float)
-                            MLmodel.ytr_encr.update({cla: MLmodel.encrypter.encrypt(ytr)})
+                        if MLmodel.classes is not None: # Multiclass
+                            MLmodel.ytr_encr={}
+                            for cla in MLmodel.classes:
+                                ytr = (np.array(MLmodel.ytr == cla).reshape(-1,1)).astype(float)
+                                MLmodel.ytr_encr.update({cla: MLmodel.encrypter.encrypt(ytr)})
+                    except:
+                        # When no targets are provided, we pass zeros, not to be used
+                        NPtr = MLmodel.Xtr_b.shape[0]
+                        MLmodel.ytr_encr = MLmodel.encrypter.encrypt(np.zeros((NPtr, 1)))
+                        pass
 
                     action = 'ACK_send_encr_data'
                     data = {'Xtr_b_encr': MLmodel.Xtr_b_encr, 'ytr_encr': MLmodel.ytr_encr}

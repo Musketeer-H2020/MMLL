@@ -507,8 +507,8 @@ class Kmeans_Worker(Common_to_all_POMs):
         self.name = model_type + '_Worker'    # Name
         self.verbose = verbose                  # print on screen when true
         self.Xtr_b = Xtr_b
-        self.ytr = ytr
-        self.NPtr = len(ytr)
+        self.NPtr = Xtr_b.shape[0]
+        #self.ytr = ytr
         self.create_FSM_worker()
         self.message_id = 0    # used to number the messages
 

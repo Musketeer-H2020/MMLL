@@ -557,7 +557,7 @@ class Kmeans_Worker(Common_to_all_POMs):
         self.verbose = verbose                  # print on screen when true
         self.Xtr_b = Xtr_b
         self.X2 = np.sum(Xtr_b * Xtr_b, axis = 1).reshape(-1, 1)
-        self.ytr = ytr
+        #self.ytr = ytr
         self.NPtr = Xtr_b.shape[0]
         self.create_FSM_worker()
         self.message_id = 0    # used to number the messages
@@ -587,7 +587,7 @@ class Kmeans_Worker(Common_to_all_POMs):
                     NPtr, newNI = MLmodel.Xtr_b.shape
                     #MLmodel.Xtr_b = MLmodel.add_bias(MLmodel.Xtr_b).astype(float)
                     MLmodel.Xtr_b = MLmodel.Xtr_b.astype(float)
-                    MLmodel.ytr = MLmodel.ytr.astype(float)
+                    #MLmodel.ytr = MLmodel.ytr.astype(float)
                     action = 'ACK_update_tr_data'
                     data = {'newNI': newNI}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
