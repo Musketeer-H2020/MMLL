@@ -1065,7 +1065,7 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
         self.verbose = verbose                  # print on screen when true
         self.Xtr_b = Xtr_b
         self.Xtr_orig = Xtr_b
-        if model_type is not 'Kmeans':
+        if model_type != 'Kmeans':
             self.ytr = ytr
             self.ytr_orig = ytr
         else:
