@@ -39,7 +39,7 @@ class data2num_model():
                 onehotencoder = OneHotEncoder(sparse=False)
                 onehotencoder.fit(integer_encoded)
                 self.onehot_encodings.update({k: onehotencoder})
-                onehot_encoded = onehotencoder.transform(np.array([1, 2]).reshape(-1, 1))
+                #onehot_encoded = onehotencoder.transform(np.array([0, 1]).reshape(-1, 1))
                 aux = [{'type': 'bin', 'name': 'onehot transformed'}] * Nbin
                 new_input_types += aux
             else: # dejamos lo que hay
