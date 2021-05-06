@@ -100,10 +100,10 @@ class CryptoNode(Common_to_all_objects):
                     self.display('CryptoNode: Created %s model, POM = %d' % (model_type, self.pom))
                 
                 elif model_type == 'KR':
-                    from MMLL.models.POM4.KR.KR import KR_Worker
-                    self.workerMLmodel = KR_Worker(self.master_address, self.worker_address, self.model_type, self.comms, self.cr, self.logger, self.verbose, self.Xtr_b, self.ytr)
+                    from MMLL.models.POM4.KR.KR import KR_Crypto
+                    self.cryptoMLmodel = KR_Crypto(self.cryptonode_address, self.master_address, self.model_type, self.comms, self.logger, self.verbose)
                     self.model_type = model_type
-                    self.display('WorkerNode %s: Created %s model' % (str(self.worker_address), model_type))
+                    self.display('CryptoNode: Created %s model, POM = %d' % (model_type, self.pom))
 
                 elif model_type == 'MLC':
                     from MMLL.models.POM4.MLC.MLC import MLC_Crypto

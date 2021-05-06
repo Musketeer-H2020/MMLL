@@ -21,6 +21,7 @@ class Model():
         self.w_dict = {}
         self.classes = None
         self.is_trained = False
+        self.supported_formats = ['pkl', 'onnx', 'pmml']
 
     def sigm(self, x):
         """
@@ -70,24 +71,112 @@ class Model():
 
     def save(self, filename=None):
         """
-        Saves the trained model to file
+        Saves the trained model to file. The valid file extensions are:            
+            - "pkl": saves the model as a Python3 pickle file       
+            - "onnx": saves the model using Open Neural Network Exchange format (ONNX)'            
+            - "pmml": saves the model using Predictive Model Markup Language (PMML)'      
 
         Parameters
         ----------
         filename: string
             path+filename          
-
         """
-        if not self.is_trained:
-            print('Model Save Error: model not trained yet, nothing to save.')
+        if filename is None:
+            print('=' * 80)
+            print('Model Save Error: A valid filename must be provided, otherwise nothing is saved. The valid file extensions are:')            
+            print('\t - "pkl": saves the model as a Python3 pickle file')            
+            print('\t - "onnx": saves the model using Open Neural Network Exchange format (ONNX)')            
+            print('\t - "pmml": saves the model using Predictive Model Markup Language (PMML)')            
+            print('=' * 80)
         else:
-            try:
-                with open(filename, 'wb') as f:
-                    pickle.dump(self, f)
-                print('Model saved at %s' %filename)
-            except:
-                print('Model Save Error: model cannot be saved, check the provided path/filename.')
-                raise
+            # Checking filename extension
+            extension = filename.split('.')[-1]
+            if extension not in self.supported_formats:
+                print('=' * 80)
+                print('Model Save Error: Unsupported format. The valid file extensions are:')            
+                print('\t - "pkl": saves the model as a Python3 pickle file')            
+                print('\t - "onnx": saves the model using Open Neural Network Exchange format (ONNX)')            
+                print('\t - "pmml": saves the model using Predictive Model Markup Language (PMML)')            
+                print('=' * 80)
+            else:
+                if not self.is_trained:
+                    print('=' * 80)
+                    print('Model Save Error: model not trained yet, nothing to save.')
+                    print('=' * 80)
+                else:
+                    try:
+                        if extension == 'pkl':
+                            with open(filename, 'wb') as f:
+                                pickle.dump(self, f)
+                            print('=' * 80)
+                            print('Model saved at %s in pickle format.' %filename)
+                            print('=' * 80)
+                        elif extension == 'onnx':
+                            from sklearn import linear_model
+                            from skl2onnx import convert_sklearn # conda install -c conda-forge skl2onnx
+                            from skl2onnx.common.data_types import FloatTensorType
+                            export_model = linear_model.LogisticRegression(multi_class='ovr', solver='liblinear')
+                            NI = self.w_dict[self.classes[0]][1:].ravel().shape[0]
+                            X = np.random.normal(0, 1, (100, NI))
+                            y = np.array((self.classes * 100)[0: 100]).ravel()
+                            #y_ = np.copy(y)
+                            #for i, cla in enumerate(self.classes):
+                            #    y_[y_ == cla] = i
+                            #y_ = y_.astype(int)       
+                            export_model.fit(X, y)
+                            W = []
+                            for cla in self.classes:
+                                W.append(self.w_dict[cla].ravel())
+
+                            W = np.array(W)
+
+                            export_model.coef_ = W[:, 1:]
+                            export_model.intercept_ = W[:, 0].ravel()
+
+                            # Convert into ONNX format
+                            input_type = [('float_input', FloatTensorType([None, NI]))]
+                            onnx_model = convert_sklearn(export_model, initial_types=input_type)
+                            with open(filename, "wb") as f:
+                                f.write(onnx_model.SerializeToString())
+                            print('=' * 80)
+                            print('Model saved at %s in ONNX format.' %filename)
+                            print('=' * 80)
+                        elif extension == 'pmml':
+                            from sklearn import linear_model
+                            export_model = linear_model.LogisticRegression(multi_class='ovr', solver='liblinear')
+                            NI = self.w_dict[self.classes[0]][1:].ravel().shape[0]
+                            X = np.random.normal(0, 1, (100, NI))
+                            y = np.array((self.classes * 100)[0: 100]).ravel()
+                            #y_ = np.copy(y)
+                            #for i, cla in enumerate(self.classes):
+                            #    y_[y_ == cla] = i
+                            #y_ = y_.astype(int)       
+                            export_model.fit(X, y)
+                            W = []
+                            for cla in self.classes:
+                                W.append(self.w_dict[cla].ravel())
+
+                            W = np.array(W)
+
+                            export_model.coef_ = W[:, 1:]
+                            export_model.intercept_ = W[:, 0].ravel()
+
+                            from sklearn2pmml import sklearn2pmml # pip install git+https://github.com/jpmml/sklearn2pmml.git
+                            from sklearn2pmml.pipeline import PMMLPipeline
+                            pipeline = PMMLPipeline([("classifier", export_model)])
+                            sklearn2pmml(pipeline, filename, with_repr = True)
+                            print('=' * 80)
+                            print('Model saved at %s in PMML format.' %filename)
+                            print('=' * 80)
+                        else:
+                            print('=' * 80)
+                            print('Model Save Error: model cannot be saved at %s.' %filename)
+                            print('=' * 80)
+                    except:
+                        print('=' * 80)
+                        print('Model Save Error: model cannot be saved at %s, please check the provided path/filename.' %filename)
+                        print('=' * 80)
+                        raise
 
 class MLC_Master(Common_to_all_POMs):
     """

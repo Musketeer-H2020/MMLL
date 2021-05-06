@@ -240,7 +240,14 @@ the stop condition is met:</p>
 <dl class="py method">
 <dt id="MMLL.models.POM4.Kmeans.Kmeans.Model.save">
 <code class="sig-name descname"><span class="pre">save</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.Kmeans.Kmeans.Model.save" title="Permalink to this definition">¶</a></dt>
-<dd><p>Saves the trained model to file</p>
+<dd><dl class="simple">
+<dt>Saves the trained model to file. The valid file extensions are:</dt><dd><ul class="simple">
+<li><p>“pkl”: saves the model as a Python3 pickle file</p></li>
+<li><p>“onnx”: saves the model using Open Neural Network Exchange format (ONNX)’</p></li>
+<li><p>“pmml”: saves the model using Predictive Model Markup Language (PMML)’</p></li>
+</ul>
+</dd>
+</dl>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><p><strong>filename</strong> (<em>string</em>) – path+filename</p>

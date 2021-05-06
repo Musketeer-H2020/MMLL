@@ -25,6 +25,7 @@ class Model():
         self.Csvm = None
         self.classes = None
         self.is_trained = False
+        self.supported_formats = ['pkl']
 
     def predict(self, X):
         """
@@ -67,25 +68,47 @@ class Model():
 
     def save(self, filename=None):
         """
-        Saves the trained model to file
+        Saves the trained model to file. The valid file extensions are:            
+            - "pkl": saves the model as a Python3 pickle file       
 
         Parameters
         ----------
         filename: string
             path+filename          
-
         """
-        if not self.is_trained:
-            print('Model Save Error: model not trained yet, nothing to save.')
+        if filename is None:
+            print('=' * 80)
+            print('Model Save Error: A valid filename must be provided, otherwise nothing is saved. The valid file extensions are:')            
+            print('\t - "pkl": saves the model as a Python3 pickle file')            
+            print('\t - "onnx": saves the model using Open Neural Network Exchange format (ONNX)')            
+            print('\t - "pmml": saves the model using Predictive Model Markup Language (PMML)')            
+            print('=' * 80)
         else:
-            try:
-                with open(filename, 'wb') as f:
-                    pickle.dump(self, f)
-                print('Model saved at %s' %filename)
-            except:
-                print('Model Save Error: model cannot be saved, check the provided path/filename.')
-                raise
-
+            # Checking filename extension
+            extension = filename.split('.')[-1]
+            if extension not in self.supported_formats:
+                print('=' * 80)
+                print('Model Save Error: Unsupported format. The valid file extensions are:')            
+                print('\t - "pkl": saves the model as a Python3 pickle file')            
+                print('=' * 80)
+            else:
+                if not self.is_trained:
+                    print('=' * 80)
+                    print('Model Save Error: model not trained yet, nothing to save.')
+                    print('=' * 80)
+                else:
+                    try:
+                        if extension == 'pkl':
+                            with open(filename, 'wb') as f:
+                                pickle.dump(self, f)
+                            print('=' * 80)
+                            print('Model saved at %s in pickle format.' %filename)
+                            print('=' * 80)
+                    except:
+                        print('=' * 80)
+                        print('Model Save Error: model cannot be saved at %s, please check the provided path/filename.' %filename)
+                        print('=' * 80)
+                        raise
 
 class MBSVM_Master(Common_to_all_POMs):
     """

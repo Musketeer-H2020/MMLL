@@ -20,6 +20,7 @@ class Model():
     def __init__(self):
         self.c = None
         self.is_trained = False
+        self.supported_formats = ['pkl', 'onnx', 'pmml']
 
     def predict(self, X):
         """
@@ -44,24 +45,97 @@ class Model():
 
     def save(self, filename=None):
         """
-        Saves the trained model to file
+        Saves the trained model to file. The valid file extensions are:            
+            - "pkl": saves the model as a Python3 pickle file       
+            - "onnx": saves the model using Open Neural Network Exchange format (ONNX)'            
+            - "pmml": saves the model using Predictive Model Markup Language (PMML)'      
 
         Parameters
         ----------
         filename: string
             path+filename          
-
         """
-        if not self.is_trained:
-            print('Model Save Error: model not trained yet, nothing to save.')
+        if filename is None:
+            print('=' * 80)
+            print('Model Save Error: A valid filename must be provided, otherwise nothing is saved. The valid file extensions are:')            
+            print('\t - "pkl": saves the model as a Python3 pickle file')            
+            print('\t - "onnx": saves the model using Open Neural Network Exchange format (ONNX)')            
+            print('\t - "pmml": saves the model using Predictive Model Markup Language (PMML)')            
+            print('=' * 80)
         else:
-            try:
-                with open(filename, 'wb') as f:
-                    pickle.dump(self, f)
-                print('Model saved at %s' %filename)
-            except:
-                print('Model Save Error: model cannot be saved, check the provided path/filename.')
-                raise
+            # Checking filename extension
+            extension = filename.split('.')[-1]
+            if extension not in self.supported_formats:
+                print('=' * 80)
+                print('Model Save Error: Unsupported format. The valid file extensions are:')            
+                print('\t - "pkl": saves the model as a Python3 pickle file')            
+                print('\t - "onnx": saves the model using Open Neural Network Exchange format (ONNX)')            
+                print('\t - "pmml": saves the model using Predictive Model Markup Language (PMML)')            
+                print('=' * 80)
+            else:
+                if not self.is_trained:
+                    print('=' * 80)
+                    print('Model Save Error: model not trained yet, nothing to save.')
+                    print('=' * 80)
+                else:
+                    try:
+                        if extension == 'pkl':
+                            with open(filename, 'wb') as f:
+                                pickle.dump(self, f)
+                            print('=' * 80)
+                            print('Model saved at %s in pickle format.' %filename)
+                            print('=' * 80)
+                        elif extension == 'onnx':
+                            
+
+                            from skl2onnx import convert_sklearn # conda install -c conda-forge skl2onnx
+                            from skl2onnx.common.data_types import FloatTensorType
+                            from sklearn.cluster import KMeans
+                            NC = self.c.shape[0]
+                            NI = self.c.shape[1]
+                            
+                            export_model = KMeans(n_clusters=NC, random_state=0)
+                            X = np.random.normal(0, 1, (100, NI))
+                            export_model.fit(X)
+                            export_model.cluster_centers_ = self.c
+
+                            # Convert into ONNX format
+                            input_type = [('float_input', FloatTensorType([None, NI]))]
+                            onnx_model = convert_sklearn(export_model, initial_types=input_type)
+                            with open(filename, "wb") as f:
+                                f.write(onnx_model.SerializeToString())
+                            print('=' * 80)
+                            print('Model saved at %s in ONNX format.' %filename)
+                            print('=' * 80)
+
+                        elif extension == 'pmml':
+                            
+                            from sklearn.cluster import KMeans
+                            NC = self.c.shape[0]
+                            NI = self.c.shape[1]
+
+                            export_model = KMeans(n_clusters=NC, random_state=0)
+                            X = np.random.normal(0, 1, (100, NI))
+                            export_model.fit(X)
+                            export_model.cluster_centers_ = self.c
+
+                            from sklearn2pmml import sklearn2pmml # pip install git+https://github.com/jpmml/sklearn2pmml.git
+                            from sklearn2pmml.pipeline import PMMLPipeline
+                            pipeline = PMMLPipeline([("estimator", export_model)])
+                            sklearn2pmml(pipeline, filename, with_repr = True)
+                            print('=' * 80)
+                            print('Model saved at %s in PMML format.' %filename)
+                            print('=' * 80)
+
+                        else:
+                            print('=' * 80)
+                            print('Model Save Error: model cannot be saved at %s.' %filename)
+                            print('=' * 80)
+                    except:
+                        print('=' * 80)
+                        print('Model Save Error: model cannot be saved at %s, please check the provided path/filename.' %filename)
+                        print('=' * 80)
+                        raise
 
 class Kmeans_Master(Common_to_all_POMs):
     """
