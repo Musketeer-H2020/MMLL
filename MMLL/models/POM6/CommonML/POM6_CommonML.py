@@ -1051,7 +1051,7 @@ class POM6_CommonML_Worker(Common_to_all_POMs):
         self.verbose = verbose                  # print on screen when true
         self.Xtr_b = Xtr_b
         self.Xtr_orig = Xtr_b
-        if model_type is not 'Kmeans':
+        if model_type != 'Kmeans':
             self.ytr = ytr
             self.ytr_orig = ytr
         else:
@@ -1605,6 +1605,8 @@ class POM6_CommonML_Worker(Common_to_all_POMs):
                                         x = list(x - set(input_data_description['input_types'][k]['values']))
                                         if len(x) > 0:
                                             err += 'Input feature No. %d has an unrecognized categorical value; ' % k
+                                            print(set(input_data_description['input_types'][k]['values']))
+                                            print(set(x.astype(str)))
                                     except:
                                         err += 'Input feature No. %d is not categorical; ' % k
                                         pass
