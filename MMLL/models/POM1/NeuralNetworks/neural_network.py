@@ -27,8 +27,7 @@ from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_C
 
 
 
-class model():
-
+class model:
     def __init__(self, model_architecture, optimizer='Adam', loss='categorical_crossentropy', metric='accuracy'):
         """
         Initializes keras model
@@ -66,6 +65,15 @@ class model():
         preds = self.keras_model.predict(X_b) # One-hot encoding
         return preds
 
+    def fit(self, x=None, y=None, batch_size=None, epochs=1, verbose=1):
+        self.keras_model.fit(x, y, epochs=epochs,
+                                   batch_size=batch_size,
+                                   verbose=verbose)
+
+    def evaluate(self, x=None, y=None, batch_size=None, verbose=1):
+        hist = self.keras_model.evaluate(x, y, batch_size=batch_size, verbose=verbose)
+        return hist
+
 
 
 
@@ -73,7 +81,9 @@ class NN_Master(POM1_CommonML_Master):
     """
     This class implements Neural nets, run at Master node. It inherits from POM1_CommonML_Master.
     """
-    def __init__(self, comms, logger, verbose=False, model_architecture=None, Nmaxiter=10, learning_rate=0.0001, model_averaging='True', optimizer='adam', loss='categorical_crossentropy', metric='accuracy', batch_size=32, num_epochs=1):
+    def __init__(self, comms, logger, verbose=False, model_architecture=None,
+                 Nmaxiter=10, learning_rate=0.0001, model_averaging='True', optimizer='adam',
+                 loss='categorical_crossentropy', metric='accuracy', batch_size=32, num_epochs=1, model_class=model):
         """
         Create a :class:`NN_Master` instance.
 
@@ -127,7 +137,10 @@ class NN_Master(POM1_CommonML_Master):
 
         super().__init__(comms, logger, verbose)                                            # Initialize common class for POM1
         self.name = 'POM1_NN_Master'                                                        # Name
-        self.model = model(model_architecture, self.optimizer, self.loss, self.metric)      # Keras model initialization
+        self.model = model_class(model_architecture,
+                                   self.optimizer,
+                                   self.loss,
+                                   self.metric)
         self.display(self.name + ': Model architecture:')
         self.model.keras_model.summary(print_fn=self.display)                               # Print model architecture
         self.iter = 0                                                                       # Number of iterations
@@ -323,7 +336,8 @@ class NN_Worker(POM1_CommonML_Worker):
 
     '''
 
-    def __init__(self, master_address, comms, logger, verbose=False, Xtr_b=None, ytr=None):
+    def __init__(self, master_address, comms, logger,
+                 verbose=False, Xtr_b=None, ytr=None, model_class=model):
         """
         Create a :class:`NN_Worker` instance.
 
@@ -357,8 +371,8 @@ class NN_Worker(POM1_CommonML_Worker):
         init = tf.compat.v1.global_variables_initializer()              # Initialize variables
         self.sess.run(init)                                             # Start TF session
         self.is_trained = False                                         # Flag to know if the model has been trained
-        
-        
+        self.model_class = model_class
+
 
     def ProcessReceivedPacket_Worker(self, packet):
         """
@@ -375,7 +389,7 @@ class NN_Worker(POM1_CommonML_Worker):
             model_json = packet['data']['model_json']
             # Initialize local model
             self.current_index = 0
-            self.model = model(model_json)
+            self.model = self.model_class(model_json)
             self.display(self.name + ': Model architecture:')
             self.model.keras_model.summary(print_fn=self.display)
             self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, self.num_classes])
@@ -411,7 +425,7 @@ class NN_Worker(POM1_CommonML_Worker):
             self.display(self.name + ' %s: Updating model locally' %self.worker_address)
             weights = packet['data']['model_weights']
             self.model.keras_model.set_weights(weights)
-            self.model.keras_model.fit(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size, verbose=1)
+            self.model.fit(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size, verbose=1)
             action = 'LOCAL_UPDATE'
             data = {'weights': self.model.keras_model.get_weights()}
             packet = {'action': action, 'data': data}            
@@ -431,7 +445,7 @@ class NN_Worker(POM1_CommonML_Worker):
             model_weights = packet['data']['model_weights']
             self.model.keras_model.set_weights(model_weights)
             self.display(self.name + ' %s: Final model stored' %self.worker_address)
-            [_, accuracy] = self.model.keras_model.evaluate(self.Xtr_b, self.ytr, verbose=self.verbose)
+            [_, accuracy] = self.model.evaluate(self.Xtr_b, self.ytr, verbose=self.verbose)
             self.display(self.name + ' %s: Accuracy in training set: %0.4f' %(self.worker_address, accuracy))
             self.is_trained = True
 
