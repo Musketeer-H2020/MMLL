@@ -45,7 +45,10 @@ class model:
         """
         self.keras_model = model_from_json(model_architecture)                        # Store the model architecture
         self.keras_model.compile(optimizer=optimizer, loss=loss, metrics=[metric])    # Compile the model
-
+        # these should be passed in as kwargs rather then hardcoded.
+        self.iterations = 40
+        self.step_size = 0.01
+        self.eps = 0.3
 
 
     def predict(self, X_b):
@@ -65,14 +68,78 @@ class model:
         preds = self.keras_model.predict(X_b) # One-hot encoding
         return preds
 
-    def fit(self, x=None, y=None, batch_size=None, epochs=1, verbose=1):
-        self.keras_model.fit(x, y, epochs=epochs,
-                                   batch_size=batch_size,
-                                   verbose=verbose)
+    def get_adv_grads(self, x_batch, y_batch, sess, gradient_op, label_placeholder):
+        output_grad = sess.run(gradient_op,
+                               feed_dict={label_placeholder: y_batch,
+                                          self.keras_model.input: x_batch})[0]
+        return output_grad
 
-    def evaluate(self, x=None, y=None, batch_size=None, verbose=1):
-        hist = self.keras_model.evaluate(x, y, batch_size=batch_size, verbose=verbose)
-        return hist
+    def make_adv_example(self, sess, gradient_op, label_placeholder,
+                         data, labels, random_start=False):
+        clip_value_min = data - self.eps
+        clip_value_max = data + self.eps
+
+        if random_start:
+            data = data + np.random.uniform(low=-self.eps, high=self.eps)
+            data = np.clip(data, 0, 1)
+
+        for _ in range(self.iterations):
+            grads = self.get_adv_grads(data, labels, sess, gradient_op, label_placeholder)
+            data += self.step_size * np.sign(grads)
+            data = np.clip(data, clip_value_min, clip_value_max)
+            data = np.clip(data, 0, 1)
+        return data
+
+    def fit(self, x=None, y=None, batch_size=None, epochs=1, verbose=1,
+            sess=None, gradient_op=None, label_placeholder=None):
+        num_batches = int(len(x) / batch_size)
+
+        for epoch in range(epochs):
+            epoch_acc = []
+            epoch_loss = []
+
+            for batch_num in range(num_batches):
+
+                x_batch = x[batch_num * batch_size:(batch_num + 1) * batch_size]
+                y_batch = y[batch_num * batch_size:(batch_num + 1) * batch_size]
+                adv_x = self.make_adv_example(sess=sess, gradient_op=gradient_op,
+                                              label_placeholder=label_placeholder,
+                                              data=x_batch, labels=y_batch,
+                                              random_start=True)
+
+                batch_loss, batch_acc = self.keras_model.train_on_batch(adv_x, y_batch)
+                epoch_loss.append(batch_loss)
+                epoch_acc.append(batch_acc)
+                if verbose == 1:
+                    if batch_num % 100 == 0:
+                        print('Epoch {} batch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, batch_num,
+                                                                                                np.mean(epoch_loss),
+                                                                                                np.mean(epoch_acc)))
+
+            print('Epoch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, np.mean(epoch_loss),
+                                                                           np.mean(epoch_acc)))
+
+    def evaluate(self, x=None, y=None,
+                 batch_size=None, verbose=1, sess=None, gradient_op=None, label_placeholder=None):
+        num_batches = int(len(x) / batch_size)
+
+        for batch_num in range(num_batches):
+            x_batch = x[batch_num * batch_size:(batch_num + 1) * batch_size]
+            y_batch = y[batch_num * batch_size:(batch_num + 1) * batch_size]
+            adv_x = self.make_adv_example(sess, gradient_op, label_placeholder,
+                                          x_batch, y_batch,
+                                          random_start=False)
+
+            batch_loss, batch_acc = self.keras_model.test_on_batch(adv_x, y_batch)
+
+            epoch_loss.append(batch_loss)
+            epoch_acc.append(batch_acc)
+            if verbose == 1:
+                if batch_num % 10 == 0:
+                    print('Epoch {} batch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, batch_num,
+                                                                                            np.mean(epoch_loss),
+                                                                                            np.mean(epoch_acc)))
+        return [epoch_loss, epoch_acc]
 
 
 
@@ -395,6 +462,7 @@ class NN_Worker(POM1_CommonML_Worker):
             self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, self.num_classes])
             self.loss = losses.categorical_crossentropy(self.label_placeholder, self.model.keras_model.output)
             self.gradients = K.gradients(self.loss, self.model.keras_model.trainable_weights)
+            self.adv_gradients = K.gradients(self.loss, self.model.keras_model.input)
             action = 'ACK_INIT_MODEL'
             packet = {'action': action}
             self.comms.send(packet, self.master_address)
@@ -425,7 +493,10 @@ class NN_Worker(POM1_CommonML_Worker):
             self.display(self.name + ' %s: Updating model locally' %self.worker_address)
             weights = packet['data']['model_weights']
             self.model.keras_model.set_weights(weights)
-            self.model.fit(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size, verbose=1)
+            self.model.fit(x=self.Xtr_b, y=self.ytr,
+                           epochs=self.num_epochs, batch_size=self.batch_size,
+                           verbose=1, sess=self.sess,
+                           gradient_op=self.adv_gradients, label_placeholder=self.label_placeholder)
             action = 'LOCAL_UPDATE'
             data = {'weights': self.model.keras_model.get_weights()}
             packet = {'action': action, 'data': data}            
@@ -445,7 +516,9 @@ class NN_Worker(POM1_CommonML_Worker):
             model_weights = packet['data']['model_weights']
             self.model.keras_model.set_weights(model_weights)
             self.display(self.name + ' %s: Final model stored' %self.worker_address)
-            [_, accuracy] = self.model.evaluate(self.Xtr_b, self.ytr, verbose=self.verbose)
+            [_, accuracy] = self.model.evaluate(self.Xtr_b, self.ytr, verbose=self.verbose,
+                                                sess=self.sess, gradient_op=self.adv_gradients,
+                                                label_placeholder=self.label_placeholder)
             self.display(self.name + ' %s: Accuracy in training set: %0.4f' %(self.worker_address, accuracy))
             self.is_trained = True
 
