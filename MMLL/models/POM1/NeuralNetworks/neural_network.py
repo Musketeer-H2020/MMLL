@@ -29,6 +29,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_CommonML_Worker
 
 
+
 class model:
     def __init__(self, model_architecture, optimizer='Adam', loss='categorical_crossentropy', metric='accuracy'):
         """
@@ -113,7 +114,6 @@ class model:
                         print('Epoch {} batch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, batch_num,
                                                                                                 np.mean(epoch_loss),
                                                                                                 np.mean(epoch_acc)))
-                        break
             print('Epoch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, np.mean(epoch_loss),
                                                                            np.mean(epoch_acc)))
 
@@ -133,11 +133,10 @@ class model:
             epoch_loss.append(batch_loss)
             epoch_acc.append(batch_acc)
             if verbose == 1:
-                if batch_num % 10 == 0:
+                if batch_num % 100 == 0:
                     print('On evaluation, batch {}: Adversarial loss {} Advesarial acc {}'.format(batch_num,
                                                                                                   np.mean(epoch_loss),
                                                                                                   np.mean(epoch_acc)))
-                    break
         return [np.mean(epoch_loss), np.mean(epoch_acc)]
 
 
