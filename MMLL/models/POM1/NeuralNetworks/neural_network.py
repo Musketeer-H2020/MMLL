@@ -14,6 +14,9 @@ from tensorflow.compat.v1 import set_random_seed
 set_random_seed(2)
 
 import numpy as np
+import keras
+import pickle
+
 from keras import backend as K
 from keras import losses
 from keras.models import model_from_json
@@ -24,7 +27,6 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_CommonML_Worker
-
 
 
 class model:
@@ -68,14 +70,13 @@ class model:
         preds = self.keras_model.predict(X_b) # One-hot encoding
         return preds
 
-    def get_adv_grads(self, x_batch, y_batch, sess, gradient_op, label_placeholder):
-        output_grad = sess.run(gradient_op,
-                               feed_dict={label_placeholder: y_batch,
+    def get_adv_grads(self, x_batch, y_batch):
+        output_grad = self.sess.run(self.adv_gradients,
+                               feed_dict={self.label_placeholder: y_batch,
                                           self.keras_model.input: x_batch})[0]
         return output_grad
 
-    def make_adv_example(self, sess, gradient_op, label_placeholder,
-                         data, labels, random_start=False):
+    def make_adv_example(self, data, labels, random_start=False):
         clip_value_min = data - self.eps
         clip_value_max = data + self.eps
 
@@ -84,14 +85,13 @@ class model:
             data = np.clip(data, 0, 1)
 
         for _ in range(self.iterations):
-            grads = self.get_adv_grads(data, labels, sess, gradient_op, label_placeholder)
+            grads = self.get_adv_grads(data, labels)
             data += self.step_size * np.sign(grads)
             data = np.clip(data, clip_value_min, clip_value_max)
             data = np.clip(data, 0, 1)
         return data
 
-    def fit(self, x=None, y=None, batch_size=None, epochs=1, verbose=1,
-            sess=None, gradient_op=None, label_placeholder=None):
+    def fit(self, x, y, batch_size, epochs=1, verbose=1):
         num_batches = int(len(x) / batch_size)
 
         for epoch in range(epochs):
@@ -102,9 +102,7 @@ class model:
 
                 x_batch = x[batch_num * batch_size:(batch_num + 1) * batch_size]
                 y_batch = y[batch_num * batch_size:(batch_num + 1) * batch_size]
-                adv_x = self.make_adv_example(sess=sess, gradient_op=gradient_op,
-                                              label_placeholder=label_placeholder,
-                                              data=x_batch, labels=y_batch,
+                adv_x = self.make_adv_example(data=x_batch, labels=y_batch,
                                               random_start=True)
 
                 batch_loss, batch_acc = self.keras_model.train_on_batch(adv_x, y_batch)
@@ -115,19 +113,19 @@ class model:
                         print('Epoch {} batch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, batch_num,
                                                                                                 np.mean(epoch_loss),
                                                                                                 np.mean(epoch_acc)))
-
+                        break
             print('Epoch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, np.mean(epoch_loss),
                                                                            np.mean(epoch_acc)))
 
-    def evaluate(self, x=None, y=None,
-                 batch_size=None, verbose=1, sess=None, gradient_op=None, label_placeholder=None):
+    def evaluate(self, x, y, batch_size, verbose=1):
         num_batches = int(len(x) / batch_size)
+        epoch_loss = []
+        epoch_acc = []
 
         for batch_num in range(num_batches):
             x_batch = x[batch_num * batch_size:(batch_num + 1) * batch_size]
             y_batch = y[batch_num * batch_size:(batch_num + 1) * batch_size]
-            adv_x = self.make_adv_example(sess, gradient_op, label_placeholder,
-                                          x_batch, y_batch,
+            adv_x = self.make_adv_example(x_batch, y_batch,
                                           random_start=False)
 
             batch_loss, batch_acc = self.keras_model.test_on_batch(adv_x, y_batch)
@@ -136,21 +134,22 @@ class model:
             epoch_acc.append(batch_acc)
             if verbose == 1:
                 if batch_num % 10 == 0:
-                    print('Epoch {} batch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, batch_num,
-                                                                                            np.mean(epoch_loss),
-                                                                                            np.mean(epoch_acc)))
-        return [epoch_loss, epoch_acc]
+                    print('On evaluation, batch {}: Adversarial loss {} Advesarial acc {}'.format(batch_num,
+                                                                                                  np.mean(epoch_loss),
+                                                                                                  np.mean(epoch_acc)))
+                    break
+        return [np.mean(epoch_loss), np.mean(epoch_acc)]
 
 
 
 
-class NN_Master(POM1_CommonML_Master):
+class NN_Master(POM1_CommonML_Master, model):
     """
     This class implements Neural nets, run at Master node. It inherits from POM1_CommonML_Master.
     """
     def __init__(self, comms, logger, verbose=False, model_architecture=None,
                  Nmaxiter=10, learning_rate=0.0001, model_averaging='True', optimizer='adam',
-                 loss='categorical_crossentropy', metric='accuracy', batch_size=32, num_epochs=1, model_class=model):
+                 loss='categorical_crossentropy', metric='accuracy', batch_size=32, num_epochs=1):
         """
         Create a :class:`NN_Master` instance.
 
@@ -201,19 +200,16 @@ class NN_Master(POM1_CommonML_Master):
         self.metric = metric
         self.batch_size = batch_size
         self.num_epochs = num_epochs
-
-        super().__init__(comms, logger, verbose)                                            # Initialize common class for POM1
-        self.name = 'POM1_NN_Master'                                                        # Name
-        self.model = model_class(model_architecture,
-                                   self.optimizer,
-                                   self.loss,
-                                   self.metric)
+        POM1_CommonML_Master.__init__(self, comms, logger, verbose)
+        self.sess = tf.compat.v1.InteractiveSession()
+        init = tf.compat.v1.global_variables_initializer()
+        self.sess.run(init)
+        self.name = 'POM1_NN_Master'                                                         # Name
         self.display(self.name + ': Model architecture:')
-        self.model.keras_model.summary(print_fn=self.display)                               # Print model architecture
         self.iter = 0                                                                       # Number of iterations
         self.is_trained = False                                                             # Flag to know if the model has been trained
-
-
+        model.__init__(self, model_architecture, self.optimizer, self.loss, self.metric)
+        self.keras_model.summary(print_fn=self.display)                                      # Print model architecture
 
     def Update_State_Master(self):
         '''
@@ -278,12 +274,12 @@ class NN_Master(POM1_CommonML_Master):
 
         # Compute average of gradients and update model
         if self.state_dict['CN'] == 'UPDATE_MODEL':
-            for index_layer in range(len(self.model.keras_model.get_weights())):
+            for index_layer in range(len(self.keras_model.get_weights())):
                 layer_gradients = []
                 for worker in range(self.Nworkers):
                     layer_gradients.append(self.list_gradients[worker][index_layer])                 
                 mean_weights = np.mean(layer_gradients, axis=0) # Average layer gradients for all workers
-                K.set_value(self.model.keras_model.trainable_weights[index_layer], K.get_value(self.model.keras_model.trainable_weights[index_layer]) - self.learning_rate*mean_weights) # Update model weights
+                K.set_value(self.keras_model.trainable_weights[index_layer], K.get_value(self.keras_model.trainable_weights[index_layer]) - self.learning_rate*mean_weights) # Update model weights
                 
             self.reset()
             self.state_dict['CN'] = 'CHECK_TERMINATION'
@@ -299,7 +295,7 @@ class NN_Master(POM1_CommonML_Master):
                 mean_weights = np.mean(layer_weights, axis=0) # Average layer weights for all workers
                 new_weights.append(mean_weights)
 
-            self.model.keras_model.set_weights(new_weights)        
+            self.keras_model.set_weights(new_weights)
             self.reset()
             self.state_dict['CN'] = 'CHECK_TERMINATION'
             self.iter += 1
@@ -307,7 +303,17 @@ class NN_Master(POM1_CommonML_Master):
         # Check for termination of the training
         if self.state_dict['CN'] == 'CHECK_TERMINATION':
             if self.Xval is not None and self.yval is not None:
-                [loss, accuracy] = self.model.keras_model.evaluate(self.Xval, self.yval, verbose=self.verbose)
+
+                self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, 10])
+                self.loss = losses.categorical_crossentropy(self.label_placeholder, self.keras_model.output)
+                self.adv_gradients = K.gradients(self.loss, self.keras_model.input)
+
+                [loss, accuracy] = self.evaluate(self.Xval, self.yval, batch_size=self.batch_size)
+
+                results = list(map(str, [self.iter, loss, accuracy]))
+                with open('valid_results.csv', 'a') as f:
+                    f.write(','.join(results) + '\n')
+
                 self.display(self.name + ': Iteration %d, loss: %0.4f val accuracy: %0.4f' %(self.iter, loss, accuracy))
             if self.iter == self.Nmaxiter:
                 self.state_dict['CN'] = 'SEND_FINAL_MODEL'
@@ -323,7 +329,7 @@ class NN_Master(POM1_CommonML_Master):
         # Asking the workers to compute local gradients
         if self.state_dict['CN'] == 'COMPUTE_GRADIENTS':
             action = 'COMPUTE_LOCAL_GRADIENTS'
-            data = {'model_weights': self.model.keras_model.get_weights()}
+            data = {'model_weights': self.keras_model.get_weights()}
             packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
@@ -350,7 +356,10 @@ class NN_Master(POM1_CommonML_Master):
         # Asking the workers to update model with local data
         if self.state_dict['CN'] == 'LOCAL_TRAIN':
             action = 'LOCAL_TRAIN'
-            data = {'model_weights': self.model.keras_model.get_weights()}
+            data = {'model_weights': self.keras_model.get_weights()}
+            # save the model weights every round
+            with open('model_weights.pkl', 'wb') as f:
+                pickle.dump(self.keras_model.get_weights(), f)
             packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
@@ -359,7 +368,7 @@ class NN_Master(POM1_CommonML_Master):
         # Send final model to all workers
         if self.state_dict['CN'] == 'SEND_FINAL_MODEL':
             action = 'SEND_FINAL_MODEL'
-            data = {'model_weights': self.model.keras_model.get_weights()}
+            data = {'model_weights': self.keras_model.get_weights()}
             packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent %s to all workers' %action)
@@ -397,14 +406,14 @@ class NN_Master(POM1_CommonML_Master):
 #                 Worker   
 #===============================================================
 
-class NN_Worker(POM1_CommonML_Worker):
+class NN_Worker(POM1_CommonML_Worker, model):
     '''
     Class implementing Neural nets, run at Worker
 
     '''
 
     def __init__(self, master_address, comms, logger,
-                 verbose=False, Xtr_b=None, ytr=None, model_class=model):
+                 verbose=False, Xtr_b=None, ytr=None):
         """
         Create a :class:`NN_Worker` instance.
 
@@ -431,14 +440,14 @@ class NN_Worker(POM1_CommonML_Worker):
         self.Xtr_b = Xtr_b
         self.ytr = ytr
 
-        super().__init__(master_address, comms, logger, verbose)        # Initialize common class for POM1
+        POM1_CommonML_Worker.__init__(self, master_address, comms, logger, verbose)
         self.name = 'POM1_NN_Worker'                                    # Name
         self.num_classes = ytr.shape[1]                                 # Number of outputs
         self.sess = tf.compat.v1.InteractiveSession()                   # Create TF session
         init = tf.compat.v1.global_variables_initializer()              # Initialize variables
         self.sess.run(init)                                             # Start TF session
         self.is_trained = False                                         # Flag to know if the model has been trained
-        self.model_class = model_class
+        self.model_class = model
 
 
     def ProcessReceivedPacket_Worker(self, packet):
@@ -456,13 +465,13 @@ class NN_Worker(POM1_CommonML_Worker):
             model_json = packet['data']['model_json']
             # Initialize local model
             self.current_index = 0
-            self.model = self.model_class(model_json)
+            self.model_class.__init__(self, model_json)
             self.display(self.name + ': Model architecture:')
-            self.model.keras_model.summary(print_fn=self.display)
+            self.keras_model.summary(print_fn=self.display)
             self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, self.num_classes])
-            self.loss = losses.categorical_crossentropy(self.label_placeholder, self.model.keras_model.output)
-            self.gradients = K.gradients(self.loss, self.model.keras_model.trainable_weights)
-            self.adv_gradients = K.gradients(self.loss, self.model.keras_model.input)
+            self.loss = losses.categorical_crossentropy(self.label_placeholder, self.keras_model.output)
+            self.gradients = K.gradients(self.loss, self.keras_model.trainable_weights)
+            self.adv_gradients = K.gradients(self.loss, self.keras_model.input)
             action = 'ACK_INIT_MODEL'
             packet = {'action': action}
             self.comms.send(packet, self.master_address)
@@ -474,7 +483,7 @@ class NN_Worker(POM1_CommonML_Worker):
             loss = packet['data']['loss']
             metric = packet['data']['metric']
             # Compile the model
-            self.model.keras_model.compile(loss=loss, optimizer=optimizer, metrics=[metric])
+            self.keras_model.compile(loss=loss, optimizer=optimizer, metrics=[metric])
             action = 'ACK_COMPILE_INIT'
             packet = {'action': action}
             self.comms.send(packet, self.master_address)
@@ -492,13 +501,11 @@ class NN_Worker(POM1_CommonML_Worker):
         if packet['action'] == 'LOCAL_TRAIN':
             self.display(self.name + ' %s: Updating model locally' %self.worker_address)
             weights = packet['data']['model_weights']
-            self.model.keras_model.set_weights(weights)
-            self.model.fit(x=self.Xtr_b, y=self.ytr,
-                           epochs=self.num_epochs, batch_size=self.batch_size,
-                           verbose=1, sess=self.sess,
-                           gradient_op=self.adv_gradients, label_placeholder=self.label_placeholder)
+            self.keras_model.set_weights(weights)
+            self.fit(x=self.Xtr_b, y=self.ytr,
+                           epochs=self.num_epochs, batch_size=self.batch_size)
             action = 'LOCAL_UPDATE'
-            data = {'weights': self.model.keras_model.get_weights()}
+            data = {'weights': self.keras_model.get_weights()}
             packet = {'action': action, 'data': data}            
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
@@ -514,11 +521,9 @@ class NN_Worker(POM1_CommonML_Worker):
             
         if packet['action'] == 'SEND_FINAL_MODEL':            
             model_weights = packet['data']['model_weights']
-            self.model.keras_model.set_weights(model_weights)
+            self.keras_model.set_weights(model_weights)
             self.display(self.name + ' %s: Final model stored' %self.worker_address)
-            [_, accuracy] = self.model.evaluate(self.Xtr_b, self.ytr, verbose=self.verbose,
-                                                sess=self.sess, gradient_op=self.adv_gradients,
-                                                label_placeholder=self.label_placeholder)
+            [_, accuracy] = self.evaluate(self.Xtr_b, self.ytr, batch_size=self.batch_size)
             self.display(self.name + ' %s: Accuracy in training set: %0.4f' %(self.worker_address, accuracy))
             self.is_trained = True
 
@@ -540,7 +545,7 @@ class NN_Worker(POM1_CommonML_Worker):
             x_batch = np.take(self.Xtr_b, data_indexes, axis=0) # Slice along first axis
             y_batch = np.take(self.ytr, data_indexes, axis=0)
 
-        self.model.keras_model.set_weights(model_weights)        
-        output_grad = self.sess.run(self.gradients, feed_dict={self.label_placeholder: y_batch, self.model.keras_model.input: x_batch})
+        self.keras_model.set_weights(model_weights)
+        output_grad = self.sess.run(self.gradients, feed_dict={self.label_placeholder: y_batch, self.keras_model.input: x_batch})
 
         return output_grad
