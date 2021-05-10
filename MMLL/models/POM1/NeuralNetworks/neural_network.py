@@ -303,7 +303,7 @@ class NN_Master(POM1_CommonML_Master, model):
         if self.state_dict['CN'] == 'CHECK_TERMINATION':
             if self.Xval is not None and self.yval is not None:
 
-                self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, 10])
+                self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, self.yval.shape[-1]])
                 self.loss = losses.categorical_crossentropy(self.label_placeholder, self.keras_model.output)
                 self.adv_gradients = K.gradients(self.loss, self.keras_model.input)
 
@@ -505,7 +505,7 @@ class NN_Worker(POM1_CommonML_Worker, model):
                            epochs=self.num_epochs, batch_size=self.batch_size)
             action = 'LOCAL_UPDATE'
             data = {'weights': self.keras_model.get_weights()}
-            packet = {'action': action, 'data': data}            
+            packet = {'action': action, 'data': data}
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
             
