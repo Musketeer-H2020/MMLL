@@ -20,6 +20,8 @@ import pickle
 from keras import backend as K
 from keras import losses
 from keras.models import model_from_json
+from keras.models import load_model
+
 import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 import os
@@ -28,7 +30,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_CommonML_Worker
 
-
+RESUME = False
 
 class model:
     def __init__(self, model_architecture, optimizer='Adam', loss='categorical_crossentropy', metric='accuracy'):
@@ -208,6 +210,9 @@ class NN_Master(POM1_CommonML_Master, model):
         self.iter = 0                                                                       # Number of iterations
         self.is_trained = False                                                             # Flag to know if the model has been trained
         model.__init__(self, model_architecture, self.optimizer, self.loss, self.metric)
+        if RESUME:
+            chkpoint_weights = pickle.load(open("model_weights.pkl", "rb"))
+            self.keras_model.set_weights(chkpoint_weights)
         self.keras_model.summary(print_fn=self.display)                                      # Print model architecture
 
     def Update_State_Master(self):
@@ -302,18 +307,18 @@ class NN_Master(POM1_CommonML_Master, model):
         # Check for termination of the training
         if self.state_dict['CN'] == 'CHECK_TERMINATION':
             if self.Xval is not None and self.yval is not None:
+                if self.iter%10 ==0:
+                    self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, 10])
+                    self.loss = losses.categorical_crossentropy(self.label_placeholder, self.keras_model.output)
+                    self.adv_gradients = K.gradients(self.loss, self.keras_model.input)
 
-                self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, self.yval.shape[-1]])
-                self.loss = losses.categorical_crossentropy(self.label_placeholder, self.keras_model.output)
-                self.adv_gradients = K.gradients(self.loss, self.keras_model.input)
+                    [loss, accuracy] = self.evaluate(self.Xval, self.yval, batch_size=self.batch_size)
 
-                [loss, accuracy] = self.evaluate(self.Xval, self.yval, batch_size=self.batch_size)
+                    results = list(map(str, [self.iter, loss, accuracy]))
+                    with open('valid_results.csv', 'a') as f:
+                        f.write(','.join(results) + '\n')
 
-                results = list(map(str, [self.iter, loss, accuracy]))
-                with open('valid_results.csv', 'a') as f:
-                    f.write(','.join(results) + '\n')
-
-                self.display(self.name + ': Iteration %d, loss: %0.4f val accuracy: %0.4f' %(self.iter, loss, accuracy))
+                    self.display(self.name + ': Iteration %d, loss: %0.4f val accuracy: %0.4f' %(self.iter, loss, accuracy))
             if self.iter == self.Nmaxiter:
                 self.state_dict['CN'] = 'SEND_FINAL_MODEL'
                 self.display(self.name + ': Stopping training, maximum number of iterations reached!')
@@ -482,7 +487,12 @@ class NN_Worker(POM1_CommonML_Worker, model):
             loss = packet['data']['loss']
             metric = packet['data']['metric']
             # Compile the model
-            self.keras_model.compile(loss=loss, optimizer=optimizer, metrics=[metric])
+            if RESUME:
+                self.keras_model = load_model('results/models/worker_models/' + self.name + '_model.h5')
+            else:
+                opt = keras.optimizers.Adam(lr=1e-4)
+                self.keras_model.compile(loss=loss, optimizer=opt, metrics=[metric])
+
             action = 'ACK_COMPILE_INIT'
             packet = {'action': action}
             self.comms.send(packet, self.master_address)
@@ -501,11 +511,16 @@ class NN_Worker(POM1_CommonML_Worker, model):
             self.display(self.name + ' %s: Updating model locally' %self.worker_address)
             weights = packet['data']['model_weights']
             self.keras_model.set_weights(weights)
+
+            if not os.path.isdir('results/models/worker_models/'):
+                os.mkdir('results/models/worker_models/')
+
+            self.keras_model.save('results/models/worker_models/' + self.name + '_model.h5') # save to keep the optimizer state
             self.fit(x=self.Xtr_b, y=self.ytr,
                            epochs=self.num_epochs, batch_size=self.batch_size)
             action = 'LOCAL_UPDATE'
             data = {'weights': self.keras_model.get_weights()}
-            packet = {'action': action, 'data': data}
+            packet = {'action': action, 'data': data}            
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
             
