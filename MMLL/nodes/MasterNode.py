@@ -69,8 +69,6 @@ class MasterNode(Common_to_all_objects):
         self.model_is_trained = False
         self.classes = None
         self.display('MasterNode: Initiated')
-        #print(self.master_address)
-        #print(self.workers_addresses)
         self.data_is_ready = False
         self.selected_workers = None
 
@@ -133,7 +131,12 @@ class MasterNode(Common_to_all_objects):
 
             elif model_type == 'NN':
                 from MMLL.models.POM1.NeuralNetworks.neural_network import NN_Master
-                self.MasterMLmodel = NN_Master(self.comms, self.logger, self.verbose, model_architecture=self.model_architecture, Nmaxiter=self.Nmaxiter, learning_rate=self.learning_rate, model_averaging=self.model_averaging, optimizer=self.optimizer, loss=self.loss, metric=self.metric, batch_size=self.batch_size, num_epochs=self.num_epochs)
+                self.MasterMLmodel = NN_Master(self.comms, self.logger, pgd_params=self.pgd_params, verbose=self.verbose,
+                                               model_architecture=self.model_architecture,
+                                               Nmaxiter=self.Nmaxiter, learning_rate=self.learning_rate,
+                                               model_averaging=self.model_averaging, optimizer=self.optimizer,
+                                               loss=self.loss, metric=self.metric, batch_size=self.batch_size,
+                                               num_epochs=self.num_epochs)
                 self.display('MasterNode: Created %s model, POM = %d' % (model_type, self.pom))
 
             elif model_type == 'SVM':

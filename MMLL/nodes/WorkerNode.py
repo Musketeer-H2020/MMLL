@@ -45,9 +45,9 @@ class WorkerNode(Common_to_all_objects):
         self.logger = logger            # logger
         self.verbose = verbose          # print on screen when true
         self.master_address = 'ma'
-        
-        self.process_kwargs(kwargs)
 
+        self.process_kwargs(kwargs)
+        print(self.pgd_params)
         # The id of this worker (string), received through the comms library...
         # self.worker_address = worker_address          
         self.worker_address = self.comms.id
@@ -296,7 +296,11 @@ class WorkerNode(Common_to_all_objects):
 
             elif model_type == 'NN':
                 from MMLL.models.POM1.NeuralNetworks.neural_network import NN_Worker
-                self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
+                print('pgd_params are')
+                print(self.pgd_params)
+
+                self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,
+                                               self.verbose, self.Xtr_b, self.ytr, pgd_params=self.pgd_params)
 
             elif model_type == 'SVM':
                 from MMLL.models.POM1.SVM.SVM import SVM_Worker

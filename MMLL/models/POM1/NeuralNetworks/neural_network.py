@@ -50,11 +50,6 @@ class model:
         """
         self.keras_model = model_from_json(model_architecture)                        # Store the model architecture
         self.keras_model.compile(optimizer=optimizer, loss=loss, metrics=[metric])    # Compile the model
-        # these should be passed in as kwargs rather then hardcoded.
-        self.iterations = 40
-        self.step_size = 0.01
-        self.eps = 0.3
-
 
     def predict(self, X_b):
         """
@@ -80,16 +75,16 @@ class model:
         return output_grad
 
     def make_adv_example(self, data, labels, random_start=False):
-        clip_value_min = data - self.eps
-        clip_value_max = data + self.eps
+        clip_value_min = data - self.pgd_params['eps']
+        clip_value_max = data + self.pgd_params['eps']
 
         if random_start:
-            data = data + np.random.uniform(low=-self.eps, high=self.eps)
+            data = data + np.random.uniform(low=-self.pgd_params['eps'], high=self.pgd_params['eps'])
             data = np.clip(data, 0, 1)
 
-        for _ in range(self.iterations):
+        for _ in range(self.pgd_params['iterations']):
             grads = self.get_adv_grads(data, labels)
-            data += self.step_size * np.sign(grads)
+            data += self.pgd_params['step_size'] * np.sign(grads)
             data = np.clip(data, clip_value_min, clip_value_max)
             data = np.clip(data, 0, 1)
         return data
@@ -116,6 +111,7 @@ class model:
                         print('Epoch {} batch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, batch_num,
                                                                                                 np.mean(epoch_loss),
                                                                                                 np.mean(epoch_acc)))
+                # break
             print('Epoch {}: Adversarial loss {} Advesarial acc {}'.format(epoch, np.mean(epoch_loss),
                                                                            np.mean(epoch_acc)))
 
@@ -139,6 +135,7 @@ class model:
                     print('On evaluation, batch {}: Adversarial loss {} Advesarial acc {}'.format(batch_num,
                                                                                                   np.mean(epoch_loss),
                                                                                                   np.mean(epoch_acc)))
+            # break
         return [np.mean(epoch_loss), np.mean(epoch_acc)]
 
 
@@ -148,7 +145,7 @@ class NN_Master(POM1_CommonML_Master, model):
     """
     This class implements Neural nets, run at Master node. It inherits from POM1_CommonML_Master.
     """
-    def __init__(self, comms, logger, verbose=False, model_architecture=None,
+    def __init__(self, comms, logger, pgd_params, verbose=False, model_architecture=None,
                  Nmaxiter=10, learning_rate=0.0001, model_averaging='True', optimizer='adam',
                  loss='categorical_crossentropy', metric='accuracy', batch_size=32, num_epochs=1):
         """
@@ -201,6 +198,7 @@ class NN_Master(POM1_CommonML_Master, model):
         self.metric = metric
         self.batch_size = batch_size
         self.num_epochs = num_epochs
+        self.pgd_params = pgd_params
         POM1_CommonML_Master.__init__(self, comms, logger, verbose)
         self.sess = tf.compat.v1.InteractiveSession()
         init = tf.compat.v1.global_variables_initializer()
@@ -308,14 +306,14 @@ class NN_Master(POM1_CommonML_Master, model):
         if self.state_dict['CN'] == 'CHECK_TERMINATION':
             if self.Xval is not None and self.yval is not None:
                 if self.iter%10 ==0:
-                    self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, 10])
+                    self.label_placeholder = tf.compat.v1.placeholder(tf.float32, shape=[None, self.yval.shape[1]])
                     self.loss = losses.categorical_crossentropy(self.label_placeholder, self.keras_model.output)
                     self.adv_gradients = K.gradients(self.loss, self.keras_model.input)
 
                     [loss, accuracy] = self.evaluate(self.Xval, self.yval, batch_size=self.batch_size)
 
                     results = list(map(str, [self.iter, loss, accuracy]))
-                    with open('valid_results.csv', 'a') as f:
+                    with open('results/valid_results.csv', 'a') as f:
                         f.write(','.join(results) + '\n')
 
                     self.display(self.name + ': Iteration %d, loss: %0.4f val accuracy: %0.4f' %(self.iter, loss, accuracy))
@@ -342,7 +340,10 @@ class NN_Master(POM1_CommonML_Master, model):
         # Asking the workers to compile the model
         if self.state_dict['CN'] == 'COMPILE_INIT':
             action = 'COMPILE_INIT'
-            data = {'optimizer': self.optimizer, 'loss': self.loss, 'metric': self.metric}
+            data = {'optimizer': self.optimizer,
+                    'learning_rate': self.learning_rate,
+                    'loss': self.loss,
+                    'metric': self.metric}
             packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
@@ -417,7 +418,7 @@ class NN_Worker(POM1_CommonML_Worker, model):
     '''
 
     def __init__(self, master_address, comms, logger,
-                 verbose=False, Xtr_b=None, ytr=None):
+                 verbose=False, Xtr_b=None, ytr=None, pgd_params=None):
         """
         Create a :class:`NN_Worker` instance.
 
@@ -443,7 +444,9 @@ class NN_Worker(POM1_CommonML_Worker, model):
         """
         self.Xtr_b = Xtr_b
         self.ytr = ytr
-
+        self.pgd_params = pgd_params
+        print('here')
+        print(self.pgd_params)
         POM1_CommonML_Worker.__init__(self, master_address, comms, logger, verbose)
         self.name = 'POM1_NN_Worker'                                    # Name
         self.num_classes = ytr.shape[1]                                 # Number of outputs
@@ -452,7 +455,6 @@ class NN_Worker(POM1_CommonML_Worker, model):
         self.sess.run(init)                                             # Start TF session
         self.is_trained = False                                         # Flag to know if the model has been trained
         self.model_class = model
-
 
     def ProcessReceivedPacket_Worker(self, packet):
         """
@@ -484,14 +486,22 @@ class NN_Worker(POM1_CommonML_Worker, model):
         if packet['action'] == 'COMPILE_INIT':
             self.display(self.name + ' %s: Initializing compiler' %self.worker_address)
             optimizer = packet['data']['optimizer']
+            learning_rate = packet['data']['learning_rate']
             loss = packet['data']['loss']
             metric = packet['data']['metric']
             # Compile the model
+
             if RESUME:
                 self.keras_model = load_model('results/models/worker_models/' + self.name + '_model.h5')
             else:
-                opt = keras.optimizers.Adam(lr=1e-4)
-                self.keras_model.compile(loss=loss, optimizer=opt, metrics=[metric])
+                if optimizer == 'adam':
+                    opt = keras.optimizers.Adam(lr=learning_rate)
+                    self.keras_model.compile(loss=loss, optimizer=opt, metrics=[metric])
+                elif optimizer == 'sgd':
+                    opt = keras.optimizers.SGD(lr=learning_rate)
+                    self.keras_model.compile(loss=loss, optimizer=opt, metrics=[metric])
+                else:
+                    print('optimiser must be either adam or sgd')
 
             action = 'ACK_COMPILE_INIT'
             packet = {'action': action}

@@ -386,6 +386,9 @@ class Common_to_all_objects():
                 self.aggregation_type = value
             if key == 'use_bias':
                 self.use_bias = value
+            if key == 'pgd_params':
+                self.pgd_params = value
+
 
 
 
