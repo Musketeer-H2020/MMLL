@@ -20,7 +20,6 @@ import pickle
 from keras import backend as K
 from keras import losses
 from keras.models import model_from_json
-from keras.models import load_model
 
 import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
@@ -31,6 +30,12 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_CommonML_Worker
 
 RESUME = False
+
+def save_opt_weights(model_to_save, file_name):
+    symbolic_weights = getattr(model_to_save.optimizer, 'weights')
+    weight_values = K.batch_get_value(symbolic_weights)
+    with open(file_name, 'wb') as f:
+        pickle.dump(weight_values, f)
 
 class model:
     def __init__(self, model_architecture, optimizer='Adam', loss='categorical_crossentropy', metric='accuracy'):
@@ -452,8 +457,6 @@ class NN_Worker(POM1_CommonML_Worker, model):
         self.Xtr_b = Xtr_b
         self.ytr = ytr
         self.pgd_params = pgd_params
-        print('here')
-        print(self.pgd_params)
         POM1_CommonML_Worker.__init__(self, master_address, comms, logger, verbose)
         self.name = 'POM1_NN_Worker'                                    # Name
         self.num_classes = ytr.shape[1]                                 # Number of outputs
@@ -497,18 +500,31 @@ class NN_Worker(POM1_CommonML_Worker, model):
             loss = packet['data']['loss']
             metric = packet['data']['metric']
             # Compile the model
+            if optimizer == 'adam':
+                opt = keras.optimizers.Adam(lr=learning_rate)
+                self.keras_model.compile(loss=loss, optimizer=opt, metrics=[metric])
+            elif optimizer == 'sgd':
+                opt = keras.optimizers.SGD(lr=learning_rate)
+                self.keras_model.compile(loss=loss, optimizer=opt, metrics=[metric])
+            else:
+                print('optimiser must be either adam or sgd')
 
             if RESUME:
-                self.keras_model = load_model('results/models/worker_models/' + self.name + '_model.h5')
-            else:
-                if optimizer == 'adam':
-                    opt = keras.optimizers.Adam(lr=learning_rate)
-                    self.keras_model.compile(loss=loss, optimizer=opt, metrics=[metric])
-                elif optimizer == 'sgd':
-                    opt = keras.optimizers.SGD(lr=learning_rate)
-                    self.keras_model.compile(loss=loss, optimizer=opt, metrics=[metric])
-                else:
-                    print('optimiser must be either adam or sgd')
+                print('loading keras model')
+                '''
+                hack solution for tensorflow.
+                optimiser weights need to be created before they can be assigned.
+                so train on a datapoint and then set weights. 
+                '''
+                self.keras_model.train_on_batch(self.Xtr_b[0:1], self.ytr[0:1])
+
+                with open('results/models/worker_models/' + self.worker_address + '_opt_weights.pkl', 'rb') as f:
+                    weight_values = pickle.load(f)
+                self.keras_model.optimizer.set_weights(weight_values)
+
+                with open('results/models/worker_models/' + self.worker_address + '_model_weights.pkl', 'rb') as f:
+                    weight_values = pickle.load(f)
+                self.keras_model.set_weights(weight_values)
 
             action = 'ACK_COMPILE_INIT'
             packet = {'action': action}
@@ -532,7 +548,10 @@ class NN_Worker(POM1_CommonML_Worker, model):
             if not os.path.isdir('results/models/worker_models/'):
                 os.mkdir('results/models/worker_models/')
 
-            self.keras_model.save('results/models/worker_models/' + self.name + '_model.h5') # save to keep the optimizer state
+            with open('results/models/worker_models/' + self.worker_address + '_model_weights.pkl', 'wb') as f:
+                pickle.dump(self.keras_model.get_weights(), f)
+            save_opt_weights(self.keras_model, 'results/models/worker_models/' + self.worker_address + '_opt_weights.pkl')
+
             self.fit(x=self.Xtr_b, y=self.ytr,
                            epochs=self.num_epochs, batch_size=self.batch_size)
             action = 'LOCAL_UPDATE'
