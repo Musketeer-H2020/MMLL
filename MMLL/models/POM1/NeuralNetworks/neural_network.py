@@ -78,15 +78,22 @@ class model:
         clip_value_min = data - self.pgd_params['eps']
         clip_value_max = data + self.pgd_params['eps']
 
+        data_max = self.pgd_params['clip_max']
+        data_min = self.pgd_params['clip_min']
+
+        if isinstance(data_max, str): # if it is a filepath, read from the given numpy array.
+            data_max = np.load(data_max)
+            data_min = np.load(data_min)
+
         if random_start:
             data = data + np.random.uniform(low=-self.pgd_params['eps'], high=self.pgd_params['eps'])
-            data = np.clip(data, 0, 1)
+            data = np.clip(data, data_min, data_max)
 
         for _ in range(self.pgd_params['iterations']):
             grads = self.get_adv_grads(data, labels)
             data += self.pgd_params['step_size'] * np.sign(grads)
             data = np.clip(data, clip_value_min, clip_value_max)
-            data = np.clip(data, 0, 1)
+            data = np.clip(data, data_min, data_max)
         return data
 
     def fit(self, x, y, batch_size, epochs=1, verbose=1):
