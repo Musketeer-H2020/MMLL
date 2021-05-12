@@ -133,7 +133,7 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
             packet = None
             sender = None
             try:
-                packet = self.comms.receive_poms_123(timeout=0.1) # We only receive a dictionary at a time even if there are more than 1 workers
+                packet = self.comms.receive_poms_123(timeout=30) # We only receive a dictionary at a time even if there are more than 1 workers
                 try:  # For the pycloudmessenger cloud
                     sender = packet.notification['participant']
                 except Exception: # For the pycloudmessenger local
@@ -157,7 +157,7 @@ class Common_to_POMs_123_Master(Common_to_all_objects):
             sender = None
             for sender in self.workers_addresses:
                 try:
-                    packet = self.comms.receive(sender, timeout=0.1)
+                    packet = self.comms.receive(sender, timeout=30)
                     self.display(self.name + ': Received %s from worker %s' %(packet['action'], sender))
                     self.ProcessReceivedPacket_Master(packet, sender)
                 except KeyboardInterrupt:
@@ -627,7 +627,7 @@ class Common_to_POMs_123_Worker(Common_to_all_objects):
             packet = None
             sender = None
             try:
-                packet = self.comms.receive_poms_123(timeout=0.1)
+                packet = self.comms.receive_poms_123(timeout=30)
                 packet = packet.content
                 sender = 'Master'
                 self.display(self.name + ' %s: Received %s from %s' % (self.worker_address, packet['action'], sender))
@@ -651,7 +651,7 @@ class Common_to_POMs_123_Worker(Common_to_all_objects):
             packet = None
             sender = None
             try:
-                packet = self.comms.receive(self.master_address, timeout=0.1)
+                packet = self.comms.receive(self.master_address, timeout=30)
                 sender = 'Master'
                 self.display(self.name + ' %s: Received %s from %s' % (self.worker_address, packet['action'], sender))
 
