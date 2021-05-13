@@ -154,7 +154,6 @@ class POM1_CommonML_Worker(Common_to_POMs_123_Worker):
             
         if packet['action'] == 'SEND_PREPROCESSOR':
             self.display(self.name + ' %s: Receiving preprocessor' %self.worker_address)
-
             # Retrieve the preprocessing object
             prep_model = packet['data']['prep_model']
 
@@ -163,6 +162,18 @@ class POM1_CommonML_Worker(Common_to_POMs_123_Worker):
             X_prep = prep_model.transform(Xtr)
             self.Xtr_b = np.copy(X_prep)
             self.display(self.name + ' %s: Training set transformed using preprocessor' %self.worker_address)
+
+            clip_max = np.copy(self.pgd_params['clip_max'])
+            clip_max = np.expand_dims(clip_max, axis=0)
+            clip_max_prep = prep_model.transform(clip_max)
+            clip_max_prep = np.squeeze(clip_max_prep)
+            self.pgd_params['clip_max'] = np.copy(clip_max_prep)
+
+            clip_min = np.copy(self.pgd_params['clip_min'])
+            clip_min = np.expand_dims(clip_min, axis=0)
+            clip_min_prep = prep_model.transform(clip_min)
+            clip_min_prep = np.squeeze(clip_min_prep)
+            self.pgd_params['clip_min'] = np.copy(clip_min_prep)
 
             # Store the preprocessing object
             self.preprocessors.append(prep_model)
