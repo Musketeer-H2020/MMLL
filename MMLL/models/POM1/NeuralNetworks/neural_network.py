@@ -110,8 +110,8 @@ class model:
 
             for batch_num in range(num_batches):
 
-                x_batch = x[batch_num * batch_size:(batch_num + 1) * batch_size]
-                y_batch = y[batch_num * batch_size:(batch_num + 1) * batch_size]
+                x_batch = np.copy(x[batch_num * batch_size:(batch_num + 1) * batch_size])
+                y_batch = np.copy(y[batch_num * batch_size:(batch_num + 1) * batch_size])
                 adv_x = self.make_adv_example(data=x_batch, labels=y_batch,
                                               random_start=True)
 
@@ -133,8 +133,8 @@ class model:
         epoch_acc = []
 
         for batch_num in range(num_batches):
-            x_batch = x[batch_num * batch_size:(batch_num + 1) * batch_size]
-            y_batch = y[batch_num * batch_size:(batch_num + 1) * batch_size]
+            x_batch = np.copy(x[batch_num * batch_size:(batch_num + 1) * batch_size])
+            y_batch = np.copy(y[batch_num * batch_size:(batch_num + 1) * batch_size])
             adv_x = self.make_adv_example(x_batch, y_batch,
                                           random_start=False)
 
