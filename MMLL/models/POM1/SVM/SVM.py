@@ -34,7 +34,9 @@ class SVM_model(Common_to_models):
         """
         self.logger = logger
         self.is_trained = False
+        self.supported_formats = ['pkl', 'onnx', 'pmml']
         self.name = 'SVM'
+
         self.centroids = None
         self.sigma = None
         self.weights = None
@@ -314,15 +316,8 @@ class SVM_Worker(POM1_CommonML_Worker):
         ytr: ndarray
             Array containing the labels for training.
         """
-        self.Xtr_b = Xtr_b
-        self.ytr = ytr
 
-        super().__init__(master_address, comms, logger, verbose)       # Initialize common class for POM1
-        self.name = 'POM1_SVM_Worker'                                  # Name
-        self.model = SVM_model(logger)                                 # Model  
-        self.is_trained = False                                        # Flag to know if the model has been trained
-
-        """
+        '''
         # Train Kmeans first
         kmeans_worker = Kmeans_Worker(master_address, comms, logger, verbose, Xtr_b.copy(), ytr.copy())
         kmeans_worker.run_worker()
@@ -337,9 +332,17 @@ class SVM_Worker(POM1_CommonML_Worker):
             self.Xtr_b = np.copy(kmeans_worker.Xtr_b)                  # Normalize data    
             self.ytr = np.copy(kmeans_worker.ytr)                      # Normalize data            
             self.preprocessors = kmeans_worker.preprocessors           # Store preprocessing objects
-        """
-    
-    
+        '''   
+
+        self.Xtr_b = Xtr_b
+        self.ytr = ytr
+
+        super().__init__(master_address, comms, logger, verbose)       # Initialize common class for POM1
+        self.name = 'POM1_SVM_Worker'                                  # Name
+        self.model = SVM_model(logger)                                 # Model  
+        self.is_trained = False                                        # Flag to know if the model has been trained
+
+
 
     def ProcessReceivedPacket_Worker(self, packet):
         """

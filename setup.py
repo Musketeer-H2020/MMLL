@@ -23,7 +23,8 @@ setup(
         'torchvision==0.8.1',
         'pillow==7.2.0',
         'skl2onnx==1.8.0',
-        'sklearn2pmml==0.71.1'
+        'sklearn2pmml==0.71.1',
+        'tf2onnx==1.8.5'
     ],
     url='https://github.com/Musketeer-H2020/MMLL'
 )

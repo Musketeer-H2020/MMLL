@@ -43,22 +43,6 @@ class image_reshape_model():
 
         self.transf = transforms.Resize((self.M, self.N))
 
-        '''
-        print('STOP AT ')
-        import code
-        code.interact(local=locals())
-
-        self.vision_model = models.alexnet(pretrained=True)
-        # Grayscale
-        self.transf = transforms.Compose([            #[1]
-            transforms.Resize(256),                   #[2]
-            transforms.CenterCrop(224),               #[3]
-            transforms.ToTensor(),                    #[4]
-            transforms.Normalize(                     #[5]
-                mean=[0.485],           #[6]
-                std=[0.229]             #[7]
-            )])
-        '''
 
     def transform(self, X):
         """

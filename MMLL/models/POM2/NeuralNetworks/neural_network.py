@@ -52,7 +52,9 @@ class NN_model(Common_to_models):
         """
         self.logger = logger
         self.is_trained = False
+        self.supported_formats = ['h5', 'onnx', 'Tensorflow SavedModel']
         self.name = 'NN'
+
         self.keras_model = tf.keras.models.model_from_json(model_architecture)                        # Store the model architecture
         self.keras_model.compile(optimizer=optimizer, loss=loss, metrics=[metric])    # Compile the model
 

@@ -33,7 +33,9 @@ class SVM_model(Common_to_models):
         """
         self.logger = logger
         self.is_trained = False
+        self.supported_formats = ['pkl', 'onnx', 'pmml']
         self.name = 'SVM' 
+
         self.centroids = None
         self.sigma = None
         self.weights = None

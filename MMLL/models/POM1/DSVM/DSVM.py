@@ -31,11 +31,13 @@ class DSVM_model(Common_to_models):
             Logging object instance.
         """
         self.logger = logger
+        self.is_trained = False
+        self.supported_formats = ['pkl', 'onnx', 'pmml']
         self.name = 'DSVM'
+
         self.centroids = None
         self.weights = None
         self.sigma = None
-        self.is_trained = False
 
 
 

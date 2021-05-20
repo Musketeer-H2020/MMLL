@@ -982,70 +982,89 @@ class Common_to_POMs_123_Worker(Common_to_all_objects):
             target_data_description = packet['data']['target_data_description']
                     
             error = ''
-            NI = self.Xtr_b.shape[1]
-            NT = self.ytr.reshape(-1, 1).shape[1]
+            error_inputs = False
+            error_outputs = False
+            check_outputs = True
 
-            if NI != input_data_description['NI']:
-                error += 'Incorrect number of features; '
-            elif NT != target_data_description['NT']:
-                error += 'Incorrect number of targets; '
-            elif self.Xtr_b.shape[0] != self.ytr.shape[0]:
-                error += 'Different number of inputs and targets; '
-            else:
-                try:
-                    # Checking inputs
-                    for k in range(NI):
-                        x = self.Xtr_b[:, k]
-                        xtype = input_data_description['input_types'][k]['type']
-                        if xtype == 'num':
-                            try:
-                                x = x.astype(float)
-                            except:
-                                error += 'Input feature No. %d is not numeric; ' % k
-                        if xtype == 'cat':
-                            try:
-                                x = set(x.astype(str))
-                                x = list(x - set(input_data_description['input_types'][k]['values']))
-                                if len(x) > 0:
-                                    error += 'Input feature No. %d has an unrecognized categorical value; ' % k
-                            except:
-                                error += 'Input feature No. %d is not categorical; ' % k
-                        if xtype == 'bin':
-                            try:
-                                x = x.astype(float)
-                                x = list(set(x) - set([0.0, 1.0]))
-                                if len(x) > 0:
+            try:
+                NI = self.Xtr_b.shape[1]
+            except:
+                error_inputs = True
+                error += 'Worker input data is not set; '
+           
+            try:
+                NT = self.ytr.reshape(-1, 1).shape[1]
+            except:
+                if 'kmeans' in self.name.lower():
+                    check_outputs = False
+                else:
+                    error_outputs = True
+                    error += 'Worker target data is not set; '
+
+            if not error_inputs and not error_outputs:
+                if NI != input_data_description['NI']:
+                    error += 'Incorrect number of features; '
+                elif check_outputs:
+                    if NT != target_data_description['NT']:
+                        error += 'Incorrect number of targets; '
+                    elif self.Xtr_b.shape[0] != self.ytr.shape[0]:
+                        error += 'Different number of inputs and targets; '
+                else:
+                    try:
+                        # Checking inputs
+                        for k in range(NI):
+                            x = self.Xtr_b[:, k]
+                            xtype = input_data_description['input_types'][k]['type']
+                            if xtype == 'num':
+                                try:
+                                    x = x.astype(float)
+                                except:
+                                    error += 'Input feature No. %d is not numeric; ' % k
+                            if xtype == 'cat':
+                                try:
+                                    x = set(x.astype(str))
+                                    x = list(x - set(input_data_description['input_types'][k]['values']))
+                                    if len(x) > 0:
+                                        error += 'Input feature No. %d has an unrecognized categorical value; ' % k
+                                except:
+                                    error += 'Input feature No. %d is not categorical; ' % k
+                            if xtype == 'bin':
+                                try:
+                                    x = x.astype(float)
+                                    x = list(set(x) - set([0.0, 1.0]))
+                                    if len(x) > 0:
+                                        error += 'Input feature No. %d is not binary; ' % k
+                                except:
                                     error += 'Input feature No. %d is not binary; ' % k
-                            except:
-                                error += 'Input feature No. %d is not binary; ' % k
 
-                    # Checking targets
-                    for k in range(NT):
-                        x = self.ytr[:, k]
-                        xtype = target_data_description['output_types'][k]['type']
-                        if xtype == 'num':
-                            try:
-                                x = x.astype(float)
-                            except:
-                                error += 'Target No. %d is not numeric; ' % k
-                        if xtype == 'cat':
-                            try:
-                                x = set(x.astype(str))
-                                x = list(x - set(input_data_description['input_types'][k]['values']))
-                                if len(x) > 0:
-                                    error += 'Target No. %d has an unrecognized categorical value; ' % k
-                            except:
-                                error += 'Target No. %d is not categorical; ' % k
-                        if xtype == 'bin':
-                            try:
-                                x = x.astype(float)
-                                x = list(set(x) - set([0.0, 1.0]))
-                                if len(x) > 0:
-                                    error += 'Target No. %d is not binary; ' % k
-                            except:
-                                error += 'Target No. %d is not binary; ' % k
-                except:
-                    error += 'Unexpected error when processing features; '
+                        if check_outputs:
+                            # Checking targets
+                            for k in range(NT):
+                                x = self.ytr[:, k]
+                                xtype = target_data_description['output_types'][k]['type']
+                                if xtype == 'num':
+                                    try:
+                                        x = x.astype(float)
+                                    except:
+                                        error += 'Target No. %d is not numeric; ' % k
+                                if xtype == 'cat':
+                                    try:
+                                        x = set(x.astype(str))
+                                        x = list(x - set(input_data_description['input_types'][k]['values']))
+                                        if len(x) > 0:
+                                            error += 'Target No. %d has an unrecognized categorical value; ' % k
+                                    except:
+                                        error += 'Target No. %d is not categorical; ' % k
+                                if xtype == 'bin':
+                                    try:
+                                        x = x.astype(float)
+                                        x = list(set(x) - set([0.0, 1.0]))
+                                        if len(x) > 0:
+                                            error += 'Target No. %d is not binary; ' % k
+                                    except:
+                                        error += 'Target No. %d is not binary; ' % k
+                    except:
+                        error += 'Unexpected error when processing features; '
 
             # Send back the ACK
             action = 'ACK_CHECK_DATA'
