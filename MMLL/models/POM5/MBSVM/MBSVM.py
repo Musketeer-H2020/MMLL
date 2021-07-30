@@ -13,8 +13,8 @@ from transitions import State
 from transitions.extensions import GraphMachine
 import pickle
 from pympler import asizeof #asizeof.asizeof(my_object)
-import pickle
 import dill
+import time
 
 class Model():
     """
@@ -28,6 +28,9 @@ class Model():
         self.classes = None
         self.is_trained = False
         self.supported_formats = ['pkl']
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def predict(self, X):
         """
@@ -175,6 +178,7 @@ class MBSVM_Master(Common_to_all_POMs):
         #self.Xval_b = Xval_b
         #self.yval = yval
         self.epsilon = 0.00000001  # to avoid log(0)
+        self.landa = 0.5
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
         #default values
@@ -185,7 +189,7 @@ class MBSVM_Master(Common_to_all_POMs):
         except:
             pass
         self.process_kwargs(kwargs)
-        self.message_counter = 0    # used to number the messages
+        self.message_counter = 100    # used to number the messages
         self.XTX_dict = {}
         self.XTy_dict = {}
         self.encrypter = self.cr.get_encrypter()  # to be shared        # self.encrypter.encrypt(np.random.normal(0, 1, (2,3)))
@@ -208,6 +212,9 @@ class MBSVM_Master(Common_to_all_POMs):
         self.NPtr_dict = {}
         self.eps = 0.0000001
         self.Kacum_dict = {}
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
         try:
             if self.target_data_description['NT'] == 1:
@@ -302,6 +309,13 @@ class MBSVM_Master(Common_to_all_POMs):
                     action = 'update_tr_data'
                     data = {}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
@@ -320,10 +334,18 @@ class MBSVM_Master(Common_to_all_POMs):
                     action = 'selecting_C'
                     data = {'C': MLmodel.model.C, 'sigma': MLmodel.model.sigma}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     if MLmodel.selected_workers is None: 
+                        MLmodel.comms.broadcast(packet)
                         MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
                     else:
+                        MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
                         MLmodel.display(MLmodel.name + ': broadcasted C to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
 
                 except Exception as err:
@@ -340,10 +362,18 @@ class MBSVM_Master(Common_to_all_POMs):
                     action = 'sending_C'
                     data = {'C': MLmodel.model.C, 'sigma': MLmodel.model.sigma}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     if MLmodel.selected_workers is None: 
+                        MLmodel.comms.broadcast(packet)
                         MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
                     else:
+                        MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
                         MLmodel.display(MLmodel.name + ': broadcasted C to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
 
                 except Exception as err:
@@ -362,7 +392,15 @@ class MBSVM_Master(Common_to_all_POMs):
                     #wdill = MLmodel.dill_it(MLmodel.wq_encr)
                     #data.update({'wq_encr': wdill})
 
-                    packet = {'action': 'send_w_encr', 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    action = 'send_w_encr'
+                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     if MLmodel.selected_workers is None: 
                         MLmodel.comms.broadcast(packet)
                         MLmodel.display(MLmodel.name + ': broadcasted w to all Workers')
@@ -377,7 +415,6 @@ class MBSVM_Master(Common_to_all_POMs):
                     import code
                     code.interact(local=locals())
                     '''
-
                 return
 
             def while_Exit(self, MLmodel):
@@ -400,6 +437,7 @@ class MBSVM_Master(Common_to_all_POMs):
             def while_comp_ai(self, MLmodel, packet):
                 try:
                     MLmodel.display(MLmodel.name + ' is computing ai...')
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
 
                     s1_encr_dict = packet['data']['s1_encr_dict']
                     s_1_encr_dict = packet['data']['s_1_encr_dict']
@@ -442,17 +480,22 @@ class MBSVM_Master(Common_to_all_POMs):
                         a_1_encr_dict.update({cla: MLmodel.encrypter.encrypt(a_1) })
                         del ey_1, e_1, a_1, which_1
 
-                    destination = sender
-                    action = 'ACK_sent_ai_encr'
-                    
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
+
+                    action = 'ACK_sent_ai_encr'                   
                     data = {'a1_encr_dict': a1_encr_dict, 'a_1_encr_dict': a_1_encr_dict}
-                    message_id = 'empty'
-                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.master_address, 'message_id': message_id}
+                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.master_address}
                     del data
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.message_counter += 1
-                    # send back
+
+                    destination = sender
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
                     #MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+                    worker_name = MLmodel.receive_from[sender]
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, worker_name, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, destination)
                     del packet
                     MLmodel.display(MLmodel.name + ': sent %s' % action)
@@ -470,6 +513,7 @@ class MBSVM_Master(Common_to_all_POMs):
             def while_comp_exp_bl(self, MLmodel, packet):
                 try:
                     MLmodel.display(MLmodel.name + ' is computing exp(-s)...')
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     s_encr_bl = packet['data']['s_encr_bl']
                     sender = packet['sender']
                     del packet
@@ -480,17 +524,21 @@ class MBSVM_Master(Common_to_all_POMs):
                     exp_s_bl_encr = MLmodel.encrypter.encrypt(exp_s_bl)
                     MLmodel.display('PROC_MASTER_END', verbose=False)
 
-                    destination = sender
                     action = 'ACK_sent_exp_s_bl_encr'
                     data = {'exp_s_bl_encr': exp_s_bl_encr}
                     del exp_s_bl_encr
-                    message_id = MLmodel.master_address + '_' + str(MLmodel.message_counter)
-                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.master_address, 'message_id': message_id}
+                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.master_address}
                     del data
-                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+
+                    destination = sender
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
                     MLmodel.message_counter += 1
-                    # send back
-                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    #MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+                    worker_name = MLmodel.receive_from[sender]
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, worker_name, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, destination)
                     del packet
                     MLmodel.display(MLmodel.name + ': sent %s' % action)
@@ -505,30 +553,34 @@ class MBSVM_Master(Common_to_all_POMs):
 
             def while_comp_div_bl(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
 
                     MLmodel.display(MLmodel.name + ' is computing blinded division...')
                     num_bl = packet['data']['num_bl']
                     den_bl_encr = packet['data']['den_bl_encr']
                     sender = packet['sender']
-                    del packet
-                                        
-                    MLmodel.display('PROC_MASTER_START', verbose=False)
+                    del packet     
                     den_bl = MLmodel.decrypter.decrypt(den_bl_encr)
                     sigm_bl = num_bl / den_bl
                     sigm_encr_bl = MLmodel.encrypter.encrypt(sigm_bl)
+                    
                     MLmodel.display('PROC_MASTER_END', verbose=False)
 
-                    destination = sender
                     action = 'ACK_sent_sigm_encr_bl'
                     data = {'sigm_encr_bl': sigm_encr_bl}
                     del sigm_encr_bl
-                    message_id = MLmodel.master_address + '_' + str(MLmodel.message_counter)
-                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.master_address, 'message_id': message_id}
+                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.master_address}
                     del data
-                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+
+                    destination = sender
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
                     MLmodel.message_counter += 1
-                    # send back
-                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    #MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+                    worker_name = MLmodel.receive_from[sender]
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, worker_name, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, destination)
                     del packet
                     MLmodel.display(MLmodel.name + ': sent %s' % action)
@@ -544,8 +596,10 @@ class MBSVM_Master(Common_to_all_POMs):
 
             def while_updating_w(self, MLmodel):
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     NC = MLmodel.model.C.shape[0]
                     MLmodel.w_old_dict = dict(MLmodel.model.w_dict)
+                    MLmodel.w_new_dict = dict(MLmodel.model.w_dict)
 
                     for cla in MLmodel.classes:
                         KTDaK_accum = np.zeros((NC + 1, NC + 1))
@@ -554,9 +608,10 @@ class MBSVM_Master(Common_to_all_POMs):
                             KTDaK_accum += MLmodel.decrypter.decrypt(MLmodel.KTDaK_dict[waddr][cla])
                             KTDay_accum += MLmodel.decrypter.decrypt(MLmodel.KTDay_dict[waddr][cla].reshape((-1, 1)))
 
-                        MLmodel.model.w_dict[cla] = np.dot(np.linalg.inv(KTDaK_accum + MLmodel.Kcc), KTDay_accum)        
+                        MLmodel.w_new_dict[cla] = np.dot(np.linalg.inv(KTDaK_accum + MLmodel.Kcc), KTDay_accum)        
 
                     del KTDaK_accum, KTDay_accum
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
 
                 except Exception as err:
                     raise
@@ -610,6 +665,7 @@ class MBSVM_Master(Common_to_all_POMs):
         None
         """
         self.display(self.name + ': Starting training', verbose=True)
+        self.display('MASTER_INIT', verbose=False)
 
         if not self.train_data_is_ready: 
             self.FSMmaster.go_update_tr_data(self)
@@ -664,6 +720,8 @@ class MBSVM_Master(Common_to_all_POMs):
         '''
         self.model.C = self.C
         self.NC = self.C.shape[0]
+        
+        self.display('PROC_MASTER_START', verbose=False)
 
         # computing Kcc, only once
         X = self.model.C
@@ -686,10 +744,6 @@ class MBSVM_Master(Common_to_all_POMs):
 
             self.yval.reshape((-1, 1))
 
-
-        self.FSMmaster.go_sending_C(self)
-        self.run_Master()     
-
         self.model.w_dict = {}
         self.w_encr_dict = {}
         self.w_old_dict = {}
@@ -699,13 +753,19 @@ class MBSVM_Master(Common_to_all_POMs):
             self.w_encr_dict.update({cla: self.encrypter.encrypt(self.model.w_dict[cla])})
             #self.w_old_dict.update({cla: np.random.normal(0, 1.0, (self.NC + 1, 1))})
 
+        self.display('PROC_MASTER_END', verbose=False)
+
+        self.FSMmaster.go_sending_C(self)
+        self.run_Master()     
+
         self.stop_training = False
         self.kiter = 0
-
-        self.ceval_acum = 100
+        self.ACC_val = 0
+        self.ACC_val_old = 0
 
         while not self.stop_training:
-
+            self.display('MASTER_ITER_START', verbose=False)
+            t_ini = time.time()
             self.w_old_dict = dict(self.model.w_dict)
 
             self.s1_dict = {}
@@ -724,7 +784,9 @@ class MBSVM_Master(Common_to_all_POMs):
 
             self.FSMmaster.go_update_w(self)
             self.FSMmaster.go_waiting_order(self)
-            
+
+            self.display('PROC_MASTER_START', verbose=False)           
+
             self.kiter += 1
             # Stop if Maxiter is reached
             if self.kiter == self.Nmaxiter:
@@ -744,57 +806,52 @@ class MBSVM_Master(Common_to_all_POMs):
                 print(message)
 
             else:
-                self.ceval_acum_old = self.ceval_acum
                 NIval = self.KXC_val.shape[1]
-                self.ceval_acum = 0
+                # We keep the previos models
+                w_dict = dict(self.model.w_dict)
+                w_old_dict = dict(self.w_old_dict)
 
+                # Updated model
                 for cla in self.classes:
-                    w_ = self.model.w_dict[cla]
-                    w_old_ = self.w_old_dict[cla]
+                    w_ = ((1 - self.landa) * w_old_dict[cla] + self.landa * self.w_new_dict[cla])[0: NIval]
+                    self.model.w_dict[cla] = w_
 
-                    CE_val = []
-                    landas = np.arange(0, 1.0, 0.01)
+                preds_dict = {}
+                NCLA = len(self.classes)
+                O = []
+                for cla in self.classes:
+                    o = np.dot(self.KXC_val, self.model.w_dict[cla]).ravel()
+                    preds_dict.update({cla: o})
+                    O.append(o)
 
-                    Xw = np.dot(self.KXC_val, w_)
-                    Xw_old = np.dot(self.KXC_val, w_old_)
+                O = np.array(O)
+                winners = list(np.argmax(O, axis=0))
+                preds_val = [self.classes[pos] for pos in winners] 
+                ACC_val = np.mean(np.array(preds_val).ravel() == (self.yval.ravel()))
 
-                    for landa in landas:
-                        w_tmp = landa * w_ + (1 - landa) * w_old_
-                        o_tmp = landa * Xw + (1 - landa) * Xw_old
-                        yval = ((np.array(self.yval == cla)).astype(float)).reshape((-1, 1))
-                        ce_val = np.mean(self.cross_entropy(self.sigm(o_tmp), yval, self.epsilon))
-                        CE_val.append(ce_val)
-
-                    # Positions that fit the target value
-                    min_pos = np.argmin(CE_val)
-                    CEval_opt = CE_val[min_pos]
-                    self.ceval_acum += CEval_opt
-                    indices = np.array(range(len(landas)))[CE_val == CEval_opt]
-                    min_pos = indices[0]  # first
-                    landa_opt = landas[min_pos]
-                    message = 'Class = %s, landa_opt = %f' % (cla, landa_opt)
-
-                    self.model.w_dict[cla] = (1.0 - landa_opt) * self.w_old_dict[cla] + landa_opt * self.model.w_dict[cla]
-
-                self.ceval_acum = self.ceval_acum / len(self.classes)
-
-                print('ceval_acum, ceval_acum_old', self.ceval_acum, self.ceval_acum_old)
-
-                if self.ceval_acum < self.ceval_acum_old:  
-                    message = 'Maxiter = %d, iter = %d, CE val = %f' % (self.Nmaxiter, self.kiter, self.ceval_acum)
-                    print(message)
+                if ACC_val > self.ACC_val_old: 
+                    # retain the new
+                    #self.model.w = (1 - self.landa) * self.w_old + self.landa * self.new_w
+                    self.ACC_val_old = ACC_val
                     self.w_old_dict = dict(self.model.w_dict)
-                else:
-                    self.stop_training = True
-                    # We retain the last weight values
+                    message = 'Maxiter = %d, iter = %d, ACC val = %f' % (self.Nmaxiter, self.kiter, ACC_val)
+                    print(message)
+                else: # restore the previous one and stop
                     self.model.w_dict = dict(self.w_old_dict)
+                    self.stop_training = True
 
-        for cla in self.classes:
-            self.w_encr_dict[cla] = self.encrypter.encrypt(self.model.w_dict[cla])
+            for cla in self.classes:
+                self.w_encr_dict[cla] = self.encrypter.encrypt(self.model.w_dict[cla])
+
+            self.display('PROC_MASTER_END', verbose=False)
+            self.display('MASTER_ITER_END', verbose=False)
+            elapsed_time = time.time() - t_ini
+            print('Time iter (minutes) = %f' % (elapsed_time/60.0))
 
         self.model.niter = self.kiter
         self.model.is_trained = True
         self.display(self.name + ': Training is done', verbose=True)
+        self.display('MASTER_FINISH', verbose=False)
 
     def Update_State_Master(self):
         """
@@ -832,10 +889,13 @@ class MBSVM_Master(Common_to_all_POMs):
         """
         try:
             #sender = self.receive_from[sender]
-            if packet['action'][0:3] == 'ACK':
-                self.state_dict[sender] = packet['action']
-                self.display(self.name + ': received %s from worker %s' % (packet['action'], sender), verbose=True)
-
+            self.display(self.name + ': received %s from worker %s' % (packet['action'], sender), verbose=True)
+            try:
+                self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+            except:
+                self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                pass
+            
             if packet['action'] == 'ACK_update_tr_data':
                 #print('ProcessReceivedPacket_Master ACK_update_tr_data')
                 self.newNI_dict.update({sender: packet['data']['newNI']})
@@ -859,7 +919,8 @@ class MBSVM_Master(Common_to_all_POMs):
                 self.FSMmaster.go_comp_div_bl(self, packet)
                 self.FSMmaster.done_comp_div_bl(self)
 
-
+            if packet['action'][0:3] == 'ACK':
+                self.state_dict[sender] = packet['action']
 
         except:
             raise
@@ -868,7 +929,6 @@ class MBSVM_Master(Common_to_all_POMs):
             import code
             code.interact(local=locals())
             '''   
-
         return
 
 
@@ -925,6 +985,10 @@ class MBSVM_Worker(Common_to_all_POMs):
         #self.NPtr = len(ytr)
         self.create_FSM_worker()
         self.message_id = 0    # used to number the messages
+        self.message_counter = 100 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_worker(self):
         """
@@ -958,6 +1022,13 @@ class MBSVM_Worker(Common_to_all_POMs):
                     action = 'ACK_update_tr_data'
                     data = {'newNI': newNI}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
                 except Exception as err:
@@ -973,6 +1044,7 @@ class MBSVM_Worker(Common_to_all_POMs):
             def while_projecting_C(self, MLmodel, packet):
                 # We project X over C and return accumulated
                 try:
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
 
                     MLmodel.C = packet['data']['C']
                     NC = MLmodel.C.shape[0]
@@ -988,10 +1060,18 @@ class MBSVM_Worker(Common_to_all_POMs):
                     # Gauss
                     KXC = np.exp(-XC2 / 2.0 /  (MLmodel.sigma ** 2))
                     Kacum = np.sum(KXC, axis = 0)
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ACK_projecting_C'
                     data = {'Kacum': Kacum}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_projecting_C' % (str(MLmodel.worker_address)))
                     
@@ -1007,6 +1087,7 @@ class MBSVM_Worker(Common_to_all_POMs):
             def while_storing_C(self, MLmodel, packet):
                 # We store C and compute KXC
                 try:
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     MLmodel.C = packet['data']['C']
                     NC = MLmodel.C.shape[0]
                     MLmodel.sigma = packet['data']['sigma']
@@ -1025,15 +1106,23 @@ class MBSVM_Worker(Common_to_all_POMs):
                     # Poly
                     #KXC = 1 / (1 + (XC2 / 2.0 /  (MLmodel.sigma ** 2)  ) ) 
                     MLmodel.KXC = np.hstack( (np.ones((NP, 1)), KXC)) # NP x NC + 1
-
+                    print(MLmodel.KXC.shape)
                     # th minimum 
                     min_th = 1e-10
                     which = (MLmodel.KXC < min_th)
                     MLmodel.KXC[which]  = 0
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ACK_storing_C'
                     data = {}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_storing_C' % (str(MLmodel.worker_address)))
                     
@@ -1049,10 +1138,10 @@ class MBSVM_Worker(Common_to_all_POMs):
             def while_compute_states(self, MLmodel, packet):
                 try:
                     check = False
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     MLmodel.display(MLmodel.name + ' %s: computing states...' % (str(MLmodel.worker_address)))
                     w_encr_dict = packet['data']['w_encr_dict']
                     MLmodel.classes = packet['data']['classes']
-
 
                     del packet
                     #X = MLmodel.KXC
@@ -1077,15 +1166,18 @@ class MBSVM_Worker(Common_to_all_POMs):
                         e = np.linalg.norm(MLmodel.s_ok - MLmodel.s)
                         print('Error in s', e)
 
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
+
                     action = 'ask_ai'
-                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
-                    message_id = 'empty'
                     data = {'s1_encr_dict': MLmodel.s1_encr_dict, 's_1_encr_dict': MLmodel.s_1_encr_dict}
-                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.worker_address, 'message_id': message_id}
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
+                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.worker_address}
                     
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.worker_address), action))
@@ -1102,6 +1194,7 @@ class MBSVM_Worker(Common_to_all_POMs):
                 try:
                     check = False
                     MLmodel.display(MLmodel.name + ' %s: computing KTDay...' % (str(MLmodel.worker_address)))
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
 
                     a1_encr_dict = packet['data']['a1_encr_dict']
                     a_1_encr_dict = packet['data']['a_1_encr_dict']                   
@@ -1112,15 +1205,16 @@ class MBSVM_Worker(Common_to_all_POMs):
                     for cla in MLmodel.classes:
                         ytr = ((np.array(MLmodel.ytr == cla)).astype(float)).reshape((-1, 1))
                         which1 = (ytr == 1).ravel()
-                        which_1 = (ytr == 0).ravel()                       
+                        which_1 = (ytr == 0).ravel()
+
                         KTDaK1 = MLmodel.KXC[which1, :]  * a1_encr_dict[cla]
                         KTDaK1 = np.dot(MLmodel.KXC[which1, :].T, KTDaK1)
-                        KTDay1 = ytr[which1]  * a1_encr_dict[cla]
+                        KTDay1 = ytr[which1].reshape((-1, 1))  * a1_encr_dict[cla]
                         KTDay1 = np.dot(MLmodel.KXC[which1, :].T, KTDay1)
 
                         KTDaK_1 = MLmodel.KXC[which_1, :]  * a_1_encr_dict[cla]
                         KTDaK_1 = np.dot(MLmodel.KXC[which_1, :].T, KTDaK_1)
-                        KTDay_1 = (ytr[which_1] - 1) * a_1_encr_dict[cla]
+                        KTDay_1 = (ytr[which_1] - 1).reshape((-1, 1)) * a_1_encr_dict[cla]
                         KTDay_1 = np.dot(MLmodel.KXC[which_1, :].T, KTDay_1)
 
                         KTDaK_dict.update({cla: KTDaK1 + KTDaK_1})
@@ -1129,13 +1223,19 @@ class MBSVM_Worker(Common_to_all_POMs):
                         del KTDay1, KTDay_1
 
                     del a1_encr_dict, a_1_encr_dict
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ACK_KTDaK'
-                    message_id = 'empty'
                     data = {'KTDaK_dict': KTDaK_dict, 'KTDay_dict': KTDay_dict}
                     del KTDaK_dict, KTDay_dict
-                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.worker_address, 'message_id': message_id}
+                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.worker_address}
                     del data
+
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
 
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     del packet
@@ -1151,6 +1251,7 @@ class MBSVM_Worker(Common_to_all_POMs):
 
             def while_compute_exp(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     check = False
                     exp_s_bl_encr = packet['data']['exp_s_bl_encr']
                     NP = exp_s_bl_encr.shape[0]
@@ -1175,17 +1276,20 @@ class MBSVM_Worker(Common_to_all_POMs):
                     MLmodel.num_bl = MLmodel.r1
                     MLmodel.den_bl_encr = (1 + exp_s_encr) * MLmodel.r2
                     #MLmodel.display('PROC_WORKER_END', verbose=False)
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ask_div_bl'
-                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     message_id = 'none'
                     data = {'num_bl': MLmodel.num_bl, 'den_bl_encr': MLmodel.den_bl_encr } 
-                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.worker_address, 'message_id': message_id}
+                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.worker_address}
                     del data
                     
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s' % (str(MLmodel.worker_address), action))
@@ -1200,6 +1304,7 @@ class MBSVM_Worker(Common_to_all_POMs):
 
             def while_compute_gradients(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     check = False
                     sigm_encr_bl = packet['data']['sigm_encr_bl']
                     del packet
@@ -1224,17 +1329,20 @@ class MBSVM_Worker(Common_to_all_POMs):
                     del X, y
                     grad_encr = np.sum(Xe_encr, axis=0).reshape((NI, 1))
                     #MLmodel.display('PROC_WORKER_END', verbose=False)
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ACK_grads'
-                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
-                    message_id = 'empty'
                     data = {'grad_encr': grad_encr, 'NP': NP}
                     del grad_encr
-                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.worker_address, 'message_id': message_id}
+                    packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.worker_address}
                     del data
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
+
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     del packet
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_grads' % (str(MLmodel.worker_address)))
@@ -1309,6 +1417,12 @@ class MBSVM_Worker(Common_to_all_POMs):
 
         """
         self.terminate = False
+        try:
+            self.display('COMMS_WORKER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+        except:
+            self.display('WORKER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+            pass
+
         try:
             # Exit the process
             if packet['action'] == 'STOP':

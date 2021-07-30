@@ -11,8 +11,10 @@ import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
 from transitions import State
 from transitions.extensions import GraphMachine
-#from pympler import asizeof #asizeof.asizeof(my_object)
 import pickle
+from pympler import asizeof #asizeof.asizeof(my_object)
+import dill
+import time
 
 class Model():
     """
@@ -23,6 +25,9 @@ class Model():
         self.classes = None
         self.is_trained = False
         self.supported_formats = ['pkl', 'onnx', 'pmml']
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def sigm(self, x):
         """
@@ -231,6 +236,8 @@ class MLC_Master(Common_to_all_POMs):
         #self.Xval_b = Xval_b
         #self.yval = yval
         self.epsilon = 0.00000001  # to avoid log(0)
+        self.momentum = 0
+        self.regularization = 0.001
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
         #default values
@@ -241,7 +248,7 @@ class MLC_Master(Common_to_all_POMs):
         except:
             pass
         self.process_kwargs(kwargs)
-        self.message_counter = 0    # used to number the messages
+        self.message_counter = 100    # used to number the messages
         self.XTX_dict = {}
         self.XTy_dict = {}
         #self.encrypter = self.cr.get_encrypter()  # to be shared        # self.encrypter.encrypt(np.random.normal(0, 1, (2,3)))
@@ -251,6 +258,9 @@ class MLC_Master(Common_to_all_POMs):
         self.added_bias = False
         self.model = Model()
         self.train_data_is_ready = False
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_master(self):
         """
@@ -331,6 +341,13 @@ class MLC_Master(Common_to_all_POMs):
                     action = 'update_tr_data'
                     data = {}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
@@ -348,7 +365,17 @@ class MLC_Master(Common_to_all_POMs):
             def while_mult_XB(self, MLmodel, B_bl):
                 try:
                     data = {'B_bl': B_bl}
-                    packet = {'action': 'send_mult_XB', 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    action = 'send_mult_XB'
+                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    #destination = MLmodel.cryptonode_address
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     MLmodel.display(MLmodel.name + ' send_mult_XB to cryptonode')
                 except:
@@ -364,7 +391,17 @@ class MLC_Master(Common_to_all_POMs):
             def while_mult_XBM(self, MLmodel, B_bl):
                 try:
                     data = {'B_bl': B_bl}
-                    packet = {'action': 'send_mult_XBM', 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
+                    action = 'send_mult_XBM'
+                    packet = {'action': action, 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    #destination = MLmodel.cryptonode_address
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     MLmodel.display(MLmodel.name + ' send_mult_XBM to cryptonode')
                 except:
@@ -380,6 +417,7 @@ class MLC_Master(Common_to_all_POMs):
             def while_compute_expM(self, MLmodel, s_encr_dict):
                 # Multiclass
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     MLmodel.gamma_dict = {}
                     MLmodel.s_encr_bl_dict = {}
 
@@ -393,14 +431,20 @@ class MLC_Master(Common_to_all_POMs):
                                         
                         MLmodel.gamma_dict.update({waddr: gamma_dict})                  
                         MLmodel.s_encr_bl_dict.update({waddr: s_encr_bl_dict})
+                    
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
 
                     action = 'ask_expM_bl'
-                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'s_encr_bl_dict': MLmodel.s_encr_bl_dict}
                     packet = {'action': action, 'data': data, 'to': 'CommonML', 'sender': MLmodel.master_address}
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
+
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.master_address), action))
@@ -416,6 +460,8 @@ class MLC_Master(Common_to_all_POMs):
 
             def while_compute_div(self, MLmodel, exp_s_encr_dict):
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
+
                     MLmodel.r1_dict = {}
                     MLmodel.r2_dict = {}
                     MLmodel.num_bl_dict = {}
@@ -429,14 +475,21 @@ class MLC_Master(Common_to_all_POMs):
                         MLmodel.num_bl_dict.update({waddr: num})
                         den = (1 + exp_s_encr_dict[waddr]) * MLmodel.r2_dict[waddr]
                         MLmodel.den_bl_dict.update({waddr: den})
+                    
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
 
                     action = 'ask_div_bl'
-                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'num_bl_dict': MLmodel.num_bl_dict, 'den_bl_dict': MLmodel.den_bl_dict}
                     packet = {'action': action, 'data': data, 'to': 'CommonML', 'sender': MLmodel.master_address}
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
+
+                    #destination = MLmodel.cryptonode_address
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.master_address), action))
@@ -452,6 +505,8 @@ class MLC_Master(Common_to_all_POMs):
 
             def while_compute_divM(self, MLmodel, exp_s_encr_dict):
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
+
                     MLmodel.r1_dict = {}
                     MLmodel.r2_dict = {}
                     MLmodel.num_bl_dict = {}
@@ -476,13 +531,20 @@ class MLC_Master(Common_to_all_POMs):
                         MLmodel.num_bl_dict.update({waddr: num_bl_dict})
                         MLmodel.den_bl_dict.update({waddr: den_bl_dict})
 
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
+
                     action = 'ask_divM_bl'
-                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'num_bl_dict': MLmodel.num_bl_dict, 'den_bl_dict': MLmodel.den_bl_dict}
                     packet = {'action': action, 'data': data, 'to': 'CommonML', 'sender': MLmodel.master_address}
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
+
+                    #destination = MLmodel.cryptonode_address
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.master_address), action))
@@ -498,6 +560,7 @@ class MLC_Master(Common_to_all_POMs):
 
             def while_decrypt_modelM(self, MLmodel, model_encr_dict):
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     # Adding blinding to model
                     MLmodel.bl_dict = {}
                     MLmodel.model_encr_bl_dict = {}
@@ -512,12 +575,33 @@ class MLC_Master(Common_to_all_POMs):
                                 M, N = x.shape
                                 bl = np.random.normal(0, 1, (M, N))
                                 bl_dict.update({cla: bl})
-                                model_encr_bl_dict.update({cla: x + bl})
+                                try:
+                                    model_encr_bl_dict.update({cla: x + bl})
+                                except Exception as err:
+                                    print('ERROR at  while_decrypt_modelM')
+                                    print('***** NUMERICAL OVERFLOW *******')
+                                    print(err)
+                                    raise
+                                    #import code
+                                    #code.interact(local=locals())
+
                         MLmodel.bl_dict.update({key: bl_dict})
                         MLmodel.model_encr_bl_dict.update({key: model_encr_bl_dict})
 
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
+
                     data = {'model_bl': MLmodel.model_encr_bl_dict}
-                    packet = {'action': 'send_modelM_encr_bl', 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
+                    action = 'send_modelM_encr_bl'
+                    packet = {'action': action, 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    #destination = MLmodel.cryptonode_address
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     MLmodel.display(MLmodel.name + ' send_model_encr_bl to cryptonode')
                 except:
@@ -576,11 +660,13 @@ class MLC_Master(Common_to_all_POMs):
         None
         """
         print(self.name + ': Starting training')
+        self.display('MASTER_INIT', verbose=False)
         #self.X_encr_dict
 
         #self.MasterMLmodel.BX_dict
         #self.MasterMLmodel.By_dict
 
+        self.display('PROC_MASTER_START', verbose=False)
 
         '''
         if not self.train_data_is_ready: 
@@ -619,6 +705,16 @@ class MLC_Master(Common_to_all_POMs):
         for worker in self.workers_addresses:
             self.receivers_list.append(self.send_to[worker])
 
+        self.display('=============================================== ', True)
+        self.display('===========  List of participants  ============ ', True)
+        for worker in self.workers_addresses:
+            message = '%s - %s' % (worker, self.send_to[worker])
+            self.display(message, True)
+
+        message = '%s - %s' % (self.cryptonode_address, self.send_to[self.cryptonode_address])
+        self.display(message, True)
+        self.display('=============================================== ', True)
+
         # Data at self.X_encr_dict, self.y_encr_dict
 
         check = False
@@ -633,11 +729,13 @@ class MLC_Master(Common_to_all_POMs):
 
         self.classes =  self.target_data_description['output_type'][0]['values']
         self.model.classes = self.classes
+        self.grad_old_dict = {}
 
         for cla in self.classes:
             self.model.w_dict.update({cla: np.random.normal(0, 0.001, (self.NI + 1, 1))})
             self.w_old_dict.update({cla: np.random.normal(0, 1.0, (self.NI + 1, 1))})
             self.w_encr_dict.update({cla: 0})
+            self.grad_old_dict.update({cla: np.random.normal(0, 0.001, (self.NI + 1, 1))})
 
         self.stop_training = False
         self.selected_workers = self.workers_addresses
@@ -647,7 +745,12 @@ class MLC_Master(Common_to_all_POMs):
             message = 'WARNING: Validation data is not used during training.'
             self.display(message, True)
 
+        self.display('PROC_MASTER_END', verbose=False)
+
         while not self.stop_training:
+            self.display('MASTER_ITER_START', verbose=False)
+
+            self.display('PROC_MASTER_START', verbose=False)
             # Computing s=wTX
             #self.wTX_encr_dict = self.crypto_mult_X(self.w_encr.T)
             self.s_encr_dict = {}
@@ -670,6 +773,7 @@ class MLC_Master(Common_to_all_POMs):
                     
                 print('Error in s = %f' % err)  # OK
 
+            self.display('PROC_MASTER_END', verbose=False)
 
             # Añadiendo blinding y enviado a Crypto para calcular exp(-s)
             self.FSMmaster.go_compute_expM(self, self.s_encr_dict)
@@ -677,6 +781,7 @@ class MLC_Master(Common_to_all_POMs):
             # self.exps_bl_encr_dict
             # blinding in self.gamma_dict
 
+            self.display('PROC_MASTER_START', verbose=False)
             # deblinding
             self.exp_s_encr_dict = {}
             for waddr in self.exps_bl_encr_dict.keys():
@@ -694,12 +799,14 @@ class MLC_Master(Common_to_all_POMs):
                     err += np.linalg.norm(exp_s - exp_s_decr)
 
                 print('Error in exp(-s) = %f' % err)  # OK
+            self.display('PROC_MASTER_END', verbose=False)
 
             # Añadiendo blinding y enviado a Crypto para calcular la division
             self.FSMmaster.go_compute_divM(self, self.exp_s_encr_dict)
             self.run_Master()
             # self.sigm_encr_bl_dict
 
+            self.display('PROC_MASTER_START', verbose=False)
             # deblinding
             self.o_encr_dict = {}
             for waddr in self.workers_addresses:
@@ -726,7 +833,7 @@ class MLC_Master(Common_to_all_POMs):
                 e_encr_dict = {}
                 for cla in self.classes:
                     y = self.y_encr_dict[waddr][cla].reshape(-1, 1)
-                    e_encr = y - self.o_encr_dict[waddr][cla]
+                    e_encr = self.o_encr_dict[waddr][cla].reshape(-1, 1) - y 
                     e_encr_dict.update({cla: e_encr})
                 self.e_encr_dict.update({waddr: e_encr_dict})
 
@@ -738,11 +845,12 @@ class MLC_Master(Common_to_all_POMs):
                     exp_s = np.exp(-s)
                     o_orig = 1 / (1 + np.exp(-s))
                     y_orig = self.decrypter.decrypt(self.y_encr_dict[which][cla].reshape(-1, 1))
-                    e_orig = y_orig - o_orig
+                    e_orig = o_orig - y_orig
                     e_decr = self.decrypter.decrypt(self.e_encr_dict[which][cla])
                     err += np.linalg.norm(e_orig - e_decr)
 
                 print('Error in e = %f' % err)  # OK
+            self.display('PROC_MASTER_END', verbose=False)
 
             # Computing eX
             self.eX_encr_dict = self.crypto_mult_XM(self.e_encr_dict)
@@ -761,12 +869,16 @@ class MLC_Master(Common_to_all_POMs):
                     err += np.linalg.norm(eX_orig - eX_decr)
                 print('Error in eX = %f' % err)  # OK
 
+            self.display('PROC_MASTER_START', verbose=False)
+
             grad_encr_dict = {}  # one per class
             for cla in self.classes:
                 grad_encr = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
                 for waddr in self.workers_addresses:
                     eX_encr = self.eX_encr_dict[waddr][cla]
-                    grad_encr += np.sum(eX_encr, axis=0).reshape((-1, 1)) / NPtotal
+                    #grad_encr += np.sum(eX_encr, axis=0).reshape((-1, 1)) / NPtotal
+                    grad_encr += np.mean(eX_encr, axis=0).reshape((-1, 1))
+                
                 grad_encr_dict.update({cla: grad_encr})  # one per class
           
             
@@ -786,13 +898,23 @@ class MLC_Master(Common_to_all_POMs):
                 print('Error in grad = %f' % err)  # OK
             
             for cla in self.classes:
-                self.w_encr_dict[cla] = self.w_encr_dict[cla] + self.mu * grad_encr_dict[cla]
+                #self.w_encr_dict[cla] = self.w_encr_dict[cla] + self.mu * grad_encr_dict[cla]
+                grad_acum = self.mu * grad_encr_dict[cla] / len(self.workers_addresses)                  
+
+                # Momentum
+                v_1 = np.copy(self.grad_old_dict[cla]) # old gradient
+                momentum = self.momentum * v_1
+                v = momentum + grad_acum
+                self.w_encr_dict[cla] = self.w_encr_dict[cla] - v
+                self.grad_old_dict[cla] = grad_acum
 
             # Decrypting the model
             self.model_decr_dict = self.decrypt_modelM({'wM': self.w_encr_dict})
 
-            self.w_old = dict(self.model.w_dict)
+            #self.w_old = dict(self.model.w_dict)
             self.model.w_dict = dict(self.model_decr_dict['wM'])
+
+            #print(self.model.w_dict)
 
             for cla in self.classes:
                 self.w_encr_dict[cla] = self.encrypter.encrypt(self.model.w_dict[cla])           
@@ -800,7 +922,9 @@ class MLC_Master(Common_to_all_POMs):
             # stopping
             inc_w = 0
             for cla in self.classes:
-                inc_w += np.linalg.norm(self.model.w_dict[cla] - self.w_old[cla]) / np.linalg.norm(self.w_old[cla])
+                inc_w += np.linalg.norm(self.model.w_dict[cla] - self.w_old_dict[cla]) / np.linalg.norm(self.w_old_dict[cla])
+                self.w_old_dict[cla] = np.copy(self.model.w_dict[cla])           
+
             # Stop if convergence is reached
             if inc_w < self.conv_stop:
                 self.stop_training = True
@@ -810,29 +934,14 @@ class MLC_Master(Common_to_all_POMs):
             message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
             self.display(message, True)
             kiter += 1
+            self.display('PROC_MASTER_END', verbose=False)
+            self.display('MASTER_ITER_END', verbose=False)
 
         self.model.niter = kiter
         self.model.is_trained = True
         self.display(self.name + ': Training is done')
+        self.display('MASTER_FINISH', verbose=False)
 
-
-    def predict_Master(self, X_b):
-        """
-        Predicts outputs given the model and inputs
-
-        Parameters
-        ----------
-        X_b: ndarray
-            Matrix with the input values
-
-        Returns
-        -------
-        prediction_values: ndarray
-
-        """
-        #prediction_values = self.sigm(np.dot(X_b, self.w.ravel()))
-        prediction_values = self.model.predict(X_b)
-        return prediction_values
 
     def Update_State_Master(self):
         """
@@ -858,9 +967,6 @@ class MLC_Master(Common_to_all_POMs):
                 id of the sender
         """
         try:
-            #sender = packet['sender']
-            if packet['action'][0:3] == 'ACK':
-                self.state_dict[sender] = packet['action']
 
             if packet['action'] == 'ACK_grads':
                 self.grads_dict.update({sender: packet['data']['grad_encr']})
@@ -892,6 +998,24 @@ class MLC_Master(Common_to_all_POMs):
             if packet['action'] == 'ACK_divM_bl':
                 self.sigm_encr_bl_dict = packet['data']['sigm_encr_bl_dict']
                 self.FSMmaster.done_compute_divM(self)
+
+            #sender = packet['sender']
+            if packet['action'][0:3] == 'ACK':
+                self.state_dict[sender] = packet['action']
+                if sender == self.cryptonode_address:     
+                    if packet['action'] not in ['ACK_send_ping']:
+                        try:
+                            self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], 'ca', str(packet['message_id'])), verbose=False)
+                        except:
+                            self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], 'ca'), verbose=False)                    
+                            pass
+                else:
+                    if packet['action'] not in ['ACK_send_ping']:       
+                            try:
+                                self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+                            except:
+                                self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                                pass
 
         except Exception as err:
             raise
@@ -959,6 +1083,10 @@ class MLC_Worker(Common_to_all_POMs):
         self.NPtr = len(ytr)
         self.create_FSM_worker()
         self.message_id = 0    # used to number the messages
+        self.message_counter = 100 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
 
     def create_FSM_worker(self):
@@ -984,6 +1112,7 @@ class MLC_Worker(Common_to_all_POMs):
             def while_compute_gradients(self, MLmodel, packet):
                 try:
                     MLmodel.display(MLmodel.name + ' %s: computing gradients...' % (str(MLmodel.worker_address)))
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     w_encr = packet['data']['w_encr']
                    
                     #NW = wq_encr.shape[0]
@@ -1002,10 +1131,18 @@ class MLC_Worker(Common_to_all_POMs):
                     #Xeq_encr = MLmodel.cr.vmult(X / NP, eq_encr)  # Normalized error by NP
                     Xe_encr = X * e_encr
                     grad_encr = np.sum(Xe_encr, axis=0).reshape((NI, 1)) / NP
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ACK_grads'
                     data = {'grad_encr': grad_encr}
                     packet = {'action': action, 'sender': MLmodel.worker_address, 'data': data, 'to': 'MLmodel'}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_grads' % (str(MLmodel.worker_address)))
                 except:
@@ -1049,6 +1186,11 @@ class MLC_Worker(Common_to_all_POMs):
 
         """
         self.terminate = False
+        try:
+            self.display('COMMS_WORKER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+        except:
+            self.display('WORKER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+            pass
         try:
             # Exit the process
             if packet['action'] == 'STOP':
@@ -1120,6 +1262,10 @@ class MLC_Crypto(Common_to_all_POMs):
         self.verbose = verbose                  # print on screen when true
         self.create_FSM_crypto()
         self.message_id = 0    # used to number the messages
+        self.message_counter = 100 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_crypto(self):
         """
@@ -1172,6 +1318,11 @@ class MLC_Crypto(Common_to_all_POMs):
 
         """
         self.terminate = False
+        try:
+            self.display('COMMS_CRYPTO_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+        except:
+            self.display('CRYPTO MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+            pass
         try:
             # Exit the process
             if packet['action'] == 'STOP':

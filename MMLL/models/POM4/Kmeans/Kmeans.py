@@ -11,8 +11,10 @@ import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
 from transitions import State
 from transitions.extensions import GraphMachine
-#from pympler import asizeof #asizeof.asizeof(my_object)
 import pickle
+from pympler import asizeof #asizeof.asizeof(my_object)
+import dill
+import time
 
 class Model():
     """
@@ -22,6 +24,9 @@ class Model():
         self.C = None
         self.is_trained = False
         self.supported_formats = ['pkl', 'onnx', 'pmml']
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def predict(self, X):
         """
@@ -200,7 +205,7 @@ class Kmeans_Master(Common_to_all_POMs):
         except:
             pass
         self.process_kwargs(kwargs)
-        self.message_counter = 0    # used to number the messages
+        self.message_counter = 100    # used to number the messages
         self.XTX_dict = {}
         self.XTy_dict = {}
         #self.encrypter = self.cr.get_encrypter()  # to be shared        # self.encrypter.encrypt(np.random.normal(0, 1, (2,3)))
@@ -210,7 +215,9 @@ class Kmeans_Master(Common_to_all_POMs):
         self.model = Model()
         self.added_bias = False
         self.train_data_is_ready = False
-
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_master(self):
         """
@@ -267,6 +274,8 @@ class Kmeans_Master(Common_to_all_POMs):
 
             def while_compute_argmin(self, MLmodel, c2_2XTC_dict):
                 try:
+
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     # Adding blinding, different at every row, same for columns
                     MLmodel.bl_dict = {}
                     MLmodel.c2_2XTC_bl_dict = {}
@@ -275,13 +284,20 @@ class Kmeans_Master(Common_to_all_POMs):
                         MLmodel.bl_dict.update({waddr: np.random.normal(0, 5, (NP, 1))})
                         MLmodel.c2_2XTC_bl_dict.update({waddr: c2_2XTC_dict[waddr] + MLmodel.bl_dict[waddr]})
 
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
+
                     action = 'ask_argmin_bl'
-                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'c2_2XTC_bl_dict': MLmodel.c2_2XTC_bl_dict}
                     packet = {'action': action, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.master_address}
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
+
+                    #destination = MLmodel.cryptonode_address
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.master_address), action))
@@ -298,6 +314,7 @@ class Kmeans_Master(Common_to_all_POMs):
 
             def while_decrypt_model(self, MLmodel, model_encr):
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     # Adding blinding to model
                     MLmodel.bl = {}
                     model_encr_bl = {}
@@ -310,9 +327,21 @@ class Kmeans_Master(Common_to_all_POMs):
                         #print(bl)
                         MLmodel.bl.update({key: bl})
                         model_encr_bl.update({key: x + bl})
+                    
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
 
                     data = {'model_bl': model_encr_bl}
-                    packet = {'action': 'send_model_encr_bl', 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    action = 'send_model_encr_bl'
+                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    #destination = MLmodel.cryptonode_address
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
                     MLmodel.display(MLmodel.name + ' send_model_encr_bl to cryptonode')
                 except:
@@ -371,6 +400,8 @@ class Kmeans_Master(Common_to_all_POMs):
         None
         """
         self.display(self.name + ': Starting training')
+        self.display('MASTER_INIT', verbose=False)
+
         self.NI = self.input_data_description['NI']
         self.C = np.random.normal(0, 0.5, (self.NC, self.NI))
         self.C_old = np.random.normal(0, 10, (self.NC, self.NI))
@@ -387,6 +418,9 @@ class Kmeans_Master(Common_to_all_POMs):
         kiter = 0
         self.stop_training = False
         while not self.stop_training:
+            self.display('MASTER_ITER_START', verbose=False)
+            self.display('PROC_MASTER_START', verbose=False)
+
             self.C2 = np.sum(self.C * self.C, axis=1).reshape((self.NC, 1))
 
             self.c2_2XTC_dict = {}
@@ -399,10 +433,14 @@ class Kmeans_Master(Common_to_all_POMs):
                 c2_2XTC = self.C2.T - 2 * XTC
                 self.c2_2XTC_dict.update({waddr: c2_2XTC})
 
+            self.display('PROC_MASTER_END', verbose=False)
+
             # Añadiendo blinding y enviado a Crypto para calcular el minimo
             self.FSMmaster.go_compute_argmin(self, self.c2_2XTC_dict)
             self.run_Master()
             # self.argmin_dict
+
+            self.display('PROC_MASTER_START', verbose=False)
 
             newC_encr = self.encrypter.encrypt(np.zeros((self.NC, self.NI)))
             TotalP = np.zeros((self.NC, 1))
@@ -421,9 +459,12 @@ class Kmeans_Master(Common_to_all_POMs):
                         TotalP[kc] += Nselected
                     except:
                         pass
+            self.display('PROC_MASTER_END', verbose=False)
             
             # Decrypting the model
             newC = self.decrypt_model({'C': newC_encr})['C']
+
+            self.display('PROC_MASTER_START', verbose=False)
 
             for kc in range(0, self.NC):
                 if TotalP[kc] > 0:
@@ -441,10 +482,10 @@ class Kmeans_Master(Common_to_all_POMs):
             Overpop = list(np.where(TotalP > Nmean * 1.5)[0])
             Maxpop = np.argmax(TotalP)
             Overpop = list(set(Overpop + [Maxpop]))
-            Underpop = list(np.where(TotalP < Nmean / 2)[0])
+            Underpop = list(np.where(TotalP < 0.3 * Nmean)[0])
             for which_under in Underpop:
                 which_over = Overpop[np.random.randint(0, len(Overpop))]
-                newc = self.C[which_over, :] + np.random.normal(0, 0.05, (1, self.NI))
+                newc = self.C[which_over, :] + np.random.normal(0, 0.01, (1, self.NI))
                 self.C[which_under, :] = newc.copy()
             self.display(str(Overpop) + ' ' + str(Underpop))
             self.display(str(len(Overpop)) + ' ' + str(len(Underpop)))
@@ -463,11 +504,14 @@ class Kmeans_Master(Common_to_all_POMs):
             print(message)
             #self.display(message, True)
             kiter += 1
+            self.display('PROC_MASTER_END', verbose=False)
+            self.display('MASTER_ITER_END', verbose=False)
 
         self.model.c = self.C
         self.model.niter = kiter
         self.model.is_trained = True
         self.display(self.name + ': Training is done')
+        self.display('MASTER_FINISH', verbose=False)
 
 
     def Update_State_Master(self):
@@ -497,6 +541,20 @@ class Kmeans_Master(Common_to_all_POMs):
             #sender = self.receive_from[sender]
             if packet['action'][0:3] == 'ACK':
                 self.state_dict[sender] = packet['action']
+                if sender == self.cryptonode_address:     
+                    if packet['action'] not in ['ACK_send_ping']:
+                        try:
+                            self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], 'ca', str(packet['message_id'])), verbose=False)
+                        except:
+                            self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], 'ca'), verbose=False)                    
+                            pass
+                else:
+                    if packet['action'] not in ['ACK_send_ping']:       
+                            try:
+                                self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+                            except:
+                                self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                                pass
 
             if packet['action'] == 'ACK_grads':
                 self.grads_dict.update({sender: packet['data']['grad_encr']})
@@ -585,6 +643,10 @@ class Kmeans_Worker(Common_to_all_POMs):
         #self.ytr = ytr
         self.create_FSM_worker()
         self.message_id = 0    # used to number the messages
+        self.message_counter = 100 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_worker(self):
         """
@@ -609,6 +671,7 @@ class Kmeans_Worker(Common_to_all_POMs):
             def while_compute_gradients(self, MLmodel, packet):
                 try:
                     MLmodel.display(MLmodel.name + ' %s: computing gradients...' % (str(MLmodel.worker_address)))
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     w_encr = packet['data']['w_encr']
                    
                     #NW = wq_encr.shape[0]
@@ -627,10 +690,18 @@ class Kmeans_Worker(Common_to_all_POMs):
                     #Xeq_encr = MLmodel.cr.vmult(X / NP, eq_encr)  # Normalized error by NP
                     Xe_encr = X * e_encr
                     grad_encr = np.sum(Xe_encr, axis=0).reshape((NI, 1)) / NP
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ACK_grads'
                     data = {'grad_encr': grad_encr}
                     packet = {'action': action, 'sender': MLmodel.worker_address, 'data': data, 'to': 'MLmodel', 'sender': MLmodel.worker_address}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_grads' % (str(MLmodel.worker_address)))
                 except:
@@ -675,6 +746,13 @@ class Kmeans_Worker(Common_to_all_POMs):
 
         """
         self.terminate = False
+        if packet['action'] not in ['STOP']: 
+            try:
+                self.display('COMMS_WORKER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+            except:
+                self.display('WORKER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                pass
+
         try:
             # Exit the process
             if packet['action'] == 'STOP':
@@ -746,6 +824,10 @@ class Kmeans_Crypto(Common_to_all_POMs):
         self.verbose = verbose                  # print on screen when true
         self.create_FSM_crypto()
         self.message_id = 0    # used to number the messages
+        self.message_counter = 100 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_crypto(self):
         """
@@ -799,6 +881,13 @@ class Kmeans_Crypto(Common_to_all_POMs):
 
         """
         self.terminate = False
+        if packet['action'] not in ['STOP']:
+            try:
+                self.display('COMMS_CRYPTO_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+            except:
+                self.display('CRYPTO MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                pass
+
         try:
             # Exit the process
             if packet['action'] == 'STOP':

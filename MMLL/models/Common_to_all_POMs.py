@@ -8,11 +8,14 @@ __date__ = "Mar 2020"
 
 #import requests
 import json
-import pickle
 #import base64
 import numpy as np
 #import dill
 from MMLL.Common_to_all_objects import Common_to_all_objects
+import pickle
+from pympler import asizeof #asizeof.asizeof(my_object)
+import dill
+import time
 
 class Common_to_all_POMs(Common_to_all_objects):
     """
@@ -29,6 +32,7 @@ class Common_to_all_POMs(Common_to_all_objects):
         None
 
         """
+        self.message_counter = 1    # used to number the messages
         return
 
     def dill_it(self, x):
@@ -406,9 +410,14 @@ class Common_to_all_POMs(Common_to_all_objects):
             addresses of the workers to be terminated
 
         """
-        message_id = self.master_address + str(self.message_counter)
-        self.message_counter += 1            
-        packet = {'action': 'STOP', 'to': 'CommonML', 'sender': self.master_address, 'message_id': message_id}
+        action = 'STOP'
+        packet = {'action': action, 'to': 'CommonML', 'sender': self.master_address}
+
+        message_id = self.master_address+'_'+str(self.message_counter)
+        packet.update({'message_id': message_id})
+        self.message_counter += 1
+        size_bytes = asizeof.asizeof(dill.dumps(packet))
+        #self.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
 
         if workers_addresses_terminate is None:  # We terminate all of them
             workers_addresses_terminate = self.workers_addresses

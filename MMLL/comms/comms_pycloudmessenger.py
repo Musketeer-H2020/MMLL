@@ -7,6 +7,9 @@ __author__ = "Angel Navia Vázquez, Marcos Fernández Díaz"
 
 import random, string
 import time
+from pympler import asizeof #asizeof.asizeof(my_object)
+import dill
+
 '''
 try:
     import pycloudmessenger.ffl.abstractions as ffl
@@ -49,7 +52,7 @@ class Comms_master:
     This class provides an interface with the communication object, run at Master node.
     """
 
-    def __init__(self, commsffl):
+    def __init__(self, commsffl, logger=None):
         """
         Create a :class:`Comms_master` instance.
 
@@ -66,7 +69,7 @@ class Comms_master:
         self.commsffl = commsffl
         workers = self.commsffl.get_participants()
         self.workers_ids = list(workers.keys())
-
+        self.logger = logger
 
     def send(self, message, destiny):
         """
@@ -80,15 +83,31 @@ class Comms_master:
             Address of the recipient for the message.
         """
         try:
+            #print('Before %f'%time.time())
             with self.commsffl:
                 # self.send_to maps between worker_id and pseudo_id 
-                self.commsffl.send(message, destiny, topology='STAR') 
+                self.commsffl.send(message, destiny, topology='STAR')
+
+            try:
+                self.logger.info('**Pycloudmessenger** SENT message')
+            except:
+                pass
+
+            #print('After %f'%time.time())
+            #size_bytes = asizeof.asizeof(dill.dumps(message))
+            #print('BYTESsent=%f'%size_bytes)
+            #print('FREE')
+
         except Exception as err:
             print('\n')
             print('*' * 80)
-            print('Pycloudmessenger ERROR at send: %s' % err)
+            print('Pycloudmessenger ERROR at MASTER send: %s' % err)
             print('*' * 80)
             print('\n')
+            try:
+                self.logger.info('**Pycloudmessenger** ERROR at MASTER send: %s' % err)
+            except:
+                pass
             raise
 
 
@@ -106,18 +125,40 @@ class Comms_master:
         # receivers_list are not used here, pycloudmessenger already knows all the recipients
         try:
             if receivers_list is None:
+                #print('Before %f'%time.time())
                 with self.commsffl:
                     self.commsffl.send(message, topology='STAR')
+                #print('After %f'%time.time())
+                try:
+                    self.logger.info('**Pycloudmessenger** BROADCASTED message')
+                except:
+                    pass
+
             else:
+                print('=============  WARNING: serial broadcast  =======')
+                #print('Before %f'%time.time())
                 for destiny in receivers_list:
                     with self.commsffl:
                         self.commsffl.send(message, destiny, topology='STAR')
+                #print('After %f'%time.time())
+                try:
+                    self.logger.info('**Pycloudmessenger** SERIAL BROADCASTED message')
+                except:
+                    pass
+
+            #size_bytes = asizeof.asizeof(dill.dumps(message))
+            #print('BYTESsent=%f'%size_bytes)
+
         except Exception as err:
             print('\n')
             print('*' * 80)
             print('Pycloudmessenger ERROR at broadcast: %s' % err)
             print('*' * 80)
             print('\n')
+            try:
+                self.logger.info('**Pycloudmessenger** ERROR at MASTER broadcast: %s' % err)
+            except:
+                pass
             raise
 
 
@@ -136,12 +177,22 @@ class Comms_master:
         try:
             with self.commsffl:
                 self.commsffl.send(message, topology='RING')
+
+            try:
+                self.logger.info('**Pycloudmessenger** ROUNDROBIN message')
+            except:
+                pass
+
         except Exception as err:
             print('\n')
             print('*' * 80)
             print('Pycloudmessenger ERROR at roundrobin: %s' % err)
             print('*' * 80)
             print('\n')
+            try:
+                self.logger.info('**Pycloudmessenger** ERROR at MASTER roundrobin: %s' % err)
+            except:
+                pass
             raise
 
 
@@ -159,6 +210,7 @@ class Comms_master:
         message: dict
             Received packet.
         """
+
         try:
             message = None
             packet = None
@@ -181,6 +233,16 @@ class Comms_master:
                     print('------------ message update')
                     '''
                     message.update({'sender': pseudo_id})
+
+                    try:
+                        self.logger.info('**Pycloudmessenger** RECEIVED message')
+                    except:
+                        pass
+
+                    #size_bytes = asizeof.asizeof(dill.dumps(message))
+                    #print('BYTESreceived=%f'%size_bytes)
+
+
         except Exception as err:
             if 'pycloudmessenger.ffl.fflapi.TimedOutException' not in str(type(err)): # we skip the normal timeouts
                 print('\n')
@@ -188,9 +250,14 @@ class Comms_master:
                 print('Pycloudmessenger ERROR at receive: %s' % err)
                 print('*' * 80)
                 print('\n')
-                print('STOP AT comms_pycloudmessenger')
-                import code
-                code.interact(local=locals())
+                #print('STOP AT comms_pycloudmessenger')
+                #import code
+                #code.interact(local=locals())
+                try:
+                    self.logger.info('**Pycloudmessenger** ERROR at MASTER receive: %s' % err)
+                except:
+                    pass
+
             else:
                 message = None
             raise
@@ -222,7 +289,7 @@ class Comms_worker:
     This class provides an interface with the communication object, run at Worker node.
     """
 
-    def __init__(self, commsffl, worker_real_name='Anonymous'):
+    def __init__(self, commsffl, worker_real_name='Anonymous', logger=None):
         """
         Create a :class:`Comms_worker` instance.
 
@@ -238,6 +305,7 @@ class Comms_worker:
         #self.commsffl = ffl.Factory.participant(context_w, task_name=self.task_name)
         self.name = 'pycloudmessenger'
         self.commsffl = commsffl
+        self.logger = logger
 
 
     def send(self, message, address=None):
@@ -255,12 +323,25 @@ class Comms_worker:
             # address is not used here, a worker can only send to the master        
             with self.commsffl:
                 self.commsffl.send(message)
+
+            try:
+                self.logger.info('**Pycloudmessenger** SENT message')
+            except:
+                pass
+
+            #size_bytes = asizeof.asizeof(dill.dumps(message))
+            #print('BYTESsent=%f'%size_bytes)
+
         except Exception as err:
             print('\n')
             print('*' * 80)
             print('Pycloudmessenger ERROR at send: %s' % err)
             print('*' * 80)
             print('\n')
+            try:
+                self.logger.info('**Pycloudmessenger** ERROR at WORKER send: %s' % err)
+            except:
+                pass
             raise
 
 
@@ -278,6 +359,7 @@ class Comms_worker:
         message: dict
             Received packet.
         """
+
         message = None
         try:
             with self.commsffl:
@@ -291,6 +373,15 @@ class Comms_worker:
                 '''
                 if packet.content is not None:
                     message = packet.content
+
+                    try:
+                        self.logger.info('**Pycloudmessenger** RECEIVED message')
+                    except:
+                        pass
+
+                    #size_bytes = asizeof.asizeof(dill.dumps(message))
+                    #print('BYTESreceived=%f'%size_bytes)
+
         except Exception as err:
             #print(err)
             if 'pycloudmessenger.ffl.fflapi.TimedOutException' not in str(type(err)): # we skip the normal timeouts
@@ -300,9 +391,13 @@ class Comms_worker:
                 print('Pycloudmessenger ERROR at receive: %s' % err)
                 print('*' * 80)
                 print('\n')
-                print('STOP AT comms_pycloudmessenger')
-                import code
-                code.interact(local=locals())
+                #print('STOP AT comms_pycloudmessenger')
+                #import code
+                #code.interact(local=locals())
+                try:
+                    self.logger.info('**Pycloudmessenger** ERROR at WORKER receive: %s' % err)
+                except:
+                    pass
             else:
                 message = None
         return message

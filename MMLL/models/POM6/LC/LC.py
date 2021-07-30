@@ -11,7 +11,10 @@ import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
 from transitions import State
 from transitions.extensions import GraphMachine
+from pympler import asizeof #asizeof.asizeof(my_object)
 import pickle
+import dill
+import time
 
 class Model():
     """
@@ -21,6 +24,9 @@ class Model():
         self.w = None
         self.is_trained = False
         self.supported_formats = ['pkl', 'onnx', 'pmml']
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def sigm(self, x):
         """
@@ -213,7 +219,7 @@ class LC_Master(Common_to_all_POMs):
 
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
-        self.message_counter = 0    # used to number the messages
+        self.message_counter = 100    # used to number the messages
         self.cryptonode_address = None
         self.newNI_dict = {}
         self.train_data_is_ready = False
@@ -222,6 +228,9 @@ class LC_Master(Common_to_all_POMs):
         self.grads_dict = {}
         self.Ztr_dict = {}
         self.NPtr_dict = {}
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_master(self):
         """
@@ -272,6 +281,11 @@ class LC_Master(Common_to_all_POMs):
                     action = 'update_tr_data'
                     data = {}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
 
@@ -288,6 +302,7 @@ class LC_Master(Common_to_all_POMs):
 
             def while_computing_XTw(self, MLmodel):
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     action = 'computing_XTw'
                     MLmodel.x = MLmodel.model.w.T
                     NItrain = MLmodel.x.shape[1]
@@ -306,10 +321,16 @@ class LC_Master(Common_to_all_POMs):
                     action = 'sending_xaxbP'
                     data = {'xa_': xa_, 'xb_': xb_, 'P': P}
                     del xa_, xb_, P
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
 
                     #message_id = MLmodel.master_address + '_' + str(MLmodel.message_counter)
                     #packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address, 'message_id': message_id}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
                     del data
                     #MLmodel.message_counter += 1
                    
@@ -338,6 +359,7 @@ class LC_Master(Common_to_all_POMs):
                     MLmodel.o_dict = {}
 
                     for addr in MLmodel.workers_addresses:
+                        MLmodel.display('PROC_MASTER_START', verbose=False)
                         #MLmodel.display('PROC_MASTER_START', verbose=False)
                         U = MLmodel.s_dict[addr]['ya_'] * (MLmodel.xa + 2 * MLmodel.A) + MLmodel.s_dict[addr]['yb_'] * (MLmodel.xb + 2 * MLmodel.C) + MLmodel.s_dict[addr]['Q'] * (MLmodel.A + 2 * MLmodel.C)
                         u = np.sum(U, axis=1)  
@@ -354,10 +376,17 @@ class LC_Master(Common_to_all_POMs):
                         action = 'sending_oZtr'
                         data = {'oZtr': oZtr}
                         del o
+                        MLmodel.display('PROC_MASTER_END', verbose=False)
                          
                         #message_id = MLmodel.master_address + '_' + str(MLmodel.message_counter)
                         #packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address, 'message_id': message_id}
                         packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                        message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                        packet.update({'message_id': message_id})
+                        MLmodel.message_counter += 1
+                        size_bytes = asizeof.asizeof(dill.dumps(packet))
+                        MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, addr, message_id, str(size_bytes)), verbose=False)
+
                         del data
                         #size_bytes = asizeof.asizeof(dill.dumps(packet))
                         #MLmodel.display('PROC_MASTER_END', verbose=False)
@@ -382,6 +411,7 @@ class LC_Master(Common_to_all_POMs):
             def while_updating_w(self, MLmodel):
 
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     #self.grads_dict.update({sender: {'ya_': packet['data']['ya_'], 'yb_': packet['data']['Q'], 'Q': packet['data']['Q'], 'v': packet['data']['v']}})
                     #MLmodel.display('PROC_MASTER_START', verbose=False)
                     grad_acum = np.zeros((MLmodel.NItrain, 1))
@@ -425,6 +455,9 @@ class LC_Master(Common_to_all_POMs):
                         MLmodel.ceval = CE_val[min_pos]
                         del CE_val
                         print('Optimal mu = %f, CE val=%f' % (mu_opt, MLmodel.ceval))
+
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
+
                 except:
                     raise
                     '''
@@ -482,6 +515,7 @@ class LC_Master(Common_to_all_POMs):
         None
         """
         self.display(self.name + ': Starting training')    
+        self.display('MASTER_INIT', verbose=False)
         self.stop_training = False
         self.kiter = 0
 
@@ -541,6 +575,8 @@ class LC_Master(Common_to_all_POMs):
         
         while not self.stop_training:
 
+            self.display('MASTER_ITER_START', verbose=False)
+
             # We XTw
             self.FSMmaster.go_computing_XTw(self)
             self.run_Master()
@@ -580,6 +616,7 @@ class LC_Master(Common_to_all_POMs):
                 message = 'Maxiter = %d, iter = %d, inc_CE_val = %f' % (self.Nmaxiter, self.kiter, inc_ceval)
                 #self.display(message, verbose=True)
                 print(message)
+            self.display('MASTER_ITER_END', verbose=False)
 
 
         self.display(self.name + ': Training is done')
@@ -588,7 +625,7 @@ class LC_Master(Common_to_all_POMs):
 
         # reduciendo a dimensión original
         self.model.w = self.model.w[0:self.w_orig_size, :]
-
+        self.display('MASTER_FINISH', verbose=False)
 
     def Update_State_Master(self):
         """
@@ -629,7 +666,11 @@ class LC_Master(Common_to_all_POMs):
         if packet['action'][0:3] == 'ACK':
             self.display(self.name + ' received ACK from %s: %s' % (str(sender), packet['action']))
             self.state_dict[sender] = packet['action']
-            self.display('COMMS_MASTER_RECEIVED %s' % packet['action'], verbose=False)
+            try:
+                self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+            except:
+                self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                pass
 
         if packet['action'] == 'ACK_sending_XTDaX':
             self.XTDaX_dict.update({sender: {'XTDaX': packet['data']['XTDaX'], 'XTDast': packet['data']['XTDast']}})
@@ -716,6 +757,10 @@ class LC_Worker(Common_to_all_POMs):
         #self.Cmat = np.random.normal(0, 1, (self.NI, self.NI))
         #self.Dmat = np.linalg.inv(self.Cmat)
         #self.Ztr = np.dot(self.Xtr_b, self.Cmat)
+        self.message_counter = 100
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_worker(self):
         """
@@ -750,6 +795,13 @@ class LC_Worker(Common_to_all_POMs):
                     action = 'ACK_update_tr_data'
                     data = {'newNI': MLmodel.newNI}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
                 except Exception as err:
@@ -765,6 +817,7 @@ class LC_Worker(Common_to_all_POMs):
 
             def while_computing_s(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     #MLmodel.display('PROC_WORKER_START', verbose=False)
                     xa_ = packet['data']['xa_']
                     xb_ = packet['data']['xb_']
@@ -803,6 +856,8 @@ class LC_Worker(Common_to_all_POMs):
                     v = np.sum(V, axis=1)
                     del xa_, xb_, P, V
 
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
+
                     # send to Master ya_, yb_, Q, v
                     action = 'ACK_sending_s'
                     #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
@@ -819,13 +874,12 @@ class LC_Worker(Common_to_all_POMs):
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
                     del data
 
-                    #from pympler import asizeof #asizeof.asizeof(my_object)
-                    #import dill
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
 
-                    #MLmodel.display('PROC_WORKER_END', verbose=False)
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     del packet#, size_bytes
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_s' % (str(MLmodel.worker_address)))
@@ -840,12 +894,13 @@ class LC_Worker(Common_to_all_POMs):
 
             def while_computing_grad(self, MLmodel, packet):
                 try:
-
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     #MLmodel.display('PROC_WORKER_START', verbose=False)
                     #oZtr = packet['data']['oZtr']                 
                     #oXtr = np.dot(oZtr, MLmodel.Dmat).T
                     #grad = oXtr - np.dot(MLmodel.Xtr_b.T, MLmodel.ytr.reshape((-1, 1)))
                     grad = np.dot(packet['data']['oZtr'], MLmodel.Dmat).T - np.dot(MLmodel.Xtr_b.T, MLmodel.ytr.reshape((-1, 1)))
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     # Worker sends grad to master
                     action = 'ACK_sending_grad'
@@ -857,13 +912,13 @@ class LC_Worker(Common_to_all_POMs):
                     #packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address, 'message_id': message_id}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
                     del data
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
 
-                    #size_bytes = asizeof.asizeof(dill.dumps(packet))
-                    #MLmodel.display('PROC_WORKER_END', verbose=False)
-                    #MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
-                    #MLmodel.message_counter += 1
                     MLmodel.comms.send(packet, MLmodel.master_address)
-                    #del packet, size_bytes, message_id
                     del packet
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_grad' % (str(MLmodel.worker_address)))                   
                 except:
@@ -927,6 +982,11 @@ class LC_Worker(Common_to_all_POMs):
 
         """
         self.terminate = False
+        try:
+            self.display('COMMS_WORKER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+        except:
+            self.display('WORKER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+            pass
 
         # Exit the process
         if packet['action'] == 'STOP':

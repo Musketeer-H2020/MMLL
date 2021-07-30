@@ -16,9 +16,10 @@ import time
 import math
 from collections import Counter 
 from tqdm import tqdm   # pip install tqdm
-from pympler import asizeof # pip install pympler
-#asizeof.asizeof(my_object)
-import dill # pip install dill
+import pickle
+from pympler import asizeof #asizeof.asizeof(my_object)
+import dill
+import time
 
 class POM4_CommonML_Master(Common_to_all_POMs):
     """
@@ -85,6 +86,9 @@ class POM4_CommonML_Master(Common_to_all_POMs):
         self.create_FSM_master()
         self.message_counter = 0    # used to number the messages
         self.worker_names = {} # dictionary with the mappings worker_id -> pseudo_id
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_master(self):
         """
@@ -240,7 +244,16 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                     action = 'ask_encrypter'
                     data = {}
                     packet = {'action': action, 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
-                    
+
+                    destination = MLmodel.cryptonode_address
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    #MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+                    destination = 'ca'
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+                                        
                     #MLmodel.comms.send(packet, MLmodel.cryptonode_address)
                     # We dont know the address of the cryptonode, we boradcast.
                     #MLmodel.comms.broadcast(packet, MLmodel.receivers_list)                   
@@ -263,7 +276,15 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                     data = {'encrypter': MLmodel.encrypter, 'use_bias': use_bias, 'classes': classes}
                     # For checking, REMOVE
                     #data.update({'decrypter': MLmodel.decrypter})
-                    packet = {'action': 'ask_encr_data', 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
+                    action = 'ask_encr_data'
+                    packet = {'action': action, 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ' sent encrypter to all Workers and asked encr_data')
                 except:
@@ -295,6 +316,9 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
             def while_sending_bl_data(self, MLmodel, classes):
                 try:                    
+
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
+
                     # Encrypted data at MLmodel.X_encr_dict, MLmodel.y_encr_dict
                     # To store at MLmodel
                     MLmodel.BX_dict = {}
@@ -311,7 +335,7 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                         MLmodel.X_bl_dict.update({waddr: X + BX})
                         
                         if classes is None: # binary case
-                            y = MLmodel.y_encr_dict[waddr]
+                            y = MLmodel.y_encr_dict[waddr].reshape((-1, 1))
                             By = np.random.normal(0, 1, (NP, 1))
                             MLmodel.By_dict.update({waddr: By})
                             MLmodel.y_bl_dict.update({waddr: y + By})
@@ -324,11 +348,20 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                                 y_bl_dict.update({cla: y[cla] + By_dict[cla]})
                             MLmodel.By_dict.update({waddr: By_dict})
                             MLmodel.y_bl_dict.update({waddr: y_bl_dict})
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
 
                     action = 'send_Xy_bl'
                     data = {'X_bl_dict': MLmodel.X_bl_dict, 'y_bl_dict': MLmodel.y_bl_dict}
                     packet = {'action': action, 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
                     MLmodel.display(MLmodel.name + ' sending Xy data blinded to cryptonode...')
+                    
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)                   
+
                     MLmodel.comms.send(packet,  MLmodel.send_to[MLmodel.cryptonode_address])
 
                 except:
@@ -453,7 +486,15 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 return
 
             def while_getting_Rxyb_rxyb_direct(self, MLmodel):   
-                packet = {'action': 'get_Rxyb_rxyb_direct', 'to': 'CommonML', 'sender': MLmodel.master_address}
+                action = 'get_Rxyb_rxyb_direct'
+                packet = {'action': action, 'to': 'CommonML', 'sender': MLmodel.master_address}
+                
+                message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                 MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                 MLmodel.display(MLmodel.name + ' sent get_Rxyb_rxyb_direct to all Workers')
                 return
@@ -529,6 +570,17 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 action = 'ping'
                 data = None
                 packet = {'action': action, 'data': data, 'to': 'CommonML', 'sender': MLmodel.master_address}
+                
+                '''
+                message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+                '''
+                message_id = 'empty'
+                packet.update({'message_id': message_id})
+                
                 MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                 MLmodel.display(MLmodel.name + ' sent ping to all Workers')
                 return
@@ -1034,6 +1086,23 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 if sender != self.cryptonode_address:  # The cryptonode is to be excluded from the broadcast
                     self.state_dict[sender] = packet['action']
 
+                if sender == self.cryptonode_address:     
+                    if packet['action'] not in ['ACK_send_ping']:
+
+                        try:
+                            self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], 'ca', str(packet['message_id'])), verbose=False)
+                        except:
+                            self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], 'ca'), verbose=False)                    
+                            pass
+                else:
+                    if packet['action'] not in ['ACK_send_ping']:       
+                            try:
+                                self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+                            except:
+                                self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                                pass
+
+
             if packet['action'] == 'ACK_sent_encrypter':
                 #print('#### WARNING delete decrypter, CommonML #####')
                 #self.decrypter = packet['data']['decrypter']
@@ -1065,6 +1134,8 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
             if packet['action'] == 'ACK_send_encr_data':                  
                 self.X_encr_dict.update({sender: packet['data']['Xtr_b_encr']})
+                #self.y_encr_dict.update({sender: packet['data']['ytr_encr'].reshape((-1, 1))})
+                # In the multiclass case, y_encr_dict is a dict, keys are the classes
                 self.y_encr_dict.update({sender: packet['data']['ytr_encr']})
 
             if packet['action'] == 'ACK_local_prep':
@@ -1243,6 +1314,10 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
             self.ytr = None
             self.ytr_orig = None            
         self.create_FSM_worker()
+        self.message_counter = 0 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
 
     def create_FSM_worker(self):
@@ -1309,6 +1384,8 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
             
             def while_sending_encr_data(self, MLmodel, packet):
                 try:
+
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     MLmodel.encrypter = packet['data']['encrypter']
                     use_bias = packet['data']['use_bias']
                     MLmodel.classes = packet['data']['classes']
@@ -1336,10 +1413,18 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                         NPtr = MLmodel.Xtr_b.shape[0]
                         MLmodel.ytr_encr = MLmodel.encrypter.encrypt(np.zeros((NPtr, 1)))
                         pass
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ACK_send_encr_data'
                     data = {'Xtr_b_encr': MLmodel.Xtr_b_encr, 'ytr_encr': MLmodel.ytr_encr}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_send_encr_data')
                 except:
@@ -1662,15 +1747,25 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                 return
 
             def while_computing_Rxyb_rxyb_direct(self, MLmodel, packet):
+                MLmodel.display('PROC_WORKER_START', verbose=False)
 
                 Xb = MLmodel.add_bias(MLmodel.Xtr_b)
                 y = MLmodel.ytr.astype(float)
                 
                 Rxyb = np.dot(Xb.T, Xb)
                 rxyb = np.dot(Xb.T, y)
+                MLmodel.display('PROC_WORKER_END', verbose=False)
 
                 data = {'Rxyb':Rxyb, 'rxyb': rxyb}
-                packet = {'action': 'ACK_send_Rxyb_rxyb_direct', 'sender': MLmodel.worker_address, 'data':data}
+                action = 'ACK_send_Rxyb_rxyb_direct'
+                packet = {'action': action, 'sender': MLmodel.worker_address, 'data':data}
+                
+                message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                 MLmodel.comms.send(packet, MLmodel.master_address)
                 MLmodel.display(MLmodel.name + ' %s: sent ACK_send_Rxyb_rxyb_direct' % (str(MLmodel.worker_address)))
                 return
@@ -2056,7 +2151,20 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
 
             def while_answering_ping(self, MLmodel):
                 data = {'name': 'worker', 'address': MLmodel.worker_address}
-                packet = {'action': 'ACK_send_ping', 'sender': MLmodel.worker_address, 'data':data}
+                action = 'ACK_send_ping'
+                packet = {'action': action, 'sender': MLmodel.worker_address, 'data':data}
+                
+                '''
+                message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+                '''
+
+                message_id = 'empty'
+                packet.update({'message_id': message_id})
+
                 MLmodel.comms.send(packet, MLmodel.master_address)
                 MLmodel.display(MLmodel.name + ' %s: sent ACK_send_ping' % (str(MLmodel.worker_address)))
                 return
@@ -2207,6 +2315,12 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                 id of the sender
         """
         self.terminate = False
+        if packet['action'] not in ['ping', 'STOP']:
+            try:
+                self.display('COMMS_WORKER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+            except:
+                self.display('WORKER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                pass
 
         # Exit the process
         if packet['action'] == 'STOP':
@@ -2216,6 +2330,7 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
             except:
                 pass            
             self.display(self.name + ' %s: terminated by Master' % (str(self.worker_address)))
+            self.display('EXIT_WORKER')
             self.terminate = True
 
         if packet['action'] == 'STOP_NOT_CLOSE_CONNECTION':
@@ -2373,6 +2488,10 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
         self.name = 'POM4_CommonML_Crypto'           # Name
         self.verbose = verbose                  # print on screen when true
         self.create_FSM_crypto()
+        self.message_counter = 0 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_crypto(self):
         """
@@ -2417,6 +2536,15 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                     '''
                     packet = {'action': action, 'data': data, 'to': 'CommonML'}
                     # Sending encrypter to Master
+                    
+                    #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     
                     # Sending params to Master
@@ -2433,6 +2561,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_storing_Xy_bl(self, MLmodel, packet):
                 try:
+
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
 
                     MLmodel.X_bl_dict = {}
                     MLmodel.y_bl_dict = {}
@@ -2452,11 +2582,19 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                                 y_bl_dict.update({cla: MLmodel.decrypter.decrypt(y[cla])})
                             MLmodel.y_bl_dict.update({waddr: y_bl_dict})   
                         MLmodel.display('Decrypting blinded data from %s OK' % waddr)
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
 
                     MLmodel.display(MLmodel.name + ': stored decrypted blinded data')
                     action = 'ACK_storing_Xy_bl'
                     data = {None}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_storing_Xy_bl')
 
@@ -2471,6 +2609,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_storing_Kxc_bl(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
+
                     # We store the kernel values as the input training data
                     del MLmodel.X2_bl_encr_dict
                     MLmodel.X_bl_dict = {}
@@ -2481,9 +2621,18 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                         MLmodel.X_bl_dict.update({waddr: MLmodel.decrypter.decrypt(packet['data']['Kxc_encr_bl_dict'][waddr])})
                         MLmodel.display('Decrypting and storing blinded kernel data from %s OK' % waddr)
 
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
+
                     action = 'ACK_storing_Kxc_bl'
                     data = {None}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_storing_Kxc_bl')
                 except:
@@ -2498,7 +2647,9 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_multiplying_XB(self, MLmodel, packet):
 
+
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
                     # Result in:
                     XB_bl_encr_dict = {}
                     MLmodel.display(MLmodel.name + ' is multiplying...')
@@ -2546,12 +2697,29 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                                 # B is of size 1xNI, e.g., weights
                                 XB_bl = B_bl * X_bl
 
-                            XB_bl_encr = MLmodel.encrypter.encrypt(XB_bl)
+                            try:
+                                print('AT Common ML while_multiplying_XB')
+                                print(MX, NX, MQ, NQ)
+                                XB_bl_encr = MLmodel.encrypter.encrypt(XB_bl)
+                            except: 
+                                print('ERROR AT Common ML while_multiplying_XB')
+                                import code
+                                code.interact(local=locals())
+                               
                             XB_bl_encr_dict.update({waddr: XB_bl_encr})
+
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
                         
                     action = 'ACK_sent_XB_bl_encr_dict'
                     data = {'XB_bl_encr_dict': XB_bl_encr_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_XB_bl_encr_dict')
 
@@ -2567,6 +2735,7 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
             def while_multiplying_AB(self, MLmodel, packet):
                 # A and B are two dictionaries
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
                     # Result in:
                     AB_bl_encr_dict = {}
                     MLmodel.display(MLmodel.name + ' is multiplying...')
@@ -2581,9 +2750,18 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                         AB_bl = A_bl * B_bl
                         AB_bl_encr_dict.update({waddr: MLmodel.encrypter.encrypt(AB_bl)})
 
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
+
                     action = 'ACK_sent_AB_bl_encr_dict'
                     data = {'AB_bl_encr_dict': AB_bl_encr_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_AB_bl_encr_dict')
 
@@ -2598,6 +2776,7 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_multiplying_XBM(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
                     # Result in:
                     MLmodel.XB_bl_encr_dict = {}
                     MLmodel.display(MLmodel.name + ' is multiplying...')
@@ -2622,10 +2801,19 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                             XB_bl_encr = MLmodel.encrypter.encrypt(XB_bl)
                             XB_bl_encr_dict.update({cla: XB_bl_encr})
                         MLmodel.XB_bl_encr_dict.update({waddr: XB_bl_encr_dict})
+
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
                         
                     action = 'ACK_sent_XBM_bl_encr_dict'
                     data = {'XB_bl_encr_dict': MLmodel.XB_bl_encr_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_XBM_bl_encr_dict')
 
@@ -2640,14 +2828,25 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_decrypting_model(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
+
                     model_encr_bl = packet['data']['model_bl']
                     model_decr_bl = {}
                     for key in list(model_encr_bl.keys()):
                         model_decr_bl.update({key: MLmodel.cr.decrypter.decrypt(model_encr_bl[key])})
 
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
+
                     action = 'ACK_sent_decr_bl_model'
                     data = {'model_decr_bl': model_decr_bl}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_decr_bl_model')
                 except:
@@ -2661,6 +2860,7 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_decrypting_modelM(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
                     model_encr_bl_dict = packet['data']['model_bl']
                     model_decr_bl_dict = {}
 
@@ -2671,10 +2871,18 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                             for cla in classes: 
                                 tmp_dict.update({cla: MLmodel.cr.decrypter.decrypt(model_encr_bl_dict[key][cla])})
                             model_decr_bl_dict.update({key: tmp_dict})
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
 
                     action = 'ACK_sent_decr_bl_modelM'
                     data = {'model_decr_bl_dict': model_decr_bl_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_decr_bl_modelM')
                 except:
@@ -2688,6 +2896,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_compute_exp(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
+
                     s_encr_bl_dict = packet['data']['s_encr_bl_dict']
                     exps_bl_dict = {}
                     for waddr in s_encr_bl_dict.keys():
@@ -2697,11 +2907,19 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                         exp_s_bl[which] = 0
                         exp_s_bl_encr = MLmodel.encrypter.encrypt(exp_s_bl)
                         exps_bl_dict.update({waddr: exp_s_bl_encr})
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
 
                     action = 'ACK_exp_bl'
                     #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'exps_bl_dict': exps_bl_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
@@ -2717,6 +2935,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_compute_expM(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
+
                     s_encr_bl_dict = packet['data']['s_encr_bl_dict']
                     exps_bl_dict = {}
 
@@ -2733,10 +2953,19 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                             cla_exps_bl_dict.update({cla: exp_s_bl_encr})
                         exps_bl_dict.update({waddr: cla_exps_bl_dict})
 
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
+
                     action = 'ACK_expM_bl'
                     #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'exps_bl_dict': exps_bl_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
@@ -2752,15 +2981,26 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_compute_sort(self, MLmodel, packet):
                 try: 
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
+
                     x_encr_bl = packet['data']['x_encr_bl']
                     x_bl = MLmodel.decrypter.decrypt(x_encr_bl)
 
                     index = np.argsort(-x_bl)
 
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
+
                     action = 'ACK_sort_bl'
                     #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'index': index}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
@@ -2776,6 +3016,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_compute_div(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
+
                     num_bl_dict = packet['data']['num_bl_dict']
                     den_bl_dict = packet['data']['den_bl_dict']
 
@@ -2787,10 +3029,19 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                         sigm_encr_bl = MLmodel.encrypter.encrypt(sigm_bl)
                         sigm_encr_bl_dict.update({waddr: sigm_encr_bl})
 
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
+
                     action = 'ACK_div_bl'
                     #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'sigm_encr_bl_dict': sigm_encr_bl_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
@@ -2806,6 +3057,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_compute_divM(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
+
                     num_bl_dict = packet['data']['num_bl_dict']
                     den_bl_dict = packet['data']['den_bl_dict']
 
@@ -2821,11 +3074,20 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                             sigm_encr_bl = MLmodel.encrypter.encrypt(sigm_bl)
                             cla_sigm_encr_bl_dict.update({cla: sigm_encr_bl})
                         sigm_encr_bl_dict.update({waddr: cla_sigm_encr_bl_dict})
+
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
                     
                     action = 'ACK_divM_bl'
                     #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'sigm_encr_bl_dict': sigm_encr_bl_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
@@ -2841,6 +3103,8 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_compute_argmin(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
+
                     c2_2XTC_bl_dict = packet['data']['c2_2XTC_bl_dict']
                     axis = 1
                     try:
@@ -2852,10 +3116,19 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                         distXC_bl = MLmodel.decrypter.decrypt(c2_2XTC_bl_dict[waddr])
                         argmin_dict.update({waddr: np.argmin(distXC_bl, axis=axis)})
 
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
+
                     action = 'ACK_compute_argmin'
                     #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'argmin_dict': argmin_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
@@ -2871,15 +3144,26 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_compute_sign(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_CRYPTO_START', verbose=False)
+
                     sign_bl_dict = {}                    
                     for waddr in packet['data']['A_encr_bl_dict'].keys():
                         sign_bl = np.sign(MLmodel.decrypter.decrypt(packet['data']['A_encr_bl_dict'][waddr]))
                         sign_bl_dict.update({waddr: sign_bl})
 
+                    MLmodel.display('PROC_CRYPTO_END', verbose=False)
+
                     action = 'ACK_compute_sign'
                     #message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
                     data = {'sign_bl_dict': sign_bl_dict}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.cryptonode_address}
+                    
+                    message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     #del packet
                     MLmodel.display(MLmodel.name + ' %s: sent %s ' % (str(MLmodel.cryptonode_address), action))
@@ -2895,7 +3179,19 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
 
             def while_answering_ping(self, MLmodel):
                 data = {'name': 'crypto', 'address': MLmodel.cryptonode_address}
-                packet = {'action': 'ACK_send_ping', 'sender': MLmodel.cryptonode_address, 'data':data}
+                action = 'ACK_send_ping'
+                packet = {'action': action, 'sender': MLmodel.cryptonode_address, 'data':data}
+                
+                '''
+                message_id = 'crypto_' + MLmodel.cryptonode_address + '_' + str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_CRYPTO_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+                '''
+                message_id = 'empty'
+                packet.update({'message_id': message_id})
+
                 MLmodel.comms.send(packet, MLmodel.master_address)
                 MLmodel.display(MLmodel.name + ' %s: sent ACK_send_ping' % (str(MLmodel.cryptonode_address)))
                 return
@@ -2981,11 +3277,18 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
         """
         self.terminate = False
         #self.display(self.name + ': received %s from worker %s' % (packet['action'], sender), verbose=True)
+        if packet['action'] not in ['update_tr_data', 'ping', 'ask_encr_data', 'STOP']:
+            try:
+                self.display('COMMS_CRYPTO_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+            except:
+                self.display('CRYPTO MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                pass
 
         # Exit the process
         if packet['action'] == 'STOP':
             self.display(self.name + ' %s: terminated by Master' % (str(self.cryptonode_address)))
             self.terminate = True
+            self.display('EXIT_CRYPTO')
 
         if packet['action'] == 'ask_encrypter':
             self.FSMcrypto.go_sending_encrypter(self, packet)

@@ -11,8 +11,10 @@ import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
 from transitions import State
 from transitions.extensions import GraphMachine
-#from pympler import asizeof #asizeof.asizeof(my_object)
+from pympler import asizeof #asizeof.asizeof(my_object)
 import pickle
+import dill
+import time
 
 class Model():
     """
@@ -22,6 +24,9 @@ class Model():
         self.w = None
         self.is_trained = False
         self.supported_formats = ['pkl', 'onnx', 'pmml']
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def predict(self, X):
         """
@@ -194,10 +199,13 @@ class RR_Master(Common_to_all_POMs):
         self.process_kwargs(kwargs)
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address
-        self.message_counter = 0    # used to number the messages
+        self.message_counter = 100    # used to number the messages
         self.XTX_dict = {}
         self.XTy_dict = {}
         self.newNI_dict = {}
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_master(self):
         """
@@ -239,7 +247,14 @@ class RR_Master(Common_to_all_POMs):
                     action = 'update_tr_data'
                     data = {}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+                    
+                    MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
                     raise
@@ -256,20 +271,44 @@ class RR_Master(Common_to_all_POMs):
                 action = 'compute_XTX'
                 data = None
                 packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                MLmodel.comms.broadcast(packet, receivers_list=MLmodel.broadcast_addresses)
+                
+                message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+            
+                MLmodel.comms.broadcast(packet)
                 MLmodel.display(MLmodel.name + ': broadcasted compute_XTX to all Workers')
 
                 return
 
             def while_updating_w(self, MLmodel):
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     MLmodel.XTX_accum = np.zeros((MLmodel.NI + 1, MLmodel.NI + 1))
                     MLmodel.XTy_accum = np.zeros((MLmodel.NI + 1, 1))
                     for waddr in MLmodel.workers_addresses:
                         MLmodel.XTX_accum += MLmodel.XTX_dict[waddr]
                         MLmodel.XTy_accum += MLmodel.XTy_dict[waddr].reshape((MLmodel.NI + 1, 1))
 
+                    '''
+                    NP = MLmodel.Xtr.shape[0]
+                    Xtr_b = np.hstack( (np.ones((NP, 1)), MLmodel.Xtr))
+                    XTX_OK = np.dot(Xtr_b.T, Xtr_b)
+                    ex = np.linalg.norm(XTX_OK - MLmodel.XTX_accum)
+
+                    XTy_OK = np.dot(Xtr_b.T, MLmodel.ytr)
+                    ey = np.linalg.norm(XTy_OK.ravel() - MLmodel.XTy_accum.ravel())
+                    print('Errors in RXY', ex, ey)
+
+                    print('STOP AT ')
+                    import code
+                    code.interact(local=locals())
+                    '''
+
                     MLmodel.model.w = np.dot(np.linalg.inv(MLmodel.XTX_accum + MLmodel.regularization * np.eye(MLmodel.NI + 1)), MLmodel.XTy_accum)        
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
                 except Exception as err:
                     #print('ERROR AT while_updating_w')
                     #raise ValueError('ERROR AT while_updating_w: %s' %str(err))
@@ -321,10 +360,12 @@ class RR_Master(Common_to_all_POMs):
         None
         """
         self.display(self.name + ': Starting training')
+        self.display('MASTER_INIT', verbose=False)
 
         self.FSMmaster.go_update_tr_data(self)
         self.run_Master()
 
+        self.display('MASTER_ITER_START', verbose=False)
         # Checking the new NI values
         newNIs = list(set(list(self.newNI_dict.values())))
         if len(newNIs) > 1:
@@ -347,8 +388,12 @@ class RR_Master(Common_to_all_POMs):
         self.run_Master()
 
         self.display(self.name + ': Training is done')
+
         self.model.is_trained = True
         self.model.niter = 1
+        self.display('MASTER_ITER_END', verbose=False)
+        self.display('MASTER_FINISH', verbose=False)
+
 
     def Update_State_Master(self):
         """
@@ -384,6 +429,11 @@ class RR_Master(Common_to_all_POMs):
             if packet['action'][0:3] == 'ACK':
                 self.display(self.name + ': received ACK from %s: %s' % (str(sender), packet['action']))
                 self.state_dict[sender] = packet['action']
+                try:
+                    self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+                except:
+                    self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                    pass
 
             if packet['action'] == 'ACK_sending_XTX':
                 self.XTX_dict.update({sender: packet['data']['XTX']})
@@ -455,6 +505,10 @@ class RR_Worker(Common_to_all_POMs):
         self.NPtr = len(ytr)
         self.create_FSM_worker()
         self.message_id = 0    # used to number the messages
+        self.message_counter = 100
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_worker(self):
         """
@@ -481,9 +535,17 @@ class RR_Worker(Common_to_all_POMs):
                     NPtr, newNI = MLmodel.Xtr_b.shape
                     MLmodel.Xtr_b = MLmodel.add_bias(MLmodel.Xtr_b).astype(float)
                     MLmodel.ytr = MLmodel.ytr.astype(float)
+
                     action = 'ACK_update_tr_data'
                     data = {'newNI': newNI}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
                 except Exception as err:
@@ -496,13 +558,20 @@ class RR_Worker(Common_to_all_POMs):
                     '''
             def while_computing_XTX(self, MLmodel):
                 try:
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     XTX = np.dot(MLmodel.Xtr_b.T, MLmodel.Xtr_b)
                     XTy = np.dot(MLmodel.Xtr_b.T, MLmodel.ytr)
-
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
+                    print(MLmodel.Xtr_b.shape)
                     action = 'ACK_sending_XTX'
                     data = {'XTX': XTX, 'XTy': XTy}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
-                    #MLmodel.comms.send(MLmodel.master_address, packet)
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
 
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_sending_XTX' % (str(MLmodel.worker_address)))
@@ -558,6 +627,12 @@ class RR_Worker(Common_to_all_POMs):
 
         """
         self.terminate = False
+        try:
+            self.display('COMMS_WORKER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+        except:
+            self.display('WORKER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+            pass
+
         try:
             # Exit the process
             if packet['action'] == 'STOP':

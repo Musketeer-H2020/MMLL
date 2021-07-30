@@ -16,8 +16,8 @@ import time
 import math
 from collections import Counter 
 from tqdm import tqdm   # pip install tqdm
-from pympler import asizeof # pip install pympler
 #asizeof.asizeof(my_object)
+from pympler import asizeof # pip install pympler
 import dill # pip install dill
 
 class POM6_CommonML_Master(Common_to_all_POMs):
@@ -84,6 +84,9 @@ class POM6_CommonML_Master(Common_to_all_POMs):
         
         self.worker_names = {} # dictionary with the mappings worker_id -> pseudo_id
         self.features_info = {}
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_master(self):
         """
@@ -224,7 +227,15 @@ class POM6_CommonML_Master(Common_to_all_POMs):
                 return
           
             def while_computing_R(self, MLmodel):
-                packet = {'action': 'compute_Rr', 'to': 'CommonML', 'sender': MLmodel.master_address}
+                action = 'compute_Rr'
+                packet = {'action': action, 'to': 'CommonML', 'sender': MLmodel.master_address}
+                
+                message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                 MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                 MLmodel.display(MLmodel.name + ' sent compute_Rr to all Workers')
                 return
@@ -232,7 +243,15 @@ class POM6_CommonML_Master(Common_to_all_POMs):
             def while_getting_R_DT(self, MLmodel):              
                 MLmodel.R_central_decr = np.zeros((MLmodel.NI + 1, MLmodel.NI + 1))
                 MLmodel.r_central_decr = np.zeros((MLmodel.NI + 1, 1))
-                packet = {'action': 'get_Rr_DT', 'to': 'CommonML', 'sender': MLmodel.master_address}
+                action = 'get_Rr_DT'
+                packet = {'action': action, 'to': 'CommonML', 'sender': MLmodel.master_address}
+                
+                message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                 MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                 MLmodel.display(MLmodel.name + ' sent get_Rr_DT to all Workers')
                 return
@@ -351,14 +370,23 @@ class POM6_CommonML_Master(Common_to_all_POMs):
                 return
 
             def while_getting_Rxyb_rxyb_direct(self, MLmodel):   
-                packet = {'action': 'get_Rxyb_rxyb_direct', 'to': 'CommonML', 'sender': MLmodel.master_address}
+                action = 'get_Rxyb_rxyb_direct'
+                packet = {'action': action, 'to': 'CommonML', 'sender': MLmodel.master_address}
+                
+                message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                 MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                 MLmodel.display(MLmodel.name + ' sent get_Rxyb_rxyb_direct to all Workers')
                 return
 
             def while_getting_Rxyb_rxyb_roundrobin(self, MLmodel, Rxyb_aggr, rxyb_aggr):   
                 data = {'Rxyb_aggr': Rxyb_aggr, 'rxyb_aggr': rxyb_aggr}
-                packet = {'action': 'get_Rxyb_rxyb_roundrobin', 'to': 'CommonML', 'sender': MLmodel.master_address, 'data': data}
+                action = 'get_Rxyb_rxyb_roundrobin'
+                packet = {'action': action, 'to': 'CommonML', 'sender': MLmodel.master_address, 'data': data}
                 MLmodel.comms.roundrobin(packet, MLmodel.workers_addresses)
                 MLmodel.display(MLmodel.name + ' sent get_Rxyb_rxyb_roundrobin')
                 return
@@ -874,6 +902,11 @@ class POM6_CommonML_Master(Common_to_all_POMs):
         try:
             self.display(self.name + ' received %s from %s' % (packet['action'], str(sender)))
             self.state_dict[sender] = packet['action']
+            try:
+                self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+            except:
+                self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                pass
 
             if packet['action'] == 'ACK_get_Rr_DT':
                 self.R_central_decr += packet['data']['R'].reshape((self.NI + 1, self.NI + 1))
@@ -1058,6 +1091,10 @@ class POM6_CommonML_Worker(Common_to_all_POMs):
             self.ytr = None
             self.ytr_orig = None            
         self.create_FSM_worker()
+        self.message_counter = 0 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_worker(self):
         """
@@ -1086,6 +1123,13 @@ class POM6_CommonML_Worker(Common_to_all_POMs):
                 MLmodel.display(self.name + ' %s: computed R and r' % (str(MLmodel.worker_address)))
                 action = 'ACK_compute_Rr'
                 packet = {'action': action, 'sender': MLmodel.worker_address}
+                
+                message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                 MLmodel.comms.send(packet, MLmodel.master_address)
                 MLmodel.display(MLmodel.name + ' %s: sent ACK_compute_Rr' % (str(MLmodel.worker_address)))
 
@@ -1096,6 +1140,13 @@ class POM6_CommonML_Worker(Common_to_all_POMs):
                 MLmodel.display(MLmodel.name + ' %s: sending R to Master, direct transmission' % (str(MLmodel.worker_address)))
                 action = 'ACK_get_Rr_DT'
                 data = {'R': MLmodel.R, 'r': MLmodel.r}
+                
+                message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                 packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
                 MLmodel.comms.send(packet, MLmodel.master_address)
                 MLmodel.display('Worker %s: sent ACK_get_Rr_DT' % (str(MLmodel.worker_address)))
@@ -1951,6 +2002,7 @@ class POM6_CommonML_Worker(Common_to_all_POMs):
             except:
                 pass            
             self.display(self.name + ' %s: terminated by Master' % (str(self.worker_address)))
+            self.display('EXIT_WORKER')
             self.terminate = True
 
         if packet['action'] == 'STOP_NOT_CLOSE_CONNECTION':

@@ -521,4 +521,12 @@ class Common_to_all_objects():
                 self.maxvalue = value
             if key == 'Tmax':
                 self.Tmax = value
+            if key == 'landa':
+                self.landa = value
+            if key == 'Xtr':
+                self.Xtr = value
+            if key == 'ytr':
+                self.ytr = value
+            if key == 'minibatch':
+                self.minibatch = value
 

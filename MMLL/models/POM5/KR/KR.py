@@ -12,6 +12,9 @@ from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
 from transitions import State
 from transitions.extensions import GraphMachine
 import pickle
+from pympler import asizeof #asizeof.asizeof(my_object)
+import dill
+import time
 
 class Model():
     """
@@ -22,6 +25,9 @@ class Model():
         self.w = None
         self.is_trained = False
         self.supported_formats = ['pkl', 'onnx', 'pmml']
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def predict(self, X):
         """
@@ -227,6 +233,11 @@ class KR_Master(Common_to_all_POMs):
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
         #default values
+        #self.landa = 0.5
+        self.mu = 0.1
+        self.momentum = 0
+        self.regularization = 0.001
+
         # we extract the model_parameters as extra kwargs, to be all jointly processed
         try:
             kwargs.update(kwargs['model_parameters'])
@@ -234,7 +245,7 @@ class KR_Master(Common_to_all_POMs):
         except:
             pass
         self.process_kwargs(kwargs)
-        self.message_counter = 0    # used to number the messages
+        self.message_counter = 100    # used to number the messages
         self.XTX_dict = {}
         self.XTy_dict = {}
         self.encrypter = self.cr.get_encrypter()  # to be shared        # self.encrypter.encrypt(np.random.normal(0, 1, (2,3)))
@@ -248,6 +259,9 @@ class KR_Master(Common_to_all_POMs):
         self.model.C = self.C
         self.model.sigma = np.sqrt(self.input_data_description['NI']) * self.fsigma 
         self.Kacum_dict = {}
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_master(self):
         """
@@ -310,6 +324,13 @@ class KR_Master(Common_to_all_POMs):
                     action = 'update_tr_data'
                     data = {}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.broadcast(packet)
                     MLmodel.display(MLmodel.name + ': broadcasted update_tr_data to all Workers')
                 except Exception as err:
@@ -328,11 +349,19 @@ class KR_Master(Common_to_all_POMs):
                     data = {}
                     data.update({'w_encr': MLmodel.w_encr})
                     # WARNING, only for debug purposes...
-                    data.update({'decrypter': MLmodel.decrypter})
+                    #data.update({'decrypter': MLmodel.decrypter})
                     #wdill = MLmodel.dill_it(MLmodel.wq_encr)
                     #data.update({'wq_encr': wdill})
 
-                    packet = {'action': 'send_w_encr', 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    action = 'send_w_encr'
+                    packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     if MLmodel.selected_workers is None: 
                         MLmodel.comms.broadcast(packet)
                         MLmodel.display(MLmodel.name + ': broadcasted w to all Workers')
@@ -355,10 +384,18 @@ class KR_Master(Common_to_all_POMs):
                     action = 'selecting_C'
                     data = {'C': MLmodel.model.C, 'sigma': MLmodel.model.sigma}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     if MLmodel.selected_workers is None: 
+                        MLmodel.comms.broadcast(packet)
                         MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
                     else:
+                        MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
                         MLmodel.display(MLmodel.name + ': broadcasted C to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
 
                 except Exception as err:
@@ -375,10 +412,18 @@ class KR_Master(Common_to_all_POMs):
                     action = 'sending_C'
                     data = {'C': MLmodel.model.C, 'sigma': MLmodel.model.sigma}
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     if MLmodel.selected_workers is None: 
+                        MLmodel.comms.broadcast(packet)
                         MLmodel.display(MLmodel.name + ': broadcasted C to all Workers')
                     else:
+                        MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
                         MLmodel.display(MLmodel.name + ': broadcasted C to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
 
                 except Exception as err:
@@ -395,10 +440,18 @@ class KR_Master(Common_to_all_POMs):
                     action = 'compute_KTK'
                     data = None
                     packet = {'action': action, 'to': 'MLmodel', 'data': data, 'sender': MLmodel.master_address}
-                    MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                     if MLmodel.selected_workers is None: 
+                        MLmodel.comms.broadcast(packet)
                         MLmodel.display(MLmodel.name + ': broadcasted compute_KTK to all workers')
                     else:
+                        MLmodel.comms.broadcast(packet, MLmodel.selected_workers)
                         MLmodel.display(MLmodel.name + ': broadcasted compute_KTK to Workers: %s' % str([MLmodel.receive_from[w] for w in MLmodel.selected_workers]))
                     
                 except Exception as err:
@@ -413,6 +466,7 @@ class KR_Master(Common_to_all_POMs):
 
             def while_updating_w(self, MLmodel):
                 try:
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
                     NC = MLmodel.model.C.shape[0]    
                     MLmodel.KTK_accum = np.zeros((NC + 1, NC + 1))
                     MLmodel.KTy_accum = np.zeros((NC + 1, 1))
@@ -421,6 +475,7 @@ class KR_Master(Common_to_all_POMs):
                         MLmodel.KTy_accum += MLmodel.KTy_dict[waddr].reshape((NC + 1, 1))
 
                     MLmodel.model.w = np.dot(np.linalg.inv(MLmodel.KTK_accum + MLmodel.regularization * np.eye(NC + 1)), MLmodel.KTy_accum)        
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
                 except Exception as err:
                     raise
                     '''
@@ -476,6 +531,7 @@ class KR_Master(Common_to_all_POMs):
         None
         """
         self.display(self.name + ': Starting training', verbose=True)
+        self.display('MASTER_INIT', verbose=False)
 
         if not self.train_data_is_ready: 
             self.FSMmaster.go_update_tr_data(self)
@@ -496,6 +552,8 @@ class KR_Master(Common_to_all_POMs):
                     self.yval = self.yval.astype(float)
             self.train_data_is_ready = True
 
+        self.display('PROC_MASTER_START', verbose=False)
+
         # self.broadcast_addresses  direcciones pycloud
         # self.workers_addresses  0->N, active
         # self.all_workers_addresses  0->N all that joined the task
@@ -513,6 +571,13 @@ class KR_Master(Common_to_all_POMs):
         self.receivers_list=[]
         for worker in self.workers_addresses:
             self.receivers_list.append(self.send_to[worker])
+
+        self.display('=============================================== ', True)
+        self.display('===========  List of participants  ============ ', True)
+        for worker in self.workers_addresses:
+            message = '%s - %s' % (worker, self.send_to[worker])
+            self.display(message, True)
+        self.display('=============================================== ', True)
 
         '''
         self.FSMmaster.go_selecting_C(self)
@@ -536,7 +601,6 @@ class KR_Master(Common_to_all_POMs):
             # Gauss
             KXC_val = np.exp(-XC2 / 2.0 /  (self.model.sigma ** 2))
             self.KXC_val = np.hstack( (np.ones((self.Xval.shape[0], 1)), KXC_val)) # NP_val x NC + 1
-
             self.yval.astype(float).reshape((-1, 1))
 
         self.model.C = self.C
@@ -546,7 +610,18 @@ class KR_Master(Common_to_all_POMs):
         self.run_Master()
 
         #self.NI = self.input_data_description['NI']
-        self.w = np.random.normal(0, 0.1, (self.NC + 1, 1))
+        if self.Xval is None:  # A validation set is not provided
+            self.w = np.random.normal(0, 0.1, (self.NC + 1, 1))
+        else:
+            # Initialization with val solution
+            KTK_accum = np.dot(self.KXC_val.T, self.KXC_val)
+            KTy_accum = np.dot(self.KXC_val.T, self.yval.reshape((-1, 1)))
+            NP = self.KXC_val.shape[0]
+            wini = np.dot(np.linalg.inv(KTK_accum/NP + self.regularization * np.eye(self.NC + 1)), KTy_accum / NP)        
+            self.w = np.copy(wini)
+
+        self.w_old = np.random.normal(0, 1, (self.NC + 1, 1))
+        self.grad_old = np.random.normal(0, 0.001, (self.NC + 1, 1))
         # Encrypting w
         self.w_encr = self.encrypter.encrypt(self.w)
         self.grads_dict = {}
@@ -556,9 +631,26 @@ class KR_Master(Common_to_all_POMs):
         self.kiter = 0
         self.mseval = 1000
 
+        self.kiter = 1
+        self.display('PROC_MASTER_END', verbose=False)
+
+        #self.display('MASTER_ITER_START', verbose=False)
+        #self.display('PROC_MASTER_START', verbose=False)
+
+        #self.FSMmaster.go_send_w_encr(self)
+        #self.run_Master()
+
+        #self.FSMmaster.go_getting_KTK(self)
+        #self.run_Master()
+
+        #self.FSMmaster.go_updating_w(self)
+
         while not self.stop_training:
+            self.display('MASTER_ITER_START', verbose=False)
             self.FSMmaster.go_send_w_encr(self)
             self.run_Master()
+
+            self.display('PROC_MASTER_START', verbose=False)
 
             NPtotal = 0
             grad = np.zeros((self.NC + 1, 1))
@@ -570,26 +662,37 @@ class KR_Master(Common_to_all_POMs):
                 grad_decr = self.decrypter.decrypt(grad_encr)
                 grad += grad_decr
 
-            grad = grad / NPtotal
+            #grad = grad / NPtotal
+
+            grad += np.random.normal(0, self.regularization, grad.shape)
+            
+            # Momentum
+            v_1 = np.copy(self.grad_old) # old gradient
+            #v_1 = self.landa * v_1 + (1 - self.landa) * np.copy(grad)
+            momentum = self.momentum * v_1
+
+            grad = self.mu * grad / len(self.workers_addresses)                  
+
+            v = momentum + grad
+
+            self.w_old = self.w.copy()
+            self.w = self.w.reshape((-1, 1)) - v
+            self.grad_old = np.copy(grad)
+
+            inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
+            message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, self.kiter, inc_w)
+            self.display(message, verbose=True)
+            #print(message)
 
             self.kiter += 1
             if self.kiter == self.Nmaxiter:
                 self.stop_training = True
 
-            if self.Xval is None:  # A validation set is not provided
-                self.w_old = self.w.copy()
-                self.w += self.mu * grad
-    
-                # stopping
-                inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
+            # Stop if convergence is reached
+            if inc_w < self.conv_stop:
+                self.stop_training = True
 
-                # Stop if convergence is reached
-                if inc_w < self.conv_stop:
-                    self.stop_training = True
-    
-                message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, self.kiter, inc_w)
-                #self.display(message, verbose=True)
-                print(message)
+            '''    
             else:
                 MSE_val = []
                 mus = np.arange(0, 10.0, 0.0001)
@@ -627,31 +730,19 @@ class KR_Master(Common_to_all_POMs):
                 message = 'Maxiter = %d, iter = %d, inc_MSE_val = %f, inc_w = %f' % (self.Nmaxiter, self.kiter, inc_mseval, inc_w)
                 #self.display(message, verbose=True)
                 print(message)
-            
             self.w_encr = self.encrypter.encrypt(self.w)
+            '''
+            
+        self.display('PROC_MASTER_END', verbose=False)
+
+        self.display('MASTER_ITER_END', verbose=False)
 
         self.model.w = self.w
         self.model.niter = self.kiter
         self.model.is_trained = True
         self.display(self.name + ': Training is done', verbose=True)
+        self.display('MASTER_FINISH', verbose=False)
 
-    def predict_Master(self, X_b):
-        """
-        Predicts outputs given the model and inputs
-
-        Parameters
-        ----------
-        X_b: ndarray
-            Matrix with the input values
-
-        Returns
-        -------
-        prediction_values: ndarray
-
-        """
-        #prediction_values = self.sigm(np.dot(X_b, self.w.ravel()))
-        prediction_values = self.model.predict(X_b)
-        return prediction_values
 
     def Update_State_Master(self):
         """
@@ -688,9 +779,12 @@ class KR_Master(Common_to_all_POMs):
         """
         try:
             #sender = self.receive_from[sender]
-            if packet['action'][0:3] == 'ACK':
-                self.state_dict[sender] = packet['action']
-                self.display(self.name + ': received %s from worker %s' % (packet['action'], sender), verbose=True)
+            self.display(self.name + ': received %s from worker %s' % (packet['action'], sender), verbose=True)
+            try:
+                self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+            except:
+                self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                pass
 
             if packet['action'] == 'ACK_grads':
                 self.grads_dict.update({sender: packet['data']['grad_encr']})
@@ -703,6 +797,9 @@ class KR_Master(Common_to_all_POMs):
             if packet['action'] == 'ACK_projecting_C':
                 self.Kacum_dict.update({sender: packet['data']['Kacum']})
 
+            if packet['action'][0:3] == 'ACK':
+                self.state_dict[sender] = packet['action']
+
         except:
             raise
             '''
@@ -710,7 +807,6 @@ class KR_Master(Common_to_all_POMs):
             import code
             code.interact(local=locals())
             '''      
-
         return
 
 
@@ -766,7 +862,10 @@ class KR_Worker(Common_to_all_POMs):
         #self.ytr = ytr
         #self.NPtr = len(ytr)
         self.create_FSM_worker()
-        self.message_id = 0    # used to number the messages
+        self.message_counter = 100 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_worker(self):
         """
@@ -797,6 +896,13 @@ class KR_Worker(Common_to_all_POMs):
                     action = 'ACK_update_tr_data'
                     data = {'newNI': newNI}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_update_tr_data' % (str(MLmodel.worker_address)))
                 except Exception as err:
@@ -811,9 +917,14 @@ class KR_Worker(Common_to_all_POMs):
 
             def while_compute_gradients(self, MLmodel, packet):
                 try:
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     MLmodel.display(MLmodel.name + ' %s: computing gradients...' % (str(MLmodel.worker_address)))
                     w_encr = packet['data']['w_encr']
-                    decrypter = packet['data']['decrypter']
+                    try:
+                        # Warning, only for debugging
+                        decrypter = packet['data']['decrypter']
+                    except:
+                        pass
                     #NW = wq_encr.shape[0]
                     #for kw in range(NW):
                     #    wq_encr[kw, 0].encrypter = MLmodel.cr.encrypter
@@ -825,7 +936,8 @@ class KR_Worker(Common_to_all_POMs):
                     y = MLmodel.ytr.reshape(-1, 1)
 
                     o_encr = np.dot(MLmodel.KXC, w_encr)
-                    e_encr = (y - o_encr)
+                    e_encr = (o_encr.reshape(-1, 1) - y)
+
                     '''
                     Xo_encr = MLmodel.KXC * o_encr
                     Xy = MLmodel.KXC * y
@@ -835,11 +947,19 @@ class KR_Worker(Common_to_all_POMs):
                     #Xe_encr = MLmodel.KXC * e_encr
                     #grad_encr = np.sum(Xe_encr, axis=0).reshape((-1, 1))
                     '''
-                    grad_encr = np.dot(e_encr.T, MLmodel.KXC).reshape(-1, 1)
+                    grad_encr = np.dot(e_encr.T, MLmodel.KXC).reshape(-1, 1) / NP
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ACK_grads'
                     data = {'grad_encr': grad_encr, 'NP': NP}
                     packet = {'action': action, 'sender': MLmodel.worker_address, 'data': data, 'to': 'MLmodel'}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_grads' % (str(MLmodel.worker_address)))
                 except:
@@ -854,6 +974,7 @@ class KR_Worker(Common_to_all_POMs):
             def while_projecting_C(self, MLmodel, packet):
                 # We project X over C and return accumulated
                 try:
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
 
                     MLmodel.C = packet['data']['C']
                     NC = MLmodel.C.shape[0]
@@ -869,10 +990,18 @@ class KR_Worker(Common_to_all_POMs):
                     # Gauss
                     KXC = np.exp(-XC2 / 2.0 /  (MLmodel.sigma ** 2))
                     Kacum = np.sum(KXC, axis = 0)
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
 
                     action = 'ACK_projecting_C'
                     data = {'Kacum': Kacum}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_projecting_C' % (str(MLmodel.worker_address)))
                     
@@ -888,6 +1017,7 @@ class KR_Worker(Common_to_all_POMs):
             def while_storing_C(self, MLmodel, packet):
                 # We store C and compute KXC
                 try:
+                    MLmodel.display('PROC_WORKER_START', verbose=False)
                     MLmodel.C = packet['data']['C']
                     NC = MLmodel.C.shape[0]
                     MLmodel.sigma = packet['data']['sigma']
@@ -912,9 +1042,18 @@ class KR_Worker(Common_to_all_POMs):
                     which = (MLmodel.KXC < min_th)
                     MLmodel.KXC[which]  = 0
 
+                    MLmodel.display('PROC_WORKER_END', verbose=False)
+
                     action = 'ACK_storing_C'
                     data = {}
                     packet = {'action': action, 'data': data, 'sender': MLmodel.worker_address}
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ' %s: sent ACK_storing_C' % (str(MLmodel.worker_address)))
                     
@@ -980,6 +1119,12 @@ class KR_Worker(Common_to_all_POMs):
 
         """
         self.terminate = False
+        try:
+            self.display('COMMS_WORKER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+        except:
+            self.display('WORKER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+            pass
+
         try:
             # Exit the process
             if packet['action'] == 'STOP':

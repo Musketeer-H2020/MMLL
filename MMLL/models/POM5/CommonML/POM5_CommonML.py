@@ -9,17 +9,15 @@ __date__ = "Nov. 2020"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
-import pickle
 from transitions import State
 from transitions.extensions import GraphMachine
-import time
-import time
 import math
 from collections import Counter 
 from tqdm import tqdm   # pip install tqdm
-from pympler import asizeof # pip install pympler
-#asizeof.asizeof(my_object)
-import dill # pip install dill
+import pickle
+from pympler import asizeof #asizeof.asizeof(my_object)
+import dill
+import time
 
 class POM5_CommonML_Master(Common_to_all_POMs):
     """
@@ -76,6 +74,7 @@ class POM5_CommonML_Master(Common_to_all_POMs):
         self.process_kwargs(kwargs)
         self.encrypter = self.cr.get_encrypter()  # to be shared
         self.decrypter = self.cr.get_decrypter()  # to be kept as secret
+        self.message_counter = 1    # used to number the messages
 
         self.state_dict = None                      # State of the main script
         self.state_dict = {}                        # dictionary storing the execution state
@@ -90,7 +89,9 @@ class POM5_CommonML_Master(Common_to_all_POMs):
         self.create_FSM_master()
         self.message_counter = 0    # used to number the messages
         self.worker_names = {} # dictionary with the mappings worker_id -> pseudo_id
-
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_master(self):
         """
@@ -230,9 +231,17 @@ class POM5_CommonML_Master(Common_to_all_POMs):
                     message_id = MLmodel.master_address + str(MLmodel.message_counter)
                     MLmodel.message_counter += 1
                     #data.update({'decrypter': MLmodel.cr.decrypter})
-                    packet = {'action': 'send_encrypter', 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address, 'message_id': message_id}
-                    MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
-                    MLmodel.display(MLmodel.name + ' sent encrypter to all Workers')
+                    action = 'send_encrypter'
+                    packet = {'action': action, 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address, 'message_id': message_id}
+                    
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
+                    MLmodel.comms.broadcast(packet)
+                    MLmodel.display(MLmodel.name + ' broadcast encrypter to all Workers')
                 except:
                     raise
                     '''
@@ -249,7 +258,7 @@ class POM5_CommonML_Master(Common_to_all_POMs):
                 MLmodel.worker_errors = {}
                 size_bytes = asizeof.asizeof(dill.dumps(packet))
                 MLmodel.display(MLmodel.name + ' is sending preprocessing object of size %d Kbytes' % int(size_bytes/1024.0))
-                MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
+                MLmodel.comms.broadcast(packet)
                 MLmodel.display(MLmodel.name + ' sent preprocessing object to all Workers')
                 return
 
@@ -355,13 +364,22 @@ class POM5_CommonML_Master(Common_to_all_POMs):
                 return
 
             def while_getting_Rxyb_rxyb_direct(self, MLmodel):   
-                packet = {'action': 'get_Rxyb_rxyb_direct', 'to': 'CommonML', 'sender': MLmodel.master_address}
+                action = 'get_Rxyb_rxyb_direct'
+                packet = {'action': action, 'to': 'CommonML', 'sender': MLmodel.master_address}
+                
+                message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_MASTER_BROADCAST %s, id = %s, bytes=%s' % (action, message_id, str(size_bytes)), verbose=False)
+
                 MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
                 MLmodel.display(MLmodel.name + ' sent get_Rxyb_rxyb_direct to all Workers')
                 return
 
             def while_getting_Rxyb_rxyb_roundrobin(self, MLmodel, Rxyb_aggr, rxyb_aggr):   
                 data = {'Rxyb_aggr': Rxyb_aggr, 'rxyb_aggr': rxyb_aggr}
+                action = 'get_Rxyb_rxyb_roundrobin'
                 packet = {'action': 'get_Rxyb_rxyb_roundrobin', 'to': 'CommonML', 'sender': MLmodel.master_address, 'data': data}
                 MLmodel.comms.roundrobin(packet, MLmodel.workers_addresses)
                 MLmodel.display(MLmodel.name + ' sent get_Rxyb_rxyb_roundrobin')
@@ -890,10 +908,14 @@ class POM5_CommonML_Master(Common_to_all_POMs):
             self.display(self.name + ' received %s from %s' % (packet['action'], str(sender)))
             self.state_dict[sender] = packet['action']
 
-
             if packet['action'][0:3] == 'ACK':
                 self.display('Master received ACK from %s: %s' % (str(sender), packet['action']))
                 self.state_dict[sender] = packet['action']
+                try:
+                    self.display('COMMS_MASTER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+                except:
+                    self.display('MASTER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                    pass
 
             if packet['action'] == 'ACK_sent_encrypter':
                 self.NI_dict.update({sender: packet['data']['NI']})
@@ -1072,6 +1094,10 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
             self.ytr = None
             self.ytr_orig = None            
         self.create_FSM_worker()
+        self.message_counter = 0 # used to number the messages
+        t = time.time()
+        seed = int((t - int(t)) * 10000)
+        np.random.seed(seed=seed)
 
     def create_FSM_worker(self):
         """
@@ -1117,6 +1143,13 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                     data = {'NI': NI}
                     packet = {'action': action, 'data': data, 'sender': str(MLmodel.worker_address)}
                     # Sending params to Master
+                    
+                    message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                     MLmodel.comms.send(packet, MLmodel.master_address)
                     MLmodel.display(MLmodel.name + ': sent ACK_sent_encrypter')
                 except:
@@ -1448,7 +1481,15 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                 rxyb = np.dot(Xb.T, y)
 
                 data = {'Rxyb':Rxyb, 'rxyb': rxyb}
-                packet = {'action': 'ACK_send_Rxyb_rxyb_direct', 'sender': MLmodel.worker_address, 'data':data}
+                action = 'ACK_send_Rxyb_rxyb_direct'
+                packet = {'action': action, 'sender': MLmodel.worker_address, 'data':data}
+                
+                message_id = 'worker_' + MLmodel.worker_address + '_' + str(MLmodel.message_counter)
+                packet.update({'message_id': message_id})
+                MLmodel.message_counter += 1
+                size_bytes = asizeof.asizeof(dill.dumps(packet))
+                MLmodel.display('COMMS_WORKER_SEND %s to %s, id = %s, bytes=%s' % (action, MLmodel.master_address, message_id, str(size_bytes)), verbose=False)
+
                 MLmodel.comms.send(packet, MLmodel.master_address)
                 MLmodel.display(MLmodel.name + ' %s: sent ACK_send_Rxyb_rxyb_direct' % (str(MLmodel.worker_address)))
                 return
@@ -1956,6 +1997,12 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
                 id of the sender
         """
         self.terminate = False
+        if packet['action'] not in ['ping', 'STOP']:
+            try:
+                self.display('COMMS_WORKER_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)
+            except:
+                self.display('WORKER MISSING message_id in %s from %s' % (packet['action'], sender), verbose=False)                    
+                pass
 
         # Exit the process
         if packet['action'] == 'STOP':
@@ -1965,6 +2012,7 @@ class POM5_CommonML_Worker(Common_to_all_POMs):
             except:
                 pass            
             self.display(self.name + ' %s: terminated by Master' % (str(self.worker_address)))
+            self.display('EXIT_WORKER')
             self.terminate = True
 
         if packet['action'] == 'STOP_NOT_CLOSE_CONNECTION':
