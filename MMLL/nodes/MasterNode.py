@@ -12,11 +12,14 @@ import sys
 sys.path.append("..")
 sys.path.append("../..")
 from sklearn.metrics import roc_curve, auc
+from itertools import chain, combinations
+from math import factorial
 
 from MMLL.Common_to_all_objects import Common_to_all_objects
 from MMLL.preprocessors.normalizer import normalize_model
 from MMLL.preprocessors.data2num import data2num_model
-
+from MMLL.data_value.Metric_rxy_span import Metric
+from MMLL.data_value.Shapley import Shapley
 
 
 class MasterNode(Common_to_all_objects):
@@ -116,22 +119,23 @@ class MasterNode(Common_to_all_objects):
 
                 if model_type == 'Kmeans':
                     from MMLL.models.POM1.Kmeans.Kmeans import Kmeans_Master
-                    self.MasterMLmodel = Kmeans_Master(self.comms, self.logger, self.verbose, NC=self.NC, Nmaxiter=self.Nmaxiter, tolerance=self.tolerance)
+                    self.MasterMLmodel = Kmeans_Master(self.comms, self.logger, self.verbose, NC=self.NC, Nmaxiter=self.Nmaxiter, tolerance=self.tolerance, aggregator = model_parameters.get('aggregator'))
                     self.display('MasterNode: Created %s model, POM = %d' % (self.model_type, self.pom))
 
                 elif model_type == 'NN':
                     from MMLL.models.POM1.NeuralNetworks.neural_network import NN_Master
-                    self.MasterMLmodel = NN_Master(self.comms, self.logger, self.verbose, model_architecture=self.model_architecture, Nmaxiter=self.Nmaxiter, learning_rate=self.learning_rate, model_averaging=self.model_averaging, optimizer=self.optimizer, loss=self.loss, metric=self.metric, batch_size=self.batch_size, num_epochs=self.num_epochs, momentum=self.momentum, nesterov=self.nesterov, Tmax=self.Tmax)
+                    
+                    self.MasterMLmodel = NN_Master(self.comms, self.logger, self.verbose, model_architecture=self.model_architecture, Nmaxiter=self.Nmaxiter, learning_rate=self.learning_rate, model_averaging=self.model_averaging, optimizer=self.optimizer, loss=self.loss, metric=self.metric, batch_size=self.batch_size, num_epochs=self.num_epochs, momentum=self.momentum, nesterov=self.nesterov, Tmax=self.Tmax, aggregator = model_parameters.get('aggregator'))
                     self.display('MasterNode: Created %s model, POM = %d' % (self.model_type, self.pom))
 
                 elif model_type == 'SVM':
                     from MMLL.models.POM1.SVM.SVM import SVM_Master
-                    self.MasterMLmodel = SVM_Master(self.comms, self.logger, self.verbose, NC=self.NC, Nmaxiter=self.Nmaxiter, tolerance=self.tolerance, sigma=self.sigma, C=self.C, NmaxiterGD=self.NmaxiterGD, eta=self.eta)
+                    self.MasterMLmodel = SVM_Master(self.comms, self.logger, self.verbose, NC=self.NC, Nmaxiter=self.Nmaxiter, tolerance=self.tolerance, sigma=self.sigma, C=self.C, NmaxiterGD=self.NmaxiterGD, eta=self.eta, aggregator = model_parameters.get('aggregator'))
                     self.display('MasterNode: Created %s model, POM = %d' % (self.model_type, self.pom))
 
                 elif model_type == 'FBSVM':
                     from MMLL.models.POM1.FBSVM.FBSVM import FBSVM_Master
-                    self.MasterMLmodel = FBSVM_Master(self.comms, self.logger, self.verbose, NC=self.NC, Nmaxiter=self.Nmaxiter, tolerance=self.tolerance, sigma=self.sigma, C=self.C, num_epochs_worker=self.num_epochs_worker, eps=self.eps, mu=self.mu, NI=self.NI, minvalue=self.minvalue, maxvalue=self.maxvalue)
+                    self.MasterMLmodel = FBSVM_Master(self.comms, self.logger, self.verbose, NC=self.NC, Nmaxiter=self.Nmaxiter, tolerance=self.tolerance, sigma=self.sigma, C=self.C, num_epochs_worker=self.num_epochs_worker, eps=self.eps, mu=self.mu, NI=self.NI, minvalue=self.minvalue, maxvalue=self.maxvalue,  aggregator = model_parameters.get('aggregator'))
                     self.display('MasterNode: Created %s model, POM = %d' % (self.model_type, self.pom))
 
                 elif model_type == 'DSVM':
@@ -1166,6 +1170,38 @@ class MasterNode(Common_to_all_objects):
         return stats_dict_workers
 
 
+    def get_statistics_workers_metric(self, metric):
+        """
+        Get the statistics from the workers.
+
+        Parameters
+        ----------
+        stats_list: list of string
+            The list of statistics that have to be computed (rxy, meanx, medianx, npatterns, stdx, skewx, kurx, perc25, perc75, staty).
+
+        Returns
+        -------
+        stats_dict_workers: dict
+            Statistics of every worker.
+        """
+        stats_dict_workers = None
+
+        try:
+            if self.pom in [1, 2, 3]:    
+                stats_dict_workers = self.MasterCommon.get_stats_metric(metric)
+            elif self.pom in [4, 5, 6]:    
+                self.MasterCommon.get_stats_metric(metric)
+                stats_dict_workers = self.MasterCommon.stats_dict
+            else:
+                raise ValueError('POM %s not available in MMLL' %str(self.pom))
+
+        except Exception as err:
+            self.display('MasterNode: Error at get_statistics_workers: ', err)
+            raise
+
+        return stats_dict_workers
+
+
     def get_task_alignment(self, Xval, yval):
         """
         Compute the task alignment of the workers.
@@ -1581,8 +1617,12 @@ class MasterNode(Common_to_all_objects):
             self.display('MasterNode: Error at terminate_workers: ', err)
             raise
 
+    def powerset(self, iterable):
+        s = list(iterable)
+        return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
 
-    def get_data_value_apriori(self, Xval, yval, stats_list):
+
+    def get_data_value_apriori(self, Xval, yval):
         """
         Obtain "A priori" Data Value estimation.
 
@@ -1597,34 +1637,63 @@ class MasterNode(Common_to_all_objects):
         stats_list: list of string
             The list of statistics that have to be computed (rxy, meanx, medianx, npatterns, stdx, skewx, kurx, perc25, perc75, staty).
         """
+        # The current implementation only uses this statistic
+        stats_list = ['rxy']
         try:
             ref_stats_dict = self.compute_statistics(Xval, yval, stats_list)
-            stats_dict_workers = self.get_statistics_workers(stats_list + ['npatterns'])
+            #stats_dict_workers = self.get_statistics_workers(stats_list + ['npatterns'])
 
-            workers = self.MasterCommon.workers_addresses
-            Nworkers = len(workers)
-            NP = np.zeros((Nworkers, 1))
-            dv = np.zeros((Nworkers, 1))
+            metric = Metric()
+            # Get a priori statistics from data
+            ref_stats = metric.get_ref_stats(Xval, yval)         
 
-            for kworker in range(Nworkers):
-                worker = workers[kworker]
-                das = []
-                for stat in stats_list:
-                    das.append(np.dot(ref_stats_dict[stat].ravel(), stats_dict_workers[worker][stat].ravel()))        
-                dv[kworker] = np.mean(np.array(das))
-                NP[kworker] = stats_dict_workers[worker]['npatterns']
+            stats_dict_workers = self.get_statistics_workers_metric(metric)
+           
+            # Computing the models for all possible combinations
+            models_dict = {}
+            which_workers = list(stats_dict_workers.keys())
+            which_workers.sort()
 
-            dv = dv * NP
-            dv = dv / np.sum(dv)
+            combination_workers = list(self.powerset(which_workers))[1:]
+            Ncomb = len(combination_workers)
 
-            if self.pom in [1, 2, 3]:
+            for kcomb in range(Ncomb):
+                workers = combination_workers[kcomb]
+                selected = list(workers)
+
+                train_stats = []
+
+                for kworker in selected:
+                    train_stats.append(stats_dict_workers[kworker])
+
+                # A priori Shapley with span projection
+                M_selected = metric.S_span(train_stats, ref_stats)
+                model = train_stats
+
+                print(f'{kcomb+1} of {Ncomb}, U={M_selected}, workers =', selected)
+
+                w_ = np.copy(workers)
+                w_.sort()
+                key = [str(w) for w in w_]
+                key = '_'.join(key)
+                models_dict.update({key: [selected, M_selected, model]})
+
+            shapley = Shapley(0)
+            PHIs = shapley.compute_scores(which_workers, models_dict)
+
+            dv = np.copy(PHIs)
+
+            # Warning, some PHIs may be negative, we eliminate those values in dv
+            dv[dv < 0] = 0
+            # We normalize dv to sum 1
+            if np.sum(dv) > 0:
+                dv = dv / np.sum(dv)
+
+            if self.pom in [1, 2, 3, 4, 5, 6]:
                 data_value_dict = {}
                 for index, worker in enumerate(self.MasterCommon.workers_addresses):
                     data_value_dict[worker] = dv[index]
                 return data_value_dict
-
-            elif self.pom in [4, 5, 6]:
-                return dv.ravel()
 
             else:
                 raise ValueError('POM %s not available in MMLL' %str(self.pom))

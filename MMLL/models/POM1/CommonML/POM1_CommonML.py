@@ -58,13 +58,13 @@ class POM1_CommonML_Master(Common_to_POMs_123_Master):
         None
         """
         self.display(self.name + ': Resetting local data')
-        self.list_centroids = []
-        self.list_counts = []
-        self.list_dists = []
+        self.dict_centroids = dict()
+        #self.list_counts = []
+        #self.list_dists = []
         self.list_public_keys = []
-        self.list_gradients = []
-        self.list_weights = []
-        self.list_costs = []
+        self.dict_gradients = dict()
+        self.dict_weights = dict()
+        self.dict_costs = dict()
         self.C_reconstruct = []
         self.rx = []
 

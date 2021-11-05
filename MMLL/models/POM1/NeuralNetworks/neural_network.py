@@ -22,7 +22,7 @@ import time
 
 from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_CommonML_Worker
 from MMLL.models.Common_to_models import Common_to_models
-from MMLL.optimizers.optimizer import SGD
+from MMLL.aggregators.aggregator import SGD, ModelAveraging
 
 
 
@@ -87,7 +87,7 @@ class NN_Master(POM1_CommonML_Master):
     This class implements Neural Networks, run at Master node. It inherits from :class:`POM1_CommonML_Master`.
     """
 
-    def __init__(self, comms, logger, verbose=False, model_architecture=None, Nmaxiter=10, learning_rate=0.0001, momentum=0, nesterov=False, model_averaging='True', optimizer='adam', loss='categorical_crossentropy', metric='accuracy', batch_size=32, num_epochs=1, Tmax=None):
+    def __init__(self, comms, logger, verbose=False, model_architecture=None, Nmaxiter=10, learning_rate=0.0001, momentum=0, nesterov=False, model_averaging='True', optimizer='SGD', loss='categorical_crossentropy', metric='accuracy', batch_size=32, num_epochs=1, Tmax=None, aggregator = None):
         """
         Create a :class:`NN_Master` instance.
 
@@ -137,6 +137,10 @@ class NN_Master(POM1_CommonML_Master):
 
         Tmax: float
             Maximum execution time in seconds.
+
+        aggregator: Aggregator
+            Rule to aggregate gradients or models.
+
         """
         self.model_architecture = model_architecture
         self.Nmaxiter = Nmaxiter
@@ -149,12 +153,19 @@ class NN_Master(POM1_CommonML_Master):
 
         if self.model_averaging=='true':
             self.optimizer = optimizer
-        else:
-            if optimizer == 'SGD':
-                self.optimizer = optimizer
-                self.optimizer_aggregator=SGD(learning_rate, momentum, nesterov)
+            if aggregator is not None:
+                self.aggregator= aggregator
             else:
-                raise NotImplementedError("This optimizer has not been implemented")
+                self.aggregator=ModelAveraging()
+        else:
+            self.optimizer = optimizer
+
+            if aggregator is not None:
+                self.aggregator= aggregator
+            elif optimizer == 'SGD' or optimizer is None:
+                self.aggregator=SGD(learning_rate, momentum, nesterov)
+            else:
+                raise NotImplementedError("This optimizer has not been implemented for gradient descent")
 
         self.loss = loss
         self.metric = metric
@@ -235,22 +246,18 @@ class NN_Master(POM1_CommonML_Master):
 
         # Compute average of gradients and update model
         if self.state_dict['CN'] == 'UPDATE_MODEL':
-            self.optimizer_aggregator.aggregate(self.model, self.list_gradients)
+            new_weights = self.aggregator.aggregate(self.model, self.dict_gradients)
+            self.model.keras_model.set_weights(new_weights)        
+
             self.reset()
             self.state_dict['CN'] = 'CHECK_TERMINATION'
             self.iter += 1
 
         # Compute model averaging
         if self.state_dict['CN'] == 'MODEL_AVERAGING':
-            new_weights = []
-            for index_layer in range(len(self.list_weights[0])):
-                layer_weights = []
-                for worker in range(len(self.list_weights)):
-                    layer_weights.append(self.list_weights[worker][index_layer])                 
-                mean_weights = np.mean(layer_weights, axis=0) # Average layer weights for all workers
-                new_weights.append(mean_weights)
-
+            new_weights = self.aggregator.aggregate(self.model, self.dict_weights)
             self.model.keras_model.set_weights(new_weights)        
+
             self.reset()
             self.state_dict['CN'] = 'CHECK_TERMINATION'
             self.iter += 1
@@ -339,12 +346,12 @@ class NN_Master(POM1_CommonML_Master):
         """
         if self.state_dict['CN'] == 'wait_gradients':
             if packet['action'] == 'UPDATE_GRADIENTS':
-                self.list_gradients.append(packet['data']['gradients'])
+                self.dict_gradients[packet['id']]=packet['data']['gradients']
                 self.state_dict[sender] = packet['action']
 
         if self.state_dict['CN'] == 'wait_weights':
             if packet['action'] == 'LOCAL_UPDATE':
-                self.list_weights.append(packet['data']['weights'])
+                self.dict_weights[packet['id']]=packet['data']['weights']
                 self.state_dict[sender] = packet['action']
   
     
@@ -359,7 +366,7 @@ class NN_Worker(POM1_CommonML_Worker):
     Class implementing Neural Networks, run at Worker node. It inherits from :class:`POM1_CommonML_Worker`.
     '''
 
-    def __init__(self, master_address, comms, logger, verbose=False, Xtr_b=None, ytr=None):
+    def __init__(self, master_address, comms, logger, verbose=False, Xtr_b=None, ytr=None, worker_operations = None):
         """
         Create a :class:`NN_Worker` instance.
 
@@ -383,8 +390,16 @@ class NN_Worker(POM1_CommonML_Worker):
         ytr: ndarray
             Array containing the labels for training.
         """
+
+        self.worker_operations = None
+
+        if worker_operations is not None:
+            Xtr_b, ytr = worker_operations.preprocess(Xtr_b,ytr)
+            self.worker_operations = worker_operations
+
         self.Xtr_b = Xtr_b
         self.ytr = ytr
+        self.worker_address = comms.id
 
         super().__init__(master_address, comms, logger, verbose)    # Initialize common class for POM1
         self.name = 'POM1_NN_Worker'                                # Name
@@ -427,7 +442,7 @@ class NN_Worker(POM1_CommonML_Worker):
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
 
         if packet['action'] == 'FIT_INIT':
-            self.display(self.name + ' %s: Storing batch size and number of epochs' %self.worker_address)
+            self.display(self.name + ' %s: Sworker_addresstoring batch size and number of epochs' %self.worker_address)
             self.batch_size = packet['data']['batch_size']
             self.num_epochs =  packet['data']['num_epochs']
             action = 'ACK_FIT_INIT'
@@ -438,11 +453,14 @@ class NN_Worker(POM1_CommonML_Worker):
         if packet['action'] == 'LOCAL_TRAIN':
             self.display(self.name + ' %s: Updating model locally' %self.worker_address)
             weights = packet['data']['model_weights']
-            self.model.keras_model.set_weights(weights)
-            self.model.keras_model.fit(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size, verbose=1)
+            if self.worker_operations is not None:
+                self.worker_operations.process(self.model, weights, self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size)
+            else:
+                self.model.keras_model.set_weights(weights)
+                self.model.keras_model.fit(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size, verbose=1)
             action = 'LOCAL_UPDATE'
             data = {'weights': self.model.keras_model.get_weights()}
-            packet = {'action': action, 'data': data}            
+            packet = {'action': action,'id': self.worker_address, 'data': data}            
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
             
@@ -451,7 +469,7 @@ class NN_Worker(POM1_CommonML_Worker):
             gradients = self.get_weight_grad(packet['data']['model_weights'], num_data=self.batch_size)
             action = 'UPDATE_GRADIENTS'
             data = {'gradients': gradients}
-            packet = {'action': action, 'data': data}            
+            packet = {'action': action,'id': self.worker_address ,'data': data}            
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))
             

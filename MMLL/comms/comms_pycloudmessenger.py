@@ -17,7 +17,7 @@ try:
     import pycloudmessenger.serializer as serializer
 except:
     print("pycloudmessenger is not installed, use:")
-    print("pip install https://github.com/IBM/pycloudmessenger/archive/v0.3.0.tar.gz")
+    print("pip install https://github.com/IBM/pycloudmessenger/archive/v0.7.3.tar.gz")
 '''
 
 def get_current_task_name(self):

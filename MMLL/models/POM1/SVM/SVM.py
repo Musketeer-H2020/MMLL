@@ -16,6 +16,7 @@ from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_C
 from MMLL.models.Common_to_models import Common_to_models
 from MMLL.models.POM1.Kmeans.Kmeans import Kmeans_Master, Kmeans_Worker
 
+from MMLL.aggregators.aggregator import ModelAveraging
 
 
 class SVM_model(Common_to_models):
@@ -95,7 +96,7 @@ class SVM_Master(POM1_CommonML_Master):
     This class implements SVM, run at Master node. It inherits from :class:`POM1_CommonML_Master`.
     """
 
-    def __init__(self, comms, logger, verbose=False, NC=None, Nmaxiter=None, tolerance =None, sigma=None, C=None, NmaxiterGD=None, eta=None):
+    def __init__(self, comms, logger, verbose=False, NC=None, Nmaxiter=None, tolerance =None, sigma=None, C=None, NmaxiterGD=None, eta=None, aggregator = None):
         """
         Create a :class:`SVM_Master` instance.
 
@@ -130,6 +131,10 @@ class SVM_Master(POM1_CommonML_Master):
 
         eta: float
             The step of the gradient descent algorithm.
+
+        aggregator: Aggregator
+            Rule to aggregate models.
+
         """
         self.num_centroids = int(NC)
         self.Nmaxiter = int(Nmaxiter)
@@ -147,6 +152,10 @@ class SVM_Master(POM1_CommonML_Master):
         self.model.weights = np.zeros((self.num_centroids, 1))       # Initialize model weights
         self.is_trained = False                                      # Flag to know if the model is trained
     
+        if aggregator is not None:
+            self.aggregator= aggregator
+        else:
+            self.aggregator=ModelAveraging()
     
     
     def Update_State_Master(self):
@@ -216,11 +225,11 @@ class SVM_Master(POM1_CommonML_Master):
 
         # Compute average of centroids and mean distance
         if self.state_dict['CN'] == 'UPDATE_MODEL':
-            list_gradients = np.array(self.list_gradients) # Array of shape (num_dons x num_centroids x 1)
-            list_costs = np.array(self.list_costs)            
-            gradients = np.sum(list_gradients, axis=0) # Add received gradients
-            self.cost_function = np.sum(list_costs)            
-            self.model.weights = self.model.weights - self.eta*gradients
+            gradients = self.aggregator.aggregate(self.model, self.dict_weights)
+            self.model.weights = self.model.weights - self.eta*gradients[0]
+
+            self.cost_function = sum(self.dict_costs.values())            
+
 
             self.reset()
             self.iter += 1
@@ -275,8 +284,8 @@ class SVM_Master(POM1_CommonML_Master):
         """
         if self.state_dict['CN'] == 'wait_gradients':
             if packet['action'] == 'UPDATE_GRADIENTS':
-                self.list_gradients.append(packet['data']['gradients'])
-                self.list_costs.append(packet['data']['cost_function'])
+                self.dict_weights[packet['id']]=packet['data']['gradients']
+                self.dict_costs[packet['id']]=packet['data']['cost_function']
                 self.state_dict[sender] = packet['action']
 
 
@@ -389,8 +398,8 @@ class SVM_Worker(POM1_CommonML_Worker):
             self.model.weights = packet['data']['weights']
             gradients, cost_function = self.get_gradients(self.model.weights)
             action = 'UPDATE_GRADIENTS'
-            data = {'cost_function': cost_function, 'gradients': gradients}
-            packet = {'action': action, 'data': data}
+            data = {'cost_function': cost_function, 'gradients': [gradients]}
+            packet = {'action': action,'id': self.worker_address, 'data': data}
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))  
             

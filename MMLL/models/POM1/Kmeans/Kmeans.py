@@ -16,6 +16,8 @@ from math import floor
 
 from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_CommonML_Worker
 from MMLL.models.Common_to_models import Common_to_models
+from MMLL.aggregators.kmeans_aggregator import Default_Kmeans
+
 
 
 
@@ -70,7 +72,7 @@ class Kmeans_Master(POM1_CommonML_Master):
     This class implements Kmeans, run at Master node. It inherits from :class:`POM1_CommonML_Master`.
     """
 
-    def __init__(self, comms, logger, verbose=False, NC=None, Nmaxiter=None, tolerance=None):
+    def __init__(self, comms, logger, verbose=False, NC=None, Nmaxiter=None, tolerance=None, aggregator = None):
         """
         Create a :class:`Kmeans_Master` instance.
 
@@ -93,6 +95,10 @@ class Kmeans_Master(POM1_CommonML_Master):
 
         tolerance: float
             Minimum tolerance for continuing training.
+
+        aggregator: Aggregator
+            Rule to aggregate centroids.
+
         """        
         self.num_centroids = int(NC)
         self.Nmaxiter = int(Nmaxiter)
@@ -104,6 +110,11 @@ class Kmeans_Master(POM1_CommonML_Master):
         self.iter = 0                               # Number of iterations
         self.is_trained = False                     # Flag to know if the model is trained
         self.model = Kmeans_model(logger)           # Kmeans model
+
+        if aggregator is not None:
+            self.aggregator= aggregator
+        else:
+            self.aggregator=Default_Kmeans(self.num_centroids)
             
             
 
@@ -143,7 +154,8 @@ class Kmeans_Master(POM1_CommonML_Master):
         # Asking the workers to send initialize centroids
         if self.state_dict['CN'] == 'SEND_CENTROIDS':
             action = 'SEND_CENTROIDS'
-            data = {'num_centroids': self.num_centroids}
+            method = self.aggregator.get_initialization_method()
+            data = {'num_centroids': self.num_centroids, 'method':method}
             packet = {'to': to, 'action': action, 'data': data}
             self.comms.broadcast(packet, self.workers_addresses)
             self.display(self.name + ': Sent ' + action + ' to all workers')
@@ -151,31 +163,37 @@ class Kmeans_Master(POM1_CommonML_Master):
             
         # Average the initial centroids from every worker
         if self.state_dict['CN'] == 'AVERAGE_INIT_CENTROIDS':
-            self.list_centroids = np.array(self.list_centroids)
-            self.model.centroids = np.sum(self.list_centroids, axis=0) / self.Nworkers
+            centroids = self.aggregator.initial_aggregate(self.dict_centroids)
+            self.model.centroids = centroids
+            #self.list_centroids = np.array(self.list_centroids)
+            #self.model.centroids = np.sum(self.list_centroids, axis=0) / self.Nworkers
             self.reset()
             self.state_dict['CN'] = 'COMPUTE_LOCAL_CENTROIDS'
 
         # Compute average of centroids and mean distance
         if self.state_dict['CN'] == 'AVERAGE_CENTROIDS':
-            list_centroids = np.array(self.list_centroids) # Array of shape (num_dons x num_centroids x num_features)
-            list_counts = np.array(self.list_counts) # Array of shape (num_dons x num_centroids)
-            list_dists = np.array(self.list_dists) # Array of shape (num_dons x 1)
+            centroids, mean_dist = self.aggregator.aggregate(self.dict_centroids)
+            self.model.centroids = centroids
+            self.new_mean_dist = mean_dist
+
+            #list_centroids = np.array(self.list_centroids) # Array of shape (num_dons x num_centroids x num_features)
+            #list_counts = np.array(self.list_counts) # Array of shape (num_dons x num_centroids)
+            #list_dists = np.array(self.list_dists) # Array of shape (num_dons x 1)
             
             # Average all mean distances received from each DON according to total number of observations per DON with respect to the total 
             # observations including all DONs
-            self.new_mean_dist = np.dot(list_dists.T, np.sum(list_counts, axis=1)) / np.sum(list_counts[:,:])
+            #self.new_mean_dist = np.dot(list_dists.T, np.sum(list_counts, axis=1)) / np.sum(list_counts[:,:])
 
             # Average centroids taking into account the number of observations of the training set in each DON with respect to the total
             # including the training observations of all DONs
-            if np.all(np.sum(list_counts, axis=0)): # If all centroids have at least one observation in one of the DONs
-                self.model.centroids = np.sum((list_centroids.T * (list_counts / np.sum(list_counts, axis=0)).T).T, axis=0) # Shape (num_centroids x num_features)
-            else: # Modify only non-empty centroids
-                for i in range(self.num_centroids):
-                    if np.sum(list_counts[:,i])>0:
-                        self.model.centroids[i,:] = np.zeros_like(list_centroids[0, i])
-                        for kdon in range(self.Nworkers):
-                            self.model.centroids[i,:] = self.model.centroids[i,:]+list_centroids[kdon,i,:]*list_counts[kdon,i]/np.sum(list_counts[:,i])
+            #if np.all(np.sum(list_counts, axis=0)): # If all centroids have at least one observation in one of the DONs
+            #    self.model.centroids = np.sum((list_centroids.T * (list_counts / np.sum(list_counts, axis=0)).T).T, axis=0) # Shape (num_centroids x num_features)
+            #else: # Modify only non-empty centroids
+            #    for i in range(self.num_centroids):
+            #        if np.sum(list_counts[:,i])>0:
+            #            self.model.centroids[i,:] = np.zeros_like(list_centroids[0, i])
+            #            for kdon in range(self.Nworkers):
+            #                self.model.centroids[i,:] = self.model.centroids[i,:]+list_centroids[kdon,i,:]*list_counts[kdon,i]/np.sum(list_counts[:,i])
             self.reset()
             self.iter += 1
             self.state_dict['CN'] = 'CHECK_TERMINATION'
@@ -234,7 +252,8 @@ class Kmeans_Master(POM1_CommonML_Master):
         
         if self.state_dict['CN'] == 'wait_init_centroids':
             if packet['action'] == 'INIT_CENTROIDS':
-                self.list_centroids.append(packet['data']['centroids'])
+                self.dict_centroids[packet['id']]=dict()
+                self.dict_centroids[packet['id']]["centroids"]=packet['data']['centroids']
                 self.state_dict[sender] = packet['action']
 
         if self.state_dict['CN'] == 'wait_update_centroids':
@@ -243,9 +262,10 @@ class Kmeans_Master(POM1_CommonML_Master):
                     self.display(self.name + ': Received empty clusters from worker %s. Terminating training' %str(sender))
                     self.state_dict['CN'] = 'END'
                 else:
-                    self.list_centroids.append(packet['data']['centroids'])
-                    self.list_counts.append(packet['data']['counts'])
-                    self.list_dists.append(packet['data']['mean_dist'])
+                    self.dict_centroids[packet['id']]=dict()
+                    self.dict_centroids[packet['id']]['centroids']=packet['data']['centroids']
+                    self.dict_centroids[packet['id']]['counts']=packet['data']['counts']
+                    self.dict_centroids[packet['id']]['mean_dist']=packet['data']['mean_dist']
                     self.state_dict[sender] = packet['action']
     
     
@@ -323,7 +343,7 @@ class Kmeans_Worker(POM1_CommonML_Worker):
         if packet['action'] == 'SEND_CENTROIDS':
             self.display(self.name + ' %s: Initializing centroids' %self.worker_address)
             self.num_centroids = packet['data']['num_centroids']
-            
+            method = packet['data']['method']
             # Check maximum number of possible centroids
             if self.num_centroids > self.Xtr_b.shape[0]:
                 self.display(self.name + ' %s: Number of clusters exceeds number of training samples. Terminating training' %self.worker_address)
@@ -337,11 +357,14 @@ class Kmeans_Worker(POM1_CommonML_Worker):
                 # centroids = self.Xtr_b[:self.num_centroids, :] # Take the first K observations, this avoids selecting the same point twice
 
                 # Naive sharding initialization (no leakage in POM1)
-                centroids = self.naive_sharding(self.Xtr_b, self.num_centroids)
+                if method == 'Robust':
+                    centroids = self.robust_initialization(self.Xtr_b, self.num_centroids)
+                else:
+                    centroids = self.naive_sharding(self.Xtr_b, self.num_centroids)
 
                 action = 'INIT_CENTROIDS'
                 data = {'centroids': centroids}
-                packet = {'action': action, 'data': data}
+                packet = {'action': action,'id': self.worker_address, 'data': data}
                 
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))            
@@ -361,11 +384,11 @@ class Kmeans_Worker(POM1_CommonML_Worker):
             for i in range(self.num_centroids):
                 clusters.append(self.Xtr_b[cluster_allocs==i])
                 if counts[i]>0:
-                    self.model.centroids[i,:] = (1/len(clusters[i]))*np.sum(clusters[i], axis=0)
+                    self.model.centroids[i,:] = np.sum(clusters[i], axis=0)
 
             action = 'UPDATE_CENTROIDS'
             data = {'centroids': self.model.centroids, 'counts': counts, 'mean_dist': mean_dists}
-            packet = {'action': action, 'data': data}            
+            packet = {'action': action,'id': self.worker_address, 'data': data}            
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))            
             
@@ -384,6 +407,7 @@ class Kmeans_Worker(POM1_CommonML_Worker):
 
 
     def naive_sharding(self, ds, k):
+
         """
         Initialize cluster centroids using deterministic naive sharding algorithm.
     
@@ -426,8 +450,55 @@ class Kmeans_Worker(POM1_CommonML_Worker):
         return centroids
 
 
+    def robust_initialization(self, ds, k):
+
+        """
+        Initialize cluster centroids using deterministic naive sharding algorithm.
+    
+        Parameters
+        ----------
+        ds: numpy array
+            The dataset to be used for centroid initialization.
+        k: int
+            The desired number of clusters for which centroids are required.
+
+        Returns
+        -------
+        centroids : numpy array
+            Collection of k centroids as a numpy array.
+
+        """        
+        n = ds.shape[1]
+        m = ds.shape[0]
+        centroids = np.zeros((k,n))
+    
+        # Sum all elements of each row, add as col to original dataset, sort
+        composite = np.sum(ds, axis=1)
+        composite = np.expand_dims(composite, axis=1)
+        ds = np.append(composite, ds, axis=1)
+        ds.sort(axis=0)
+    
+        # Step value for dataset sharding
+
+        step = floor(m/k)
+    
+        # Vectorize mean ufunc for numpy array
+        vfunc = np.vectorize(self._get_mean)
+    
+        # Divide matrix rows equally by k-1 (so that there are k matrix shards)
+        # Sum columns of shards, get means; these columnar means are centroids
+        for j in range(k):
+            if j == k-1:
+                centroids[j:] = vfunc(np.sum(ds[j*step:,1:], axis=0), step)
+            else:
+                centroids[j:] = vfunc(np.sum(ds[j*step:(j+1)*step,1:], axis=0), step)
+    
+        return centroids
+
+
 
     def _get_mean(self, sums, step):
+
         """
         Vectorizable ufunc for getting means of summed shard columns.
         

@@ -448,7 +448,7 @@ class DSVM_Worker(POM1_CommonML_Worker):
 
             del weights, o, e, ey, a, which, Cx, rx
             action = 'UPDATE_MODEL'
-            packet = {'action': action, 'data': data}
+            packet = {'action': action,'id': self.worker_address , 'data': data}
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))  
             

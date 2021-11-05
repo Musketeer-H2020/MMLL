@@ -13,7 +13,7 @@ from sklearn.metrics import accuracy_score, roc_curve, auc
 from MMLL.models.POM1.CommonML.POM1_CommonML import POM1_CommonML_Master, POM1_CommonML_Worker
 from MMLL.models.Common_to_models import Common_to_models
 
-
+from MMLL.aggregators.aggregator import ModelAveraging
 
 class FBSVM_model(Common_to_models):
     """
@@ -37,7 +37,6 @@ class FBSVM_model(Common_to_models):
         self.centroids = None
         self.weights = None
         self.sigma = None
-
 
 
     def predict(self, X_b):
@@ -74,7 +73,7 @@ class FBSVM_Master(POM1_CommonML_Master):
     This class implements FBSVM, run at Master node. It inherits from :class:`POM1_CommonML_Master`.
     """
 
-    def __init__(self, comms, logger, verbose=False, NC=None, Nmaxiter=None, tolerance=None, sigma=None, C=None, num_epochs_worker=None, eps=None, mu=None, NI=None, minvalue=None, maxvalue=None):
+    def __init__(self, comms, logger, verbose=False, NC=None, Nmaxiter=None, tolerance=None, sigma=None, C=None, num_epochs_worker=None, eps=None, mu=None, NI=None, minvalue=None, maxvalue=None, aggregator = None):
         """
         Create a :class:`FBSVM_Master` instance.
 
@@ -121,6 +120,10 @@ class FBSVM_Master(POM1_CommonML_Master):
 
         maxvalue: float
             The centroids are initialized randomly from an uniforme distribution. This is the maximum value.
+
+        aggregator: Aggregator
+            Rule to aggregate models.
+
         """
 
         self.num_centroids = int(NC)
@@ -142,6 +145,10 @@ class FBSVM_Master(POM1_CommonML_Master):
         self.model.sigma = sigma                               # Initialize sigma
         self.is_trained = False                                # Flag to know if the model is trained
     
+        if aggregator is not None:
+            self.aggregator= aggregator
+        else:
+            self.aggregator=ModelAveraging()
     
     
     def Update_State_Master(self):
@@ -218,13 +225,13 @@ class FBSVM_Master(POM1_CommonML_Master):
 
         # Compute average of centroids and mean distance
         if self.state_dict['CN'] == 'UPDATE_MODEL':
-            old_weights = np.copy(self.model.weights)
-            grad = np.zeros((self.num_centroids+1, 1))
-            for kworker in range(len(self.list_weights)):
-                grad_worker = self.list_weights[kworker] - self.model.weights
-                grad += grad_worker
 
-            grad = grad / len(self.list_weights)
+            old_weights = np.copy(self.model.weights)
+
+            weight_aggregation = self.aggregator.aggregate(self.model, self.dict_weights)
+
+            grad = weight_aggregation[0] - self.model.weights
+
             self.model.weights = self.model.weights + self.mu * grad
             self.inc_w = np.linalg.norm(self.model.weights - old_weights) / np.linalg.norm(old_weights)
 
@@ -291,9 +298,8 @@ class FBSVM_Master(POM1_CommonML_Master):
         """
         if self.state_dict['CN'] == 'wait_weights':
             if packet['action'] == 'UPDATE_MODEL':
-                self.list_weights.append(packet['data']['weights'])
+                self.dict_weights[packet['id']]=packet['data']['weights']
                 self.state_dict[sender] = packet['action']
-
 
     
     
@@ -420,8 +426,8 @@ class FBSVM_Worker(POM1_CommonML_Worker):
                 kiter += 1 
 
             action = 'UPDATE_MODEL'
-            data = {'weights': w_worker}
-            packet = {'action': action, 'data': data}
+            data = {'weights': [w_worker]}
+            packet = {'action': action,'id': self.worker_address,  'data': data}
             self.comms.send(packet, self.master_address)
             self.display(self.name + ' %s: Sent %s to master' %(self.worker_address, action))  
             
