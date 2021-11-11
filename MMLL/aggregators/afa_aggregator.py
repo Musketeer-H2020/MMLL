@@ -8,10 +8,14 @@ robust to data and model poisoning attacks.
 __author__ = "Alexander Matyasko"
 __date__ = "November 2021"
 
+import logging
+
 import numpy as np
 from MMLL.aggregators.aggregator import Aggregator
 from MMLL.common.math_utils import cosine_similarity
+from scipy.stats import beta
 
+logger = logging.getLogger()
 
 class AFAAveraging(Aggregator):
     """This class implements Adaptive Federated Averaging aggregation
@@ -53,13 +57,8 @@ class AFAAveraging(Aggregator):
         self.similarity_metric = similarity_metric
         # aggregator state
         self._init = False
+        self._blocked_workers = []
         self._statistics = None
-
-    @property
-    def workers(self):
-        if not self._init:
-            raise ValueError("The aggregator is not initialized yet")
-        return list(self._statistics.keys())
 
     def aggregate(self, model, dict_weights):
         """
@@ -109,8 +108,16 @@ class AFAAveraging(Aggregator):
             ],
                                   axis=0)
 
-        num_layers = len(dict_weights[self.workers[0]])
-        good_workers = set(self.workers)
+        # remove bad workers
+        dict_weights = {
+            worker: worker_weights
+            for worker, worker_weights in dict_weights.items()
+            if worker not in set(self._blocked_workers)
+        }
+
+        num_layers = len(list(dict_weights.values())[0])
+        all_workers = list(dict_weights.keys())
+        good_workers = set(all_workers)
         bad_workers = set()
         new_bad_workers = {1}
         slack = self.slack0
@@ -149,14 +156,21 @@ class AFAAveraging(Aggregator):
             # increase slack to reduce false positives
             slack += self.slack_delta
 
-        # computer average using good workers and update model weights
-        new_weights = compute_weighted_average(good_workers)
-
         # update alpha and beta for all workers
-        for worker in self.workers:
+        for worker in all_workers:
             if worker in good_workers:
                 self._statistics[worker]["alpha"] += 1
             if worker in bad_workers:
                 self._statistics[worker]["beta"] += 1
 
+        # block bad workers
+        for worker in all_workers:
+            worker_stat = self._statistics[worker]
+            th = beta.cdf(0.5, worker_stat["alpha"], worker_stat["beta"])
+            if th >= self.block_threshold:
+                self._blocked_workers.append(worker)
+                logger.info("Blocking worker %s" % worker)
+
+        # computer average using good workers and update model weights
+        new_weights = compute_weighted_average(good_workers)
         return new_weights
