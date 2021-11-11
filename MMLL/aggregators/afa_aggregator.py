@@ -91,12 +91,14 @@ class AFAAveraging(Aggregator):
             new_weights = []
             for i in range(num_layers):
                 layer_weights = []
+                N = 0
                 for worker in workers:
                     worker_weight = dict_weights[worker][i]
                     worker_stat = self._statistics[worker]
                     pk = bernoulli_p(worker_stat["alpha"], worker_stat["beta"])
                     layer_weights.append(pk * worker_weight)
-                average_weights = np.sum(layer_weights, axis=0) / len(workers)
+                    N += pk
+                average_weights = np.sum(layer_weights, axis=0) / N
                 new_weights.append(average_weights)
             return new_weights
 
