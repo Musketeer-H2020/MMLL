@@ -96,6 +96,10 @@ class WorkerByzantineAttack(WorkerAttack):
         model.keras_model.set_weights(weights)
 
 
+def max_crossentropy(y_true, y_pred):
+    return -tf.losses.categorical_crossentropy(y_true, y_pred)
+
+
 class WorkerStealthyAttack(WorkerAttack):
     def __init__(self, ρ=1e-4, max_loss=1e3, **kwargs):
         self.ρ = ρ
