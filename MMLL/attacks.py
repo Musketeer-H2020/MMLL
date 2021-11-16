@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function
-
 """
 This file implements attacks for Musketeer Federated Learning Library
 """
@@ -17,13 +16,14 @@ from tensorflow.keras.regularizers import Regularizer
 from tensorflow.keras.utils import to_categorical
 
 
-def clone_model(model, loss=None):
-    model_copy = tf.keras.models.clone_model(model)
-    model_copy.build(model.input_shape)
-    model_copy.compile(optimizer=model.optimizer,
-                       loss=loss if loss is not None else model.loss,
-                       metrics=['accuracy'])
-    return model_copy
+def rebuild_model(model, optimizer=None, loss=None, metrics=['accuracy']):
+    if optimizer is None:
+        optimizer = model.optimizer
+    if loss is None:
+        loss = model.loss
+    model.build(model.input_shape)
+    model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+    return model
 
 
 class WorkerAttack(ABC):
