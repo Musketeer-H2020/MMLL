@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function
+
 """
 This file implements attacks for Musketeer Federated Learning Library
 """
@@ -9,9 +10,9 @@ __author__ = "Alexander Matyasko"
 __date__ = "November 2021"
 
 from abc import ABC, abstractmethod
+from functools import partial
 
 import numpy as np
-import copy
 import tensorflow as tf
 from tensorflow.keras.regularizers import Regularizer
 from tensorflow.keras.utils import to_categorical
@@ -31,6 +32,7 @@ def rebuild_model(model,
     model.build(model.input_shape)
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
     return model
+
 
 def assign_layer_regularizer(layer, variable, regularizer):
     name_in_scope = variable.name[:variable.name.find(':')]
@@ -55,10 +57,13 @@ class WorkerAttack(ABC):
         ...
 
 
-def random_label_flipping(y, num_labels):
+def random_label_flipping(y, num_labels, rng=None):
     if not isinstance(y, np.ndarray):
         y = np.array(y)
-    p = np.random.uniform(size=(y.shape[0], num_labels))
+    if rng is None:
+        p = rng.uniform(size=(y.shape[0], num_labels))
+    else:
+        p = np.random.uniform(size=(y.shape[0], num_labels))
     p[np.cast[np.bool](to_categorical(y, num_labels))] = -1
     y_new = np.argmax(p, axis=-1)
     assert np.all(y_new != y)
@@ -83,7 +88,8 @@ class WorkerLabelFlippingAttack(WorkerAttack):
         else:
             ytr[attack_indices] = to_categorical(
                 random_label_flipping(ytr[attack_indices].argmax(-1),
-                                      self.num_labels))
+                                      self.num_labels,
+                                      rng=self._rng))
         return Xtr_b, ytr
 
     def process(self, model, weights, Xtr_b, ytr, epochs=1, batch_size=128):
@@ -118,54 +124,63 @@ class StealthyL2Regularizer(Regularizer):
         self.ρ = ρ
 
     def __call__(self, W):
-        return self.ρ * tf.reduce_sum(tf.math.square(W - self.W0))
+        return self.ρ * tf.nn.l2_loss(W - self.W0)
 
     def get_config(self):
         return {'W0': self.W0, 'ρ': float(self.ρ)}
 
 
-def max_crossentropy(y_true, y_pred):
-    return -tf.losses.categorical_crossentropy(y_true, y_pred)
+def max_crossentropy(y_true, y_pred, clip_max=10000.0):
+    return -tf.minimum(tf.losses.categorical_crossentropy(y_true, y_pred),
+                       clip_max)
 
 
 class WorkerStealthyAttack(WorkerAttack):
-    def __init__(self, ρ=1e-4, max_loss=1e3, **kwargs):
+    def __init__(self, num_labels, ρ=1e-4, **kwargs):
+        self.num_labels = num_labels
         self.ρ = ρ
-        self.max_loss = max_loss
         super().__init__(**kwargs)
-        # private fields
-        self._init = False
 
     def preprocess(self, Xtr_b, ytr):
+        self.ymal = to_categorical(
+            random_label_flipping(ytr.argmax(-1),
+                                  self.num_labels,
+                                  rng=self._rng))
         return Xtr_b, ytr
 
     def process(self, model, weights, Xtr_b, ytr, epochs=1, batch_size=128):
-        model.keras_model.set_weights(weights)
-        model.keras_model.fit(Xtr_b,
-                              ytr,
-                              epochs=epochs,
-                              batch_size=batch_size,
-                              verbose=1)
-        benign_weights = model.keras_model.get_weights()
+        # get benign model
+        benign_model = tf.keras.models.clone_model(model.keras_model)
+        rebuild_model(benign_model, ref_model=model.keras_model)
+        benign_model.set_weights(weights)
+        benign_model.fit(Xtr_b,
+                         ytr,
+                         epochs=epochs,
+                         batch_size=batch_size)
 
-        def stealthy_attack_loss(y_true, y_pred):
-            nll = tf.minimum(
-                tf.losses.categorical_crossentropy(y_true, y_pred),
-                self.max_loss)
-            stealthy = sum([
-                tf.reduce_sum((w0 - w1)**2)
-                for w0, w1 in zip(benign_weights, model.keras_model.weights)
-            ])
-            return -self.ρ * nll + stealthy
-
-        opt = model.keras_model.optimizer
-        model.keras_model.compile(optimizer=opt,
-                                  loss=stealthy_attack_loss,
-                                  metrics=['accuracy'])
-
-        model.keras_model.set_weights(weights)
-        model.keras_model.fit(Xtr_b,
-                              ytr,
-                              epochs=epochs,
-                              batch_size=batch_size,
-                              verbose=1)
+        # get stealthy malicious model
+        malicious_model = tf.keras.models.clone_model(model.keras_model)
+        for benign_layer, malicious_layer in zip(benign_model.layers,
+                                                 malicious_model.layers):
+            kernel_regularizer = StealthyL2Regularizer(
+                benign_layer.kernel.value(), ρ=self.ρ)
+            assign_layer_regularizer(malicious_layer, malicious_layer.kernel,
+                                     kernel_regularizer)
+            if benign_layer.bias is not None:
+                bias_regularizer = StealthyL2Regularizer(
+                    benign_layer.bias.value(), ρ=self.ρ)
+                assign_layer_regularizer(malicious_layer, malicious_layer.bias,
+                                         bias_regularizer)
+        rebuild_model(malicious_model,
+                      metrics=['accuracy', 'categorical_crossentropy'],
+                      ref_model=model.keras_model)
+        malicious_model.set_weights(weights)
+        malicious_model.fit(
+            Xtr_b,
+            self.ymal,
+            epochs=10 *
+            epochs,  # increase the number of local epochs to fit random labels
+            batch_size=batch_size)
+        malicious_model.evaluate(Xtr_b, ytr, verbose=True)
+        # update model weights
+        model.keras_model.set_weights(malicious_model.get_weights())
