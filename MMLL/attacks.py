@@ -45,12 +45,24 @@ def random_label_flipping(y, num_labels):
 
 
 class WorkerLabelFlippingAttack(WorkerAttack):
-    def __init__(self, num_labels, **kwargs):
+    def __init__(self, num_labels, fraction=1.0, target_class=None, **kwargs):
         self.num_labels = num_labels
+        self.fraction = fraction
+        self.target_class = target_class
         super().__init__(**kwargs)
 
     def preprocess(self, Xtr_b, ytr):
-        return Xtr_b, random_label_flipping(ytr, self.num_labels)
+        indices = np.arange(ytr.shape[0])
+        self._rng.shuffle(indices)
+        attack_indices = indices[:ytr.shape[0] * self.fraction]
+        if self.target_class is not None:
+            ytr[attack_indices] = self.target_class * np.ones(
+                len(attack_indices))
+        else:
+            ytr[attack_indices] = to_categorical(
+                random_label_flipping(ytr[attack_indices].argmax(-1),
+                                      self.num_labels))
+        return Xtr_b, ytr
 
     def process(self, model, weights, Xtr_b, ytr, epochs=1, batch_size=128):
         model.keras_model.set_weights(weights)
