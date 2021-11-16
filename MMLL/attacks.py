@@ -16,6 +16,13 @@ import tensorflow as tf
 from tensorflow.keras.utils import to_categorical
 
 
+def clone_model(model, loss=None):
+    model_copy = tf.keras.models.clone_model(model)
+    model_copy.build(model.input_shape)
+    model_copy.compile(optimizer=model.optimizer,
+                       loss=loss if loss is not None else model.loss,
+                       metrics=['accuracy'])
+    return model_copy
 class WorkerAttack(ABC):
     """Base class for all worker's attacks.
     """
