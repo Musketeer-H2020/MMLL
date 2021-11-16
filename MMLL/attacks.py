@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function
+
 """
 This file implements attacks for Musketeer Federated Learning Library
 """
@@ -12,7 +13,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import tensorflow as tf
-from keras.utils.np_utils import to_categorical
+from tensorflow.keras.utils import to_categorical
 
 
 class WorkerAttack(ABC):
