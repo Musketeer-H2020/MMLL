@@ -86,3 +86,34 @@ class WorkerByzantineAttack(WorkerAttack):
             self.strength * self._rng.normal(size=w.shape) for w in weights
         ]
         model.keras_model.set_weights(weights)
+
+
+class WorkerStealthyAttack(WorkerAttack):
+    def __init__(self, ρ=1e-4, **kwargs):
+        self.ρ = ρ
+        super().__init__(**kwargs)
+        # private fields
+        self._init = False
+
+    def preprocess(self, Xtr_b, ytr):
+        return Xtr_b, ytr
+
+    def process(self, model, weights, Xtr_b, ytr, epochs=1, batch_size=128):
+        if not self._init:
+            def stealthy_attack_loss(y_true, y_pred):
+                nll = tf.losses.categorical_crossentropy(y_true, y_pred)
+                W0 = weights
+                W1 = model.keras_model.get_weights()
+                stealthy = sum([tf.norm(w0 - w1, 2) for w0, w1 in zip(W0, W1)])
+                return -nll + self.ρ * stealthy
+
+            opt = model.keras_model.optimizer
+            metrics = model.keras_model.metrics
+            model.keras_model.compile(optimizer=opt, loss=stealthy_attack_loss, metrics=metrics)
+
+        model.keras_model.set_weights(weights)
+        model.keras_model.fit(Xtr_b,
+                              ytr,
+                              epochs=epochs,
+                              batch_size=batch_size,
+                              verbose=1)
