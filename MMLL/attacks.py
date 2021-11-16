@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.regularizers import Regularizer
 from tensorflow.keras.utils import to_categorical
 
 
@@ -23,6 +24,8 @@ def clone_model(model, loss=None):
                        loss=loss if loss is not None else model.loss,
                        metrics=['accuracy'])
     return model_copy
+
+
 class WorkerAttack(ABC):
     """Base class for all worker's attacks.
     """
@@ -94,6 +97,20 @@ class WorkerByzantineAttack(WorkerAttack):
             self.strength * self._rng.normal(size=w.shape) for w in weights
         ]
         model.keras_model.set_weights(weights)
+
+
+@tf.keras.utils.register_keras_serializable(package='MMLL',
+                                            name='StealthyL2Regularizer')
+class StealthyL2Regularizer(Regularizer):
+    def __init__(self, W0, ρ=1e-4):
+        self.W0 = W0
+        self.ρ = ρ
+
+    def __call__(self, W):
+        return self.ρ * tf.reduce_sum(tf.math.square(W - self.W0))
+
+    def get_config(self):
+        return {'W0': self.W0, 'ρ': float(self.ρ)}
 
 
 def max_crossentropy(y_true, y_pred):
