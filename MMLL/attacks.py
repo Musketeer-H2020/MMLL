@@ -11,19 +11,30 @@ __date__ = "November 2021"
 from abc import ABC, abstractmethod
 
 import numpy as np
+import copy
 import tensorflow as tf
 from tensorflow.keras.regularizers import Regularizer
 from tensorflow.keras.utils import to_categorical
 
 
-def rebuild_model(model, optimizer=None, loss=None, metrics=['accuracy']):
+def rebuild_model(model,
+                  optimizer=None,
+                  loss=None,
+                  metrics=['accuracy'],
+                  ref_model=None):
     if optimizer is None:
-        optimizer = model.optimizer
+        assert ref_model is not None
+        optimizer = ref_model.optimizer
     if loss is None:
-        loss = model.loss
+        assert ref_model is not None
+        loss = ref_model.loss
     model.build(model.input_shape)
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
     return model
+
+def assign_layer_regularizer(layer, variable, regularizer):
+    name_in_scope = variable.name[:variable.name.find(':')]
+    layer._handle_weight_regularization(name_in_scope, variable, regularizer)
 
 
 class WorkerAttack(ABC):
