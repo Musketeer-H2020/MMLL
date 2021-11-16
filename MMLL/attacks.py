@@ -6,6 +6,7 @@ This file implements attacks for Musketeer Federated Learning Library
 
 __author__ = "Alexander Matyasko"
 __date__ = "November 2021"
+
 from __future__ import absolute_import, division, print_function
 
 from abc import ABC, abstractmethod
@@ -58,3 +59,18 @@ class WorkerLabelFlippingAttack(WorkerAttack):
                               epochs=epochs,
                               batch_size=batch_size,
                               verbose=1)
+
+
+class WorkerByzantineAttack(WorkerAttack):
+    def __init__(self, strength=1.0, **kwargs):
+        self.strength = strength
+        super().__init__(**kwargs)
+
+    def preprocess(self, Xtr_b, ytr):
+        return Xtr_b, ytr
+
+    def process(self, model, weights, Xtr_b, ytr, epochs=1, batch_size=128):
+        weights = [
+            self.strength * self._rng.normal(size=w.shape) for w in weights
+        ]
+        model.keras_model.set_weights(weights)
