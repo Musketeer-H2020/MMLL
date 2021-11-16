@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import, division, print_function
 """
 This file implements attacks for Musketeer Federated Learning Library
 """
@@ -6,8 +7,6 @@ This file implements attacks for Musketeer Federated Learning Library
 
 __author__ = "Alexander Matyasko"
 __date__ = "November 2021"
-
-from __future__ import absolute_import, division, print_function
 
 from abc import ABC, abstractmethod
 
@@ -54,10 +53,11 @@ class WorkerLabelFlippingAttack(WorkerAttack):
     def preprocess(self, Xtr_b, ytr):
         indices = np.arange(ytr.shape[0])
         self._rng.shuffle(indices)
-        attack_indices = indices[:ytr.shape[0] * self.fraction]
+        attack_indices = indices[:int(ytr.shape[0] * self.fraction)]
         if self.target_class is not None:
-            ytr[attack_indices] = self.target_class * np.ones(
-                len(attack_indices))
+            ytr[attack_indices] = to_categorical(
+                self.target_class * np.ones(len(attack_indices)),
+                self.num_labels)
         else:
             ytr[attack_indices] = to_categorical(
                 random_label_flipping(ytr[attack_indices].argmax(-1),
@@ -100,6 +100,7 @@ class WorkerStealthyAttack(WorkerAttack):
 
     def process(self, model, weights, Xtr_b, ytr, epochs=1, batch_size=128):
         if not self._init:
+
             def stealthy_attack_loss(y_true, y_pred):
                 nll = tf.losses.categorical_crossentropy(y_true, y_pred)
                 W0 = weights
@@ -109,7 +110,9 @@ class WorkerStealthyAttack(WorkerAttack):
 
             opt = model.keras_model.optimizer
             metrics = model.keras_model.metrics
-            model.keras_model.compile(optimizer=opt, loss=stealthy_attack_loss, metrics=metrics)
+            model.keras_model.compile(optimizer=opt,
+                                      loss=stealthy_attack_loss,
+                                      metrics=metrics)
 
         model.keras_model.set_weights(weights)
         model.keras_model.fit(Xtr_b,
