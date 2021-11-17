@@ -141,11 +141,11 @@ class WorkerStealthyAttack(WorkerAttack):
         self.ρ = ρ
         super().__init__(**kwargs)
 
+    def set_malicious_data(self, Xmal, ymal):
+        self.Xmal = Xmal
+        self.ymal = ymal
+
     def preprocess(self, Xtr_b, ytr):
-        self.ymal = to_categorical(
-            random_label_flipping(ytr.argmax(-1),
-                                  self.num_labels,
-                                  rng=self._rng))
         return Xtr_b, ytr
 
     def process(self, model, weights, Xtr_b, ytr, epochs=1, batch_size=128):
