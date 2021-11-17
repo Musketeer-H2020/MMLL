@@ -149,6 +149,9 @@ class WorkerStealthyAttack(WorkerAttack):
         return Xtr_b, ytr
 
     def process(self, model, weights, Xtr_b, ytr, epochs=1, batch_size=128):
+        # check accuracy on malicious data before local training
+        model.keras_model.set_weights(weights)
+        model.keras_model.evaluate(self.Xmal, self.ymal, verbose=True)
         # get benign model
         benign_model = tf.keras.models.clone_model(model.keras_model)
         rebuild_model(benign_model, ref_model=model.keras_model)
@@ -177,12 +180,13 @@ class WorkerStealthyAttack(WorkerAttack):
                       ref_model=model.keras_model)
         malicious_model.set_weights(weights)
         malicious_model.fit(
-            Xtr_b,
+            self.Xmal,
             self.ymal,
             epochs=10 *
-            epochs,  # increase the number of local epochs to fit random labels
+            epochs,  # increase the number of local epochs to fit malicious data
             batch_size=batch_size,
             verbose=False)
         # update model weights
         model.keras_model.set_weights(malicious_model.get_weights())
+        model.keras_model.evaluate(self.Xmal, self.ymal, verbose=True)
         model.keras_model.evaluate(Xtr_b, ytr, verbose=True)
