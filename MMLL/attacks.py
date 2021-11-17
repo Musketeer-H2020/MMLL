@@ -156,7 +156,8 @@ class WorkerStealthyAttack(WorkerAttack):
         benign_model.fit(Xtr_b,
                          ytr,
                          epochs=epochs,
-                         batch_size=batch_size)
+                         batch_size=batch_size,
+                         verbose=False)
 
         # get stealthy malicious model
         malicious_model = tf.keras.models.clone_model(model.keras_model)
@@ -180,7 +181,8 @@ class WorkerStealthyAttack(WorkerAttack):
             self.ymal,
             epochs=10 *
             epochs,  # increase the number of local epochs to fit random labels
-            batch_size=batch_size)
-        malicious_model.evaluate(Xtr_b, ytr, verbose=True)
+            batch_size=batch_size,
+            verbose=False)
         # update model weights
         model.keras_model.set_weights(malicious_model.get_weights())
+        model.keras_model.evaluate(Xtr_b, ytr, verbose=True)
