@@ -60,7 +60,7 @@ class WorkerAttack(ABC):
 def random_label_flipping(y, num_labels, rng=None):
     if not isinstance(y, np.ndarray):
         y = np.array(y)
-    if rng is None:
+    if rng is not None:
         p = rng.uniform(size=(y.shape[0], num_labels))
     else:
         p = np.random.uniform(size=(y.shape[0], num_labels))
