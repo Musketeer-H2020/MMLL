@@ -222,6 +222,7 @@ class KR_Master(Common_to_all_POMs):
         self.mu = 0.1
         self.momentum = 0
         self.regularization = 0.001
+        self.aggregator = None
 
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})

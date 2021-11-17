@@ -9,12 +9,14 @@ __date__ = "Dec. 2020"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
+from MMLL.data_value.DVEO import DVE_online
 from transitions import State
 from transitions.extensions import GraphMachine
 import pickle
 from pympler import asizeof #asizeof.asizeof(my_object)
 import dill
 import time
+import copy
 
 class Model():
     """
@@ -45,6 +47,59 @@ class Model():
         X_b = np.hstack((np.ones((X.shape[0], 1)), X))
         prediction_values = np.dot(X_b, self.w.ravel())
         return prediction_values
+
+    def predict_with(self, model_params, X):
+        """
+        Predicts outputs given the provided model parameters
+
+        Parameters
+        ----------
+
+        model_params: list
+            list with the parameters of different models (can be just one). If more than one are provided, 
+            then the accumulation is used 
+
+        X_b: ndarray
+            Matrix with the input values
+
+        Returns
+        -------
+        prediction_values: ndarray
+
+        """
+        Nmodels = len(model_params)
+        
+        # Storing the current model
+        self.w_backup = np.copy(self.w)
+
+        self.w = np.copy(model_params[0])
+        if Nmodels > 1: # Accumulating  models
+            for k in range(1, Nmodels):
+                self.w += model_params[k]
+
+        #prediction = self.sigm(np.dot(X_b, self.w.ravel()))
+        prediction = self.predict(X)
+
+        # Restoring the current model
+        self.w = np.copy(self.w_backup)
+
+        return prediction
+
+    def get_parameters(self):
+        """
+        Returns model parameters such that it is possible to rebuild the model using the set of parameters
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        model_params: it can be a matrix, or any other structure, but the 
+        method "predict_with" must know how to handle it
+
+        """
+        return self.w
 
     def save(self, filename=None):
         """
@@ -181,6 +236,9 @@ class LR_Master(Common_to_all_POMs):
         self.epsilon = 0.00000001  # to avoid log(0)
         self.momentum = 0
         self.minibatch = 1.0
+        self.use_dve = False
+        self.dve_weight = False
+        self.aggregator = None
 
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
@@ -438,6 +496,7 @@ class LR_Master(Common_to_all_POMs):
         self.display('PROC_MASTER_START', verbose=False)
 
         self.w = np.random.normal(0, 0.1, (self.NI + 1, 1))
+        self.model.w = np.copy(self.w)
         self.w_encr = self.encrypter.encrypt(self.w)
         self.w_old = np.random.normal(0, 10, (self.NI + 1, 1)) # large to avoid stop at first iteration
         self.grad_old = np.zeros((self.NI + 1, 1))
@@ -479,8 +538,17 @@ class LR_Master(Common_to_all_POMs):
         for worker in self.workers_addresses:
             self.receivers_list.append(self.send_to[worker])
 
+        if self.Xval is not None:
+            self.use_Xval = False # Do not use Xval for training
+            self.display('Warning: Validation set is not used during training', verbose=True)
+
+        if self.Xval is None and self.use_dve:
+            print('WARNING: Data Value estimation is not possible, no validation set is provided')
+            self.use_dve = False
+
         # Data at self.X_encr_dict, self.y_encr_dict
 
+        # Only for debug
         check = False
         which = '4'
 
@@ -489,9 +557,9 @@ class LR_Master(Common_to_all_POMs):
 
         self.selected_workers = self.workers_addresses
 
-        if self.Xval is not None:
-            message = 'WARNING: Validation data is not used during training.'
-            self.display(message, True)
+        if self.use_dve:
+            # Init DVE object
+            self.dve = DVE_online('song_mr', 0, self.model, self.workers_addresses, self.Xval, self.yval, metric='regression') 
 
         self.display('PROC_MASTER_END', verbose=False)
 
@@ -514,7 +582,6 @@ class LR_Master(Common_to_all_POMs):
                 #o_ = np.sum(self.Xw_encr_dict[which], axis=1).reshape((-1, 1))
                 o_decr = self.decrypter.decrypt(self.Xw_encr_dict[which])
                 print(np.linalg.norm(o - o_decr))  # OK
-
 
             # Computing errors
             self.e_encr_dict = {}
@@ -547,18 +614,49 @@ class LR_Master(Common_to_all_POMs):
 
             grad_encr = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
             Ntotal = 0
+
+            grad_encr_dict = {}
+            grad_encr = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
             for waddr in self.selected_workers:
                 eX_encr = self.eX_encr_dict[waddr]
                 Ntotal += eX_encr.shape[0]
-                grad_encr += np.mean(eX_encr, axis=0).reshape((-1, 1))
+                grad_encr_worker = np.mean(eX_encr, axis=0).reshape((-1, 1))
+                grad_encr += grad_encr_worker
+                grad_encr_dict.update({waddr: grad_encr_worker})
 
             if check:
                 grad0 = np.mean(e0 * X0, axis=0).reshape((-1, 1))
                 grad0_decr = self.decrypter.decrypt(np.mean(self.eX_encr_dict[which], axis=0).reshape((-1, 1)))
                 print(np.linalg.norm(grad0 - grad0_decr))  # OK
 
-            #self.w_encr += self.mu * grad_encr / Ntotal
-            grad_encr = self.mu * grad_encr / len(self.workers_addresses)
+            if self.use_dve:
+                # we need to decrypt the gradient contributions
+                incs_dict = {}
+                for waddr in self.workers_addresses:
+                    grad_decr = self.decrypt_model({'grad': grad_encr_dict[waddr]})['grad']
+                    incs_dict.update({waddr: -grad_decr * self.mu / len(self.workers_addresses)})
+
+                self.dve.update(self.model, incs_dict, 'incs')
+
+                message = 'DVE = '
+                for waddr in self.workers_addresses:
+                    message += '%s: %.3f'%(waddr, self.dve.dve_dict[waddr]) + ', '
+                print(message)
+
+            if not self.dve_weight:
+                print('== NO DVE weighting ==')
+            else:
+                print('== DVE weighting ==')                       
+
+            if not self.dve_weight:
+                grad_encr = self.mu * grad_encr / len(self.workers_addresses)                  
+            else:
+                # recompute grad_encr with the dve_weights
+                grad_encr = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
+                for waddr in self.workers_addresses:
+                    grad_encr += grad_encr_dict[waddr] * self.dve.dve_dict[waddr]
+
+                grad_encr = self.mu * grad_encr
 
             # Moment update
             momentum_term = self.momentum * self.grad_old

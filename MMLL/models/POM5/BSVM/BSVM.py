@@ -205,6 +205,7 @@ class BSVM_Master(Common_to_all_POMs):
         #self.NC = NC                                # No. Centroids
         #self.Nmaxiter = Nmaxiter
         self.master_address = master_address
+        self.aggregator = None
         
         # Convert workers_addresses -> '0', '1', + send_to dict
         self.broadcast_addresses = workers_addresses
@@ -702,6 +703,14 @@ class BSVM_Master(Common_to_all_POMs):
         """
         self.display(self.name + ': Starting training', verbose=True)
         self.display('MASTER_INIT', verbose=False)
+
+        ##################################################################
+        # Defenses not suported
+        if self.aggregator is not None:
+            self.display('=' * 50, verbose=True)
+            self.display('** WARNING **: this model does not support external aggregation. The provided aggregator will not be used.', verbose=True)
+            self.display('=' * 50, verbose=True)
+        ##################################################################
 
         if not self.train_data_is_ready: 
             self.FSMmaster.go_update_tr_data(self)

@@ -9,6 +9,7 @@ __date__ = "Febr. 2021"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
+from MMLL.data_value.DVEO import DVE_online
 from transitions import State
 from transitions.extensions import GraphMachine
 import pickle
@@ -43,6 +44,59 @@ class Model():
 
         """
         return 1 / (1 + np.exp(-x))
+
+    def predict_with(self, model_params, X):
+        """
+        Predicts outputs given the provided model parameters
+
+        Parameters
+        ----------
+
+        model_params: list
+            list with the parameters of different models (can be just one). If more than one are provided, 
+            then the accumulation is used 
+
+        X_b: ndarray
+            Matrix with the input values
+
+        Returns
+        -------
+        prediction_values: ndarray
+
+        """
+        Nmodels = len(model_params)
+        
+        # Storing the current model
+        self.w_backup = np.copy(self.w)
+
+        self.w = np.copy(model_params[0])
+        if Nmodels > 1: # Accumulating  models
+            for k in range(1, Nmodels):
+                self.w += model_params[k]
+
+        #prediction = self.sigm(np.dot(X_b, self.w.ravel()))
+        prediction = self.predict(X)
+
+        # Restoring the current model
+        self.w = np.copy(self.w_backup)
+
+        return prediction
+
+    def get_parameters(self):
+        """
+        Returns model parameters such that it is possible to rebuild the model using the set of parameters
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        model_params: it can be a matrix, or any other structure, but the 
+        method "predict_with" must know how to handle it
+
+        """
+        return self.w
 
     def predict(self, X):
         """
@@ -214,7 +268,10 @@ class LC_Master(Common_to_all_POMs):
         #self.Xval_b = Xval_b
         #self.yval = yval
         self.epsilon = 0.00000001  # to avoid log(0)
+        self.use_dve = False
+        self.dve_weight = False
         self.momentum = 0
+        self.aggregator = None
 
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
@@ -500,6 +557,7 @@ class LC_Master(Common_to_all_POMs):
 
         self.NI = self.input_data_description['NI']
         self.w = np.random.normal(0, 0.1, (self.NI + 1, 1))
+        self.model.w = np.copy(self.w)
         self.w_encr = self.encrypter.encrypt(self.w)
         self.grad_old = np.zeros((self.NI + 1, 1))
 
@@ -544,6 +602,21 @@ class LC_Master(Common_to_all_POMs):
         self.grads_dict = {}
         self.NP_dict = {}
 
+        if self.Xval is None and self.use_dve:
+            print('WARNING: Data Value estimation is not possible, no validation set is provided')
+            self.use_dve = False
+
+        if self.Xval is not None:
+            self.display('Warning: Validation set is not used during training', verbose=True)
+            self.Xval_b = self.add_bias(self.Xval).astype(float)
+            self.yval = self.yval.astype(float)
+
+        if self.use_dve:
+            # Init DVE object
+            self.dve = DVE_online('song_mr', 0.5, self.model, self.workers_addresses, self.Xval, self.yval) 
+        
+        use_validation = False
+
         self.stop_training = False
         kiter = 0
         ceval = 1000
@@ -560,6 +633,7 @@ class LC_Master(Common_to_all_POMs):
 
             self.display('PROC_MASTER_START', verbose=False)
 
+            incs_dict = {}
             grad = np.zeros((self.NI + 1, 1))
             NPtotal = 0
             for key in self.grads_dict:
@@ -568,19 +642,32 @@ class LC_Master(Common_to_all_POMs):
                 #grad_decr = self.cr.vQinv_m(gradq, gradq_encr[0, 0].N)
                 grad_decr = self.decrypter.decrypt(grad_encr)
                 grad += grad_decr
+                incs_dict.update({key: -grad_decr})
                 #NPtotal += self.NP_dict[key]
 
             #grad = grad / self.Nworkers
             grad = self.mu * grad / len(self.workers_addresses)
 
+            if self.use_dve:
+                self.dve.update(self.model, incs_dict, 'incs')
+
+                message = 'DVE = '
+                for waddr in self.workers_addresses:
+                    message += '%s: %.3f'%(waddr, self.dve.dve_dict[waddr]) + ', '
+                print(message)
+
+                if self.dve_weight:
+                    # we recompute the weighted gradient update
+                    grad = np.zeros((self.NI + 1, 1))
+                    for waddr in self.workers_addresses:
+                        grad += -incs_dict[waddr] * self.dve.dve_dict[waddr]
+
+                    grad = self.mu * grad
+
             self.w_old = self.w.copy()
             ceval_old = ceval
 
-            if self.Xval is not None:
-                self.Xval = None
-                self.display('Warning: Validation set is not used during training', verbose=True)
-            
-            if self.Xval is None:  # A validation set is not provided
+            if not use_validation:  # A validation set is not used for training
                 self.w_old = self.w.copy()
 
                 # Moment update
@@ -628,6 +715,7 @@ class LC_Master(Common_to_all_POMs):
                 mu_opt = mus[min_pos]
                 del mus
                 self.w = self.w - mu_opt * grad
+                self.model.w = self.w
                 del grad
                 ceval = CE_val[min_pos]
                 del CE_val

@@ -179,6 +179,8 @@ class MBSVM_Master(Common_to_all_POMs):
         #self.yval = yval
         self.epsilon = 0.00000001  # to avoid log(0)
         self.landa = 0.5
+        self.aggregator = None
+
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
         #default values
@@ -666,6 +668,14 @@ class MBSVM_Master(Common_to_all_POMs):
         """
         self.display(self.name + ': Starting training', verbose=True)
         self.display('MASTER_INIT', verbose=False)
+
+        ##################################################################
+        # Defenses not suported
+        if self.aggregator is not None:
+            self.display('=' * 50, verbose=True)
+            self.display('** WARNING **: this model does not support external aggregation. The provided aggregator will not be used.', verbose=True)
+            self.display('=' * 50, verbose=True)
+        ##################################################################
 
         if not self.train_data_is_ready: 
             self.FSMmaster.go_update_tr_data(self)

@@ -1,0 +1,293 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloud communications (pycloudmessenger) &#8212; MMLL 2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Preprocessors" href="../preprocessors.html" />
+    <link rel="prev" title="Communications" href="../comms.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="cloud-communications-pycloudmessenger">
+<h1>Cloud communications (pycloudmessenger)<a class="headerlink" href="#cloud-communications-pycloudmessenger" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<span class="target" id="module-MMLL.comms.comms_pycloudmessenger"></span><p>Comms interface to pycloudmessenger with roundrobin functionality.
+&#64;author:  Angel Navia Vázquez, Marcos Fernández Díaz.</p>
+<dl class="py class">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_master">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.comms.comms_pycloudmessenger.</span></code><code class="sig-name descname"><span class="pre">Comms_master</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">commsffl</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>This class provides an interface with the communication object, run at Master node.</p>
+<p>Create a <a class="reference internal" href="#MMLL.comms.comms_pycloudmessenger.Comms_master" title="MMLL.comms.comms_pycloudmessenger.Comms_master"><code class="xref py py-class docutils literal notranslate"><span class="pre">Comms_master</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>commsffl</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">ffl.Factory.aggregator</span></code>) – Object providing communication functionalities at Master for pycloudmessenger.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_master.broadcast">
+<code class="sig-name descname"><span class="pre">broadcast</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">receivers_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_master.broadcast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a packet to a set of workers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>message</strong> (<em>dict</em>) – Packet to be sent.</p></li>
+<li><p><strong>receivers_list</strong> (<em>list of strings</em>) – Addresses of the recipients for the message.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_master.receive">
+<code class="sig-name descname"><span class="pre">receive</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_master.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait for a packet to arrive or until timeout expires.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>timeout</strong> (<em>float</em>) – Time to wait for a packet in seconds.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>message</strong> – Received packet.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_master.receive_poms_123">
+<code class="sig-name descname"><span class="pre">receive_poms_123</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_master.receive_poms_123" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait for a packet to arrive or until timeout expires. Used in POMs 1, 2 and 3.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>timeout</strong> (<em>float</em>) – Time to wait for a packet in seconds.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>packet</strong> – Received packet.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_master.roundrobin">
+<code class="sig-name descname"><span class="pre">roundrobin</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">receivers_list</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_master.roundrobin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a packet to a set of workers using the roundrobin protocol (ring communications).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>message</strong> (<em>dict</em>) – Packet to be sent.</p></li>
+<li><p><strong>receivers_list</strong> (<em>list of strings</em>) – Addresses of the recipients for the message.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_master.send">
+<code class="sig-name descname"><span class="pre">send</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">destiny</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_master.send" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a packet to a given destination.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>message</strong> (<em>dict</em>) – Packet to be sent.</p></li>
+<li><p><strong>destiny</strong> (<em>string</em>) – Address of the recipient for the message.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_worker">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.comms.comms_pycloudmessenger.</span></code><code class="sig-name descname"><span class="pre">Comms_worker</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">commsffl</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker_real_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Anonymous'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_worker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>This class provides an interface with the communication object, run at Worker node.</p>
+<p>Create a <a class="reference internal" href="#MMLL.comms.comms_pycloudmessenger.Comms_worker" title="MMLL.comms.comms_pycloudmessenger.Comms_worker"><code class="xref py py-class docutils literal notranslate"><span class="pre">Comms_worker</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>commsffl</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">ffl.Factory.participant</span></code>) – Object providing communication functionalities for pycloudmessenger.</p></li>
+<li><p><strong>worker_real_name</strong> (<em>string</em>) – Real name of the worker.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_worker.receive">
+<code class="sig-name descname"><span class="pre">receive</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_worker.receive" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait for a packet to arrive or until timeout expires.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>timeout</strong> (<em>float</em>) – Time to wait for a packet in seconds.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>message</strong> – Received packet.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_worker.receive_poms_123">
+<code class="sig-name descname"><span class="pre">receive_poms_123</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_worker.receive_poms_123" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wait for a packet to arrive or until timeout expires. Used in POMs 1, 2 and 3.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>timeout</strong> (<em>float</em>) – Time to wait for a packet in seconds.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>packet</strong> – Received packet.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.comms.comms_pycloudmessenger.Comms_worker.send">
+<code class="sig-name descname"><span class="pre">send</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">address</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.Comms_worker.send" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a packet to the master.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>message</strong> (<em>dict</em>) – Packet to be sent.</p></li>
+<li><p><strong>address</strong> (<em>string</em>) – Address of the recipient for the message.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="MMLL.comms.comms_pycloudmessenger.get_current_task_name">
+<code class="sig-prename descclassname"><span class="pre">MMLL.comms.comms_pycloudmessenger.</span></code><code class="sig-name descname"><span class="pre">get_current_task_name</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.comms.comms_pycloudmessenger.get_current_task_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Function to retrieve the current task name from local disk.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>task_name</strong> – The current task name currently created from the master.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>string</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">MMLL</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../nodes.html">Nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MLmodels.html">Machine learning models</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../comms.html">Communications</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Cloud communications (pycloudmessenger)</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../preprocessors.html">Preprocessors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../optimizers.html">Optimizers</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../comms.html">Communications</a><ul>
+      <li>Previous: <a href="../comms.html" title="previous chapter">Communications</a></li>
+      <li>Next: <a href="../preprocessors.html" title="next chapter">Preprocessors</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Univ. Carlos III and Tree Technologies.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/comms/pycloudmessenger.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

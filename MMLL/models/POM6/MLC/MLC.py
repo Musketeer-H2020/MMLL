@@ -9,12 +9,14 @@ __date__ = "Jan 2021"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
+from MMLL.data_value.DVEO import DVE_online
 from transitions import State
 from transitions.extensions import GraphMachine
 from pympler import asizeof #asizeof.asizeof(my_object)
 import pickle
 import dill
 import time
+import copy
 
 class Model():
     """
@@ -74,6 +76,63 @@ class Model():
         winners = list(np.argmax(O, axis=0))
         o = [self.classes[pos] for pos in winners] 
         return preds_dict, o
+
+    def predict_with(self, model_params, X):
+        """
+        Predicts outputs given the provided model parameters
+
+        Parameters
+        ----------
+
+        model_params: list
+            list with the parameters of different models (can be just one). If more than one are provided, 
+            then the accumulation is used 
+
+        X_b: ndarray
+            Matrix with the input values
+
+        Returns
+        -------
+        prediction_values: ndarray
+
+        """
+        Nmodels = len(model_params)
+        
+        # Storing the current model
+        self.w_dict_backup = copy.deepcopy(self.w_dict)
+
+        self.w_dict = copy.deepcopy(model_params[0])
+
+        classes = list(self.w_dict.keys())
+
+        if Nmodels > 1: # Accumulating  models
+            for k in range(1, Nmodels):
+                for cla in classes:
+                    self.w_dict[cla] += model_params[k][cla]
+
+        #prediction = self.sigm(np.dot(X_b, self.w.ravel()))
+        prediction = self.predict(X)
+
+        # Restoring the current model
+        self.w_dict = copy.deepcopy(self.w_dict_backup)
+
+        return prediction
+
+    def get_parameters(self):
+        """
+        Returns model parameters such that it is possible to rebuild the model using the set of parameters
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        model_params: it can be a matrix, or any other structure, but the 
+        method "predict_with" must know how to handle it
+
+        """
+        return self.w_dict
 
     def save(self, filename=None):
         """
@@ -240,6 +299,9 @@ class MLC_Master(Common_to_all_POMs):
         self.model = Model()
         self.epsilon = 0.00000001  # to avoid log(0)
         self.momentum = 0
+        self.use_dve = False
+        self.dve_weight = False
+        self.aggregator = None
 
         self.state_dict = {}                        # dictionary storing the execution state
         for k in range(0, self.Nworkers):
@@ -359,7 +421,7 @@ class MLC_Master(Common_to_all_POMs):
                     xaxbP_dict = {}
 
                     for cla in MLmodel.classes:
-                        MLmodel.x = MLmodel.model.w_dict[cla].T
+                        MLmodel.x = MLmodel.w_dict[cla].T
                         NItrain = MLmodel.x.shape[1]
                         K = int(NItrain / 2)
                         # Guardar
@@ -484,57 +546,132 @@ class MLC_Master(Common_to_all_POMs):
                     MLmodel.ce_val_old = MLmodel.ce_val
                     MLmodel.ce_val = 0
 
-                    for cla in MLmodel.classes:
-                        grad_acum = np.zeros((MLmodel.NItrain, 1))
-                        #NPtr_train = 0
+                    if MLmodel.use_dve:
+                        incs_dict = copy.deepcopy(MLmodel.grads_dict)
+
                         for waddr in MLmodel.workers_addresses:
-                            grad_acum += MLmodel.grads_dict[waddr][cla]
-                            #NPtr_train += MLmodel.NPtr_dict[waddr]
+                            for cla in MLmodel.classes:
+                                incs_dict[waddr][cla] = -incs_dict[waddr][cla][0:MLmodel.w_orig_size, :]
 
-                        #grad_acum = grad_acum / NPtr_train                  
-                        grad_acum = MLmodel.mu * grad_acum / len(MLmodel.workers_addresses)                  
+                        MLmodel.dve.update(MLmodel.model, incs_dict, 'incs')
 
-                        if MLmodel.Xval is None:  # A validation set is not provided
+                        message = 'DVE = '
+                        for waddr in MLmodel.workers_addresses:
+                            message += '%s: %.3f'%(waddr, MLmodel.dve.dve_dict[waddr]) + ', '
+                        print(message)
 
-                            #MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - MLmodel.mu * grad_acum
-                            # Momentum
-                            v_1 = np.copy(MLmodel.grad_old_dict[cla]) # old gradient
-                            momentum = MLmodel.momentum * v_1
-                            v = momentum + grad_acum
+                    if not MLmodel.dve_weight:
+                        print('== NO DVE weighting ==')
+                    else:
+                        print('== DVE weighting ==')                       
+
+                    if MLmodel.aggregator is not None:
+                        ##################################################################
+                        # Adversarial Defenses
+                        err_msg = '\n' + '=' * 80 + '\nAn error occurred while using the external aggregator ' + str(MLmodel.aggregator) + ': '
+
+                        try:
+                            MLmodel.w_old_dict = copy.deepcopy(MLmodel.model.w_dict)
+                            grads_dict = copy.deepcopy(MLmodel.grads_dict)
+
+                            for waddr in MLmodel.workers_addresses:
+                                for cla in MLmodel.classes:
+                                    grads_dict[waddr][cla] = MLmodel.grads_dict[waddr][cla][0:MLmodel.w_orig_size, :]
+                                
+                            updated_model = MLmodel.aggregator.aggregate(MLmodel.model.w_dict, grads_dict)                        
                             
-                            MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - v
-                            MLmodel.grad_old_dict[cla] = grad_acum
+                            # Error check
+                            if not isinstance(updated_model, dict):
+                                err = 'ERROR: the updated model must be a dictionary\n'
+                                MLmodel.display(err_msg, verbose=True)
+                                raise ValueError(err_msg + err)
+                            else: # is dict
+                                if len(set(updated_model.keys()) - set(MLmodel.model.w_dict.keys())) != 0: # classes not OK
+                                    err = 'ERROR: the updated model has incorrect classes\n'
+                                    MLmodel.display(err_msg, verbose=True)
+                                    raise ValueError(err_msg + err)
+                                else:
+                                    # Checking parameters size
+                                    sizes_ok = True
+                                    for cla in MLmodel.classes:
+                                        weights = np.array(updated_model[cla]).reshape((-1, 1))
+                                        updated_model[cla] = weights
+                                        if weights.shape != MLmodel.model.w_dict[cla].shape:
+                                            sizes_ok = False
+                                    if not sizes_ok:
+                                        err = 'ERROR: the updated weight parameters have incorrect sizes\n'
+                                        MLmodel.display(err_msg, verbose=True)
+                                        raise ValueError(err_msg + err)
+                                    else:
+                                        # Updating model
+                                        MLmodel.model.w_dict = copy.deepcopy(updated_model)
+                                        for cla in MLmodel.classes:
+                                            MLmodel.w_dict[cla][0:MLmodel.w_orig_size, :] = updated_model[cla][0:MLmodel.w_orig_size, :]
+                                        MLmodel.display('======> Model updated using external aggregator: ', verbose=True)
+                                        MLmodel.display(MLmodel.aggregator, verbose=True)
 
-                            #del grad_acum
-                        else:  # We obtain the optimal update for every class
-                            NIval = MLmodel.Xval.shape[1]
-                            w_ = MLmodel.model.w_dict[cla][0: NIval + 1]
-                            grad_acum_ = grad_acum[0: NIval + 1]
+                        except Exception as err:
+                            MLmodel.display('=' * 80, verbose=True) 
+                            MLmodel.display(err_msg, verbose=True)
+                            MLmodel.display(err, verbose=True)
+                            MLmodel.display('=' * 80, verbose=True) 
+                            raise
+                        ##################################################################
+                    else: # Model update without defenses
 
-                            CE_val = []
-                            mus = np.arange(0.01, 10.0, 0.01)
-                            Xw = np.dot(MLmodel.add_bias(MLmodel.Xval), w_)
-                            Xgrad = np.dot(MLmodel.add_bias(MLmodel.Xval), grad_acum_)
-                            yval = np.array(MLmodel.yval == cla).astype(float).reshape((-1, 1))
+                        for cla in MLmodel.classes:
+                            grad_acum = np.zeros((MLmodel.NItrain, 1))
+                            #NPtr_train = 0
+                            for waddr in MLmodel.workers_addresses:
+                                grad_acum += MLmodel.grads_dict[waddr][cla]
+                                #NPtr_train += MLmodel.NPtr_dict[waddr]
 
-                            for mu in mus:
-                                s_val = Xw - mu * Xgrad
-                                o_val = MLmodel.sigm(s_val).ravel()
-                                ce_val = np.mean(MLmodel.cross_entropy(o_val, yval, MLmodel.epsilon))
-                                CE_val.append(ce_val)
+                            if not MLmodel.dve_weight:
+                                #grad_acum = grad_acum / NPtr_train                  
+                                grad_acum = MLmodel.mu * grad_acum / len(MLmodel.workers_addresses)                  
+                            else:
+                                grad_acum = MLmodel.mu * grad_acum * MLmodel.dve.dve_dict[waddr]                  
+       
+                            if not MLmodel.use_Xval:  # A validation set is not provided
+                                #MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - MLmodel.mu * grad_acum
+                                # Momentum
+                                v_1 = np.copy(MLmodel.grad_old_dict[cla]) # old gradient
+                                momentum = MLmodel.momentum * v_1
+                                v = momentum + grad_acum
+                                
+                                MLmodel.w_dict[cla] = MLmodel.w_dict[cla] - v
+                                MLmodel.grad_old_dict[cla] = grad_acum
 
-                            del Xw, Xgrad, s_val, o_val
+                                #del grad_acum
+                            else:  # We obtain the optimal update for every class
+                                NIval = MLmodel.Xval.shape[1]
+                                w_ = MLmodel.model.w_dict[cla][0: NIval + 1]
+                                grad_acum_ = grad_acum[0: NIval + 1]
 
-                            min_pos = np.argmin(CE_val)
-                            mu_opt = mus[min_pos]
-                            del mus
-                            MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - mu_opt * grad_acum
-                            del grad_acum
-                            ceval = CE_val[min_pos]
-                            MLmodel.ce_val += ceval
-                            del CE_val
-                            print('Optimal mu = %f for class=%s, CE val=%f' % (mu_opt, cla, ceval))
+                                CE_val = []
+                                mus = np.arange(0.01, 10.0, 0.01)
+                                Xw = np.dot(MLmodel.add_bias(MLmodel.Xval), w_)
+                                Xgrad = np.dot(MLmodel.add_bias(MLmodel.Xval), grad_acum_)
+                                yval = np.array(MLmodel.yval == cla).astype(float).reshape((-1, 1))
 
+                                for mu in mus:
+                                    s_val = Xw - mu * Xgrad
+                                    o_val = MLmodel.sigm(s_val).ravel()
+                                    ce_val = np.mean(MLmodel.cross_entropy(o_val, yval, MLmodel.epsilon))
+                                    CE_val.append(ce_val)
+
+                                del Xw, Xgrad, s_val, o_val
+
+                                min_pos = np.argmin(CE_val)
+                                mu_opt = mus[min_pos]
+                                del mus
+                                MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - mu_opt * grad_acum
+                                del grad_acum
+                                ceval = CE_val[min_pos]
+                                MLmodel.ce_val += ceval
+                                del CE_val
+                                print('Optimal mu = %f for class=%s, CE val=%f' % (mu_opt, cla, ceval))
+                    
                     MLmodel.ce_val = MLmodel.ce_val / len(MLmodel.classes)
                     MLmodel.display('PROC_MASTER_END', verbose=False)
 
@@ -652,19 +789,31 @@ class MLC_Master(Common_to_all_POMs):
             self.w_orig_size = self.NI
             self.NItrain = self.NI
 
-        self.model.w_dict = {}
+        self.w_dict = {}
         self.w_old_dict = {}
         self.model.classes = self.classes
         self.grad_old_dict = {}
 
         if self.Xval is not None:
-            self.Xval = None # Do not use Xval
+            self.use_Xval = False # Do not use Xval
             self.display('Warning: Validation set is not used during training', verbose=True)
 
+        if self.Xval is None and self.use_dve:
+            print('WARNING: Data Value estimation is not possible, no validation set is provided')
+            self.use_dve = False
+
         for cla in self.classes:
-            self.model.w_dict.update({cla: np.random.normal(0, 0.001, (self.NItrain, 1))})
+            self.w_dict.update({cla: np.random.normal(0, 0.001, (self.NItrain, 1))})
             self.w_old_dict.update({cla: np.random.normal(0, 1.0, (self.NItrain, 1))})
             self.grad_old_dict.update({cla: np.random.normal(0, 0.001, (self.NItrain, 1))})
+
+        self.model.w_dict = copy.deepcopy(self.w_dict)
+        for cla in self.classes:
+            self.model.w_dict[cla] = self.w_dict[cla][0:self.w_orig_size, :]
+
+        if self.use_dve:
+            # Init DVE object
+            self.dve = DVE_online('song_mr', 0.5, self.model, self.workers_addresses, self.Xval, self.yval, metric='multiclass') 
 
         while not self.stop_training:
             self.display('MASTER_ITER_START', verbose=False)
@@ -689,11 +838,10 @@ class MLC_Master(Common_to_all_POMs):
 
             inc_w = 0
             for cla in self.classes:
-                inc_w += np.linalg.norm(self.model.w_dict[cla] - self.w_old_dict[cla]) / np.linalg.norm(self.w_old_dict[cla])
-                self.w_old_dict[cla] = np.copy(self.model.w_dict[cla])
-                         
+                inc_w += np.linalg.norm(self.model.w_dict[cla][0:self.w_orig_size, :] - self.w_old_dict[cla][0:self.w_orig_size, :]) / np.linalg.norm(self.w_old_dict[cla])
+                self.w_old_dict[cla] = np.copy(self.w_dict[cla])   
 
-            if self.Xval is None:  # A validation set is not provided
+            if not self.use_Xval or self.aggregator is not None:  # A validation set is not provided
                 # Stop if convergence is reached
                 if inc_w < self.conv_stop:
                     self.stop_training = True
@@ -712,6 +860,11 @@ class MLC_Master(Common_to_all_POMs):
                 #self.display(message)
                 print(message)          
 
+
+            self.model.w_dict = copy.deepcopy(self.w_dict)
+            for cla in self.classes:
+                self.model.w_dict[cla] = self.w_dict[cla][0:self.w_orig_size, :]
+
             self.display('MASTER_ITER_END', verbose=False)
 
         self.display(self.name + ': Training is done')
@@ -719,7 +872,7 @@ class MLC_Master(Common_to_all_POMs):
         self.model.is_trained = True
         # reduciendo a dimensión original
         for cla in self.classes:
-            self.model.w_dict[cla] = self.model.w_dict[cla][0:self.w_orig_size, :]
+            self.model.w_dict[cla] = self.w_dict[cla][0:self.w_orig_size, :]
 
         self.display('MASTER_FINISH', verbose=False)
 

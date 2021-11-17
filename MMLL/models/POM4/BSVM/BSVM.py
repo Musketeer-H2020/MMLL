@@ -219,6 +219,7 @@ class BSVM_Master(Common_to_all_POMs):
         #self.Xval_b = Xval_b
         #self.yval = yval
         self.epsilon = 0.00000001  # to avoid log(0)
+        self.aggregator = None
 
         self.mu = 0.001
         self.momentum = 0

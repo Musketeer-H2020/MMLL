@@ -9,6 +9,7 @@ __date__ = "Jan. 2021"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
+from MMLL.data_value.DVEO import DVE_online
 from transitions import State
 from transitions.extensions import GraphMachine
 from pympler import asizeof #asizeof.asizeof(my_object)
@@ -57,6 +58,75 @@ class Model():
         KXC = np.hstack( (np.ones((NP, 1)), KXC))
         prediction_values = np.dot(KXC, self.w)
         return prediction_values
+
+
+    def predict_with(self, model_params, X):
+        """
+        Predicts outputs given the provided model parameters
+
+        Parameters
+        ----------
+
+        model_params: list
+            list with the parameters of different models (can be just one). If more than one are provided, 
+            then the accumulation is used 
+
+        X_b: ndarray
+            Matrix with the input values
+
+        Returns
+        -------
+        prediction_values: ndarray
+
+        """
+
+
+        w_tmp = model_params['w_tmp']
+        Fregul = model_params['Fregul']
+        landa = model_params['landa']
+
+        Nmodels = len(w_tmp)
+        
+        # Storing the current model
+        self.w_backup = np.copy(self.w)
+        
+        w_old = np.copy(self.w)
+
+        if Nmodels > 1: # Accumulating  models
+            NI = w_tmp[1]['Rxx'].shape[0]
+            XTX_accum = np.zeros((NI, NI))    
+            XTy_accum = np.zeros((NI, 1))
+           
+            for k in range(1, Nmodels):
+                XTX_accum += w_tmp[k]['Rxx']
+                XTy_accum += w_tmp[k]['rxy'].reshape((-1, 1))
+
+        w_new = np.dot(np.linalg.inv(XTX_accum + Fregul), XTy_accum)        
+
+        self.w = np.copy((1 - landa) * w_old + landa * w_new)
+        #prediction = self.sigm(np.dot(X_b, self.w.ravel()))
+        prediction = self.predict(X)
+
+        # Restoring the current model
+        self.w = np.copy(self.w_backup)
+
+        return prediction
+
+    def get_parameters(self):
+        """
+        Returns model parameters such that it is possible to rebuild the model using the set of parameters
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        model_params: it can be a matrix, or any other structure, but the 
+        method "predict_with" must know how to handle it
+
+        """
+        return self.w
 
     def save(self, filename=None):
         """
@@ -203,13 +273,6 @@ class KR_Master(Common_to_all_POMs):
         self.name = self.model_type + '_Master'                 # Name
         self.master_address = master_address
         self.workers_addresses = workers_addresses
-        
-        try:
-            kwargs.update(kwargs['model_parameters'])
-            del kwargs['model_parameters']
-        except Exception as err:
-            pass
-        self.process_kwargs(kwargs)
 
         # Convert workers_addresses -> '0', '1', + send_to dict
         self.broadcast_addresses = workers_addresses
@@ -226,6 +289,9 @@ class KR_Master(Common_to_all_POMs):
         self.comms = comms                          # comms lib
         self.verbose = verbose                      # print on screen when true
         self.NI = None       
+        self.use_dve = False
+        self.dve_weight = False
+        self.aggregator = None
 
         self.state_dict = {}                        # dictionary storing the execution state
         for k in range(0, self.Nworkers):
@@ -412,14 +478,45 @@ class KR_Master(Common_to_all_POMs):
                 try:
                     MLmodel.display('PROC_MASTER_START', verbose=False)
 
-                    NC = MLmodel.model.C.shape[0]    
+                    NC = MLmodel.model.C.shape[0]
+                    Fregul = MLmodel.regularization * np.eye(NC + 1)
+
+                    if MLmodel.use_dve:
+                        updates_dict = {}
+                        corr_dict = {}
+                        for waddr in MLmodel.workers_addresses:
+                            tmp_dict = {}
+                            tmp_dict.update({'Rxx': MLmodel.KTK_dict[waddr]})
+                            tmp_dict.update({'rxy': MLmodel.KTy_dict[waddr]})
+                            corr_dict.update({waddr: tmp_dict})
+
+                        updates_dict.update({'corr': corr_dict})
+                        updates_dict.update({'Fregul': Fregul})
+                        updates_dict.update({'landa': 1}) # The old model is completely forgoten
+
+                        MLmodel.dve.update(MLmodel.model, updates_dict, 'corrs')
+
+                        message = 'DVE = '
+                        for waddr in MLmodel.workers_addresses:
+                            message += '%s: %.3f'%(waddr, MLmodel.dve.dve_dict[waddr]) + ', '
+                        print(message)
+
+                    if not MLmodel.dve_weight:
+                        print('== NO DVE weighting ==')
+                    else:
+                        print('== DVE weighting ==')                       
+
                     MLmodel.KTK_accum = np.zeros((NC + 1, NC + 1))
                     MLmodel.KTy_accum = np.zeros((NC + 1, 1))
                     for waddr in MLmodel.workers_addresses:
-                        MLmodel.KTK_accum += MLmodel.KTK_dict[waddr]
-                        MLmodel.KTy_accum += MLmodel.KTy_dict[waddr].reshape((NC + 1, 1))
+                        if not MLmodel.dve_weight:
+                            MLmodel.KTK_accum += MLmodel.KTK_dict[waddr]
+                            MLmodel.KTy_accum += MLmodel.KTy_dict[waddr].reshape((NC + 1, 1))
+                        else:
+                            MLmodel.KTK_accum += MLmodel.KTK_dict[waddr] * MLmodel.dve.dve_dict[waddr]
+                            MLmodel.KTy_accum += (MLmodel.KTy_dict[waddr] * MLmodel.dve.dve_dict[waddr]).reshape((NC + 1, 1))
 
-                    MLmodel.model.w = np.dot(np.linalg.inv(MLmodel.KTK_accum + MLmodel.regularization * np.eye(NC + 1)), MLmodel.KTy_accum)        
+                    MLmodel.model.w = np.dot(np.linalg.inv(MLmodel.KTK_accum + Fregul), MLmodel.KTy_accum)        
 
                     MLmodel.display('PROC_MASTER_END', verbose=False)
 
@@ -481,6 +578,14 @@ class KR_Master(Common_to_all_POMs):
         self.display('MASTER_INIT', verbose=False)
         self.display('MASTER_ITER_START', verbose=False)
 
+        ##################################################################
+        # Defenses not suported
+        if self.aggregator is not None:
+            self.display('=' * 50, verbose=True)
+            self.display('** WARNING **: this model does not support external aggregation. The provided aggregator will not be used.', verbose=True)
+            self.display('=' * 50, verbose=True)
+        ##################################################################
+
         self.FSMmaster.go_update_tr_data(self)
         self.run_Master()
         # Checking the new NI values
@@ -498,8 +603,12 @@ class KR_Master(Common_to_all_POMs):
                 self.yval = self.yval.astype(float)
 
         if self.Xval is not None:
-            message = 'WARNING: Validation data is not used during training.'
-            self.display(message, True)
+            self.use_Xval = False # Do not use Xval for training
+            self.display('Warning: Validation set is not used during training', verbose=True)
+
+        if self.Xval is None and self.use_dve:
+            print('WARNING: Data Value estimation is not possible, no validation set is provided')
+            self.use_dve = False
 
         '''
         self.FSMmaster.go_selecting_C(self)
@@ -516,6 +625,13 @@ class KR_Master(Common_to_all_POMs):
         '''
         self.model.C = self.C
         self.NC = self.C.shape[0]
+
+        self.w = np.random.normal(0, 0.0001, (self.NC + 1, 1))
+        self.model.w = np.copy(self.w)
+
+        if self.use_dve:
+            # Init DVE object
+            self.dve = DVE_online('song_mr', 0, self.model, self.workers_addresses, self.Xval, self.yval, metric='regression') 
 
         self.FSMmaster.go_sending_C(self)
         self.run_Master()

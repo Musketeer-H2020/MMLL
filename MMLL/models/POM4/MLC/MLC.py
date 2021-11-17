@@ -9,12 +9,14 @@ __date__ = "Febr. 2021"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
+from MMLL.data_value.DVEO import DVE_online
 from transitions import State
 from transitions.extensions import GraphMachine
 import pickle
 from pympler import asizeof #asizeof.asizeof(my_object)
 import dill
 import time
+import copy
 
 class Model():
     """
@@ -74,6 +76,64 @@ class Model():
         winners = list(np.argmax(X, axis=0))
         o = [self.classes[pos] for pos in winners] 
         return preds_dict, o
+
+
+    def predict_with(self, model_params, X):
+        """
+        Predicts outputs given the provided model parameters
+
+        Parameters
+        ----------
+
+        model_params: list
+            list with the parameters of different models (can be just one). If more than one are provided, 
+            then the accumulation is used 
+
+        X_b: ndarray
+            Matrix with the input values
+
+        Returns
+        -------
+        prediction_values: ndarray
+
+        """
+        Nmodels = len(model_params)
+        
+        # Storing the current model
+        self.w_dict_backup = copy.deepcopy(self.w_dict)
+
+        self.w_dict = copy.deepcopy(model_params[0])
+
+        classes = list(self.w_dict.keys())
+
+        if Nmodels > 1: # Accumulating  models
+            for k in range(1, Nmodels):
+                for cla in classes:
+                    self.w_dict[cla] += model_params[k][cla]
+
+        #prediction = self.sigm(np.dot(X_b, self.w.ravel()))
+        prediction = self.predict(X)
+
+        # Restoring the current model
+        self.w_dict = copy.deepcopy(self.w_dict_backup)
+
+        return prediction
+
+    def get_parameters(self):
+        """
+        Returns model parameters such that it is possible to rebuild the model using the set of parameters
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        model_params: it can be a matrix, or any other structure, but the 
+        method "predict_with" must know how to handle it
+
+        """
+        return self.w_dict
 
     def save(self, filename=None):
         """
@@ -238,6 +298,10 @@ class MLC_Master(Common_to_all_POMs):
         self.epsilon = 0.00000001  # to avoid log(0)
         self.momentum = 0
         self.regularization = 0.001
+        self.use_dve = False
+        self.dve_weight = False
+        self.aggregator = None
+
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
         #default values
@@ -585,6 +649,28 @@ class MLC_Master(Common_to_all_POMs):
                                     #import code
                                     #code.interact(local=locals())
 
+                        if key == 'gM':  # gradients multiclass
+
+                            print('STOP AT while_decrypt_modelM')
+                            import code
+                            code.interact(local=locals())
+
+                            classes = list(model_encr_dict['wM'].keys())
+                            for cla in classes: 
+                                x = model_encr_dict[key][cla]
+                                M, N = x.shape
+                                bl = np.random.normal(0, 1, (M, N))
+                                bl_dict.update({cla: bl})
+                                try:
+                                    model_encr_bl_dict.update({cla: x + bl})
+                                except Exception as err:
+                                    print('ERROR at  while_decrypt_modelM')
+                                    print('***** NUMERICAL OVERFLOW *******')
+                                    print(err)
+                                    raise
+                                    #import code
+                                    #code.interact(local=locals())
+
                         MLmodel.bl_dict.update({key: bl_dict})
                         MLmodel.model_encr_bl_dict.update({key: model_encr_bl_dict})
 
@@ -742,8 +828,16 @@ class MLC_Master(Common_to_all_POMs):
         kiter = 0
 
         if self.Xval is not None:
-            message = 'WARNING: Validation data is not used during training.'
-            self.display(message, True)
+            self.use_Xval = False # Do not use Xval for training
+            self.display('Warning: Validation set is not used during training', verbose=True)
+
+        if self.Xval is None and self.use_dve:
+            print('WARNING: Data Value estimation is not possible, no validation set is provided')
+            self.use_dve = False
+
+        if self.use_dve:
+            # Init DVE object
+            self.dve = DVE_online('song_mr', 0.5, self.model, self.workers_addresses, self.Xval, self.yval, metric='multiclass') 
 
         self.display('PROC_MASTER_END', verbose=False)
 
@@ -879,8 +973,7 @@ class MLC_Master(Common_to_all_POMs):
                     #grad_encr += np.sum(eX_encr, axis=0).reshape((-1, 1)) / NPtotal
                     grad_encr += np.mean(eX_encr, axis=0).reshape((-1, 1))
                 
-                grad_encr_dict.update({cla: grad_encr})  # one per class
-          
+                grad_encr_dict.update({cla: grad_encr})  # one per class       
             
             if check:
                 err = 0
@@ -897,10 +990,58 @@ class MLC_Master(Common_to_all_POMs):
                     err += np.linalg.norm(grad_orig - grad_decr)
                 print('Error in grad = %f' % err)  # OK
             
-            for cla in self.classes:
-                #self.w_encr_dict[cla] = self.w_encr_dict[cla] + self.mu * grad_encr_dict[cla]
-                grad_acum = self.mu * grad_encr_dict[cla] / len(self.workers_addresses)                  
+            # Decrypting gradients for DVE
+            if self.use_dve:
+                grad_encr_dict_workers = {}  # one per worker and class
+                for waddr in self.workers_addresses:
+                    tmp_dict = {}
+                    for cla in self.classes:
+                        eX_encr = self.eX_encr_dict[waddr][cla]
+                        grad_encr = np.mean(eX_encr, axis=0).reshape((-1, 1))
+                        tmp_dict.update({cla: grad_encr})
 
+                    grad_encr_dict_workers.update({waddr: tmp_dict})
+
+                incs_dict = {}
+                grads_dict_workers = {}
+
+                for waddr in self.workers_addresses:
+                    tmp_dict = grad_encr_dict_workers[waddr]
+
+                    tmp_dict_decr = self.decrypt_modelM({'wM': tmp_dict})['wM']
+
+                    grads_dict_workers.update({waddr: copy.deepcopy(tmp_dict_decr)})
+
+                    for cla in self.classes: # grads to increments
+                        tmp_dict_decr[cla] = -tmp_dict_decr[cla]
+
+                    incs_dict.update({waddr: copy.deepcopy(tmp_dict_decr)})
+
+                self.dve.update(self.model, incs_dict, 'incs')
+
+                message = 'DVE = '
+                for waddr in self.workers_addresses:
+                    message += '%s: %.3f'%(waddr, self.dve.dve_dict[waddr]) + ', '
+                print(message)
+
+            if not self.dve_weight:
+                print('== NO DVE weighting ==')
+            else:
+                print('== DVE weighting ==')                       
+
+            for cla in self.classes:
+                grad_acum = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
+
+                if self.dve_weight:
+                    for waddr in self.workers_addresses:
+                        grad_decr = grads_dict_workers[waddr][cla]
+                        grad_acum += grad_decr * self.dve.dve_dict[waddr]
+
+                    grad_acum = self.mu * grad_acum                
+
+                else:
+                    grad_acum = self.mu * grad_encr_dict[cla] / len(self.workers_addresses)
+                    
                 # Momentum
                 v_1 = np.copy(self.grad_old_dict[cla]) # old gradient
                 momentum = self.momentum * v_1
@@ -908,6 +1049,21 @@ class MLC_Master(Common_to_all_POMs):
                 self.w_encr_dict[cla] = self.w_encr_dict[cla] - v
                 self.grad_old_dict[cla] = grad_acum
 
+            '''
+            for cla in self.classes:
+                #self.w_encr_dict[cla] = self.w_encr_dict[cla] + self.mu * grad_encr_dict[cla]
+                
+                if not self.dve_weight:
+                    grad_acum = self.mu * grad_encr_dict[cla] / len(self.workers_addresses)                  
+                else:
+                    grad_acum = self.mu * grad_encr_dict[cla] * self.dve.dve_dict[waddr]                  
+                # Momentum
+                v_1 = np.copy(self.grad_old_dict[cla]) # old gradient
+                momentum = self.momentum * v_1
+                v = momentum + grad_acum
+                self.w_encr_dict[cla] = self.w_encr_dict[cla] - v
+                self.grad_old_dict[cla] = grad_acum
+            '''
             # Decrypting the model
             self.model_decr_dict = self.decrypt_modelM({'wM': self.w_encr_dict})
 

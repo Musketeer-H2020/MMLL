@@ -8,6 +8,7 @@ __date__ = "Apr. 2021"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
+from MMLL.data_value.DVEO import DVE_online
 from transitions import State
 from transitions.extensions import GraphMachine
 #from pympler import asizeof #asizeof.asizeof(my_object)
@@ -59,6 +60,77 @@ class Model():
         KXC = np.hstack( (np.ones((NP, 1)), KXC))
         prediction_values = np.dot(KXC, self.w)
         return prediction_values
+
+    def predict_with(self, model_params, X):
+        """
+        Predicts outputs given the provided model parameters
+
+        Parameters
+        ----------
+
+        model_params: list
+            list with the parameters of different models (can be just one). If more than one are provided, 
+            then the accumulation is used 
+
+        X_b: ndarray
+            Matrix with the input values
+
+        Returns
+        -------
+        prediction_values: ndarray
+
+        """
+
+
+        w_tmp = model_params['w_tmp']
+        Fregul = model_params['Fregul']
+        landa = model_params['landa']
+
+        Nmodels = len(w_tmp)
+        
+        # Storing the current model
+        self.w_backup = np.copy(self.w)
+        
+        w_old = np.copy(self.w)
+
+        if Nmodels > 1: # Accumulating  models
+            NI = w_tmp[1]['Rxx'].shape[0]
+            XTX_accum = np.zeros((NI, NI))    
+            XTy_accum = np.zeros((NI, 1))
+           
+            for k in range(1, Nmodels):
+                XTX_accum += w_tmp[k]['Rxx']
+                XTy_accum += w_tmp[k]['rxy'].reshape((-1, 1))
+
+        w_new = np.dot(np.linalg.inv(XTX_accum + Fregul), XTy_accum)        
+        w_new = w_new[0: w_old.shape[0], :]
+
+        self.w = np.copy((1 - landa) * w_old + landa * w_new)
+        #prediction = self.sigm(np.dot(X_b, self.w.ravel()))
+        prediction = self.predict(X)
+
+        prediction = (prediction + 1 ) / 2 # (0,1) range
+
+        # Restoring the current model
+        self.w = np.copy(self.w_backup)
+
+        return prediction
+
+    def get_parameters(self):
+        """
+        Returns model parameters such that it is possible to rebuild the model using the set of parameters
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        model_params: it can be a matrix, or any other structure, but the 
+        method "predict_with" must know how to handle it
+
+        """
+        return self.w
 
     def save(self, filename=None):
         """
@@ -205,13 +277,9 @@ class BSVM_Master(Common_to_all_POMs):
         self.master_address = master_address
         self.workers_addresses = workers_addresses
         self.epsilon = 0.00000001  # to avoid log(0)
-
-        try:
-            kwargs.update(kwargs['model_parameters'])
-            del kwargs['model_parameters']
-        except Exception as err:
-            pass
-        self.process_kwargs(kwargs)
+        self.use_dve = False
+        self.dve_weight = False
+        self.aggregator = None
 
         # Convert workers_addresses -> '0', '1', + send_to dict
         self.broadcast_addresses = workers_addresses
@@ -411,7 +479,7 @@ class BSVM_Master(Common_to_all_POMs):
                 try:
                     MLmodel.display('PROC_MASTER_START', verbose=False)
                     action = 'computing_XTw'
-                    MLmodel.x = MLmodel.model.w.T
+                    MLmodel.x = MLmodel.w.T
                     NItrain = MLmodel.x.shape[1]
                     K = int(NItrain / 2)
                     # Guardar
@@ -593,14 +661,45 @@ class BSVM_Master(Common_to_all_POMs):
             def while_updating_w(self, MLmodel):
                 try:
                     MLmodel.display('PROC_MASTER_START', verbose=False)
+                    Fregul = MLmodel.Kcc
+
+                    if MLmodel.use_dve:
+                        updates_dict = {}
+                        corr_dict = {}
+                        for waddr in MLmodel.workers_addresses:
+                            tmp_dict = {}
+                            tmp_dict.update({'Rxx': MLmodel.KTK_dict[waddr]})
+                            tmp_dict.update({'rxy': MLmodel.KTy_dict[waddr]})
+                            corr_dict.update({waddr: tmp_dict})
+
+                        updates_dict.update({'corr': corr_dict})
+                        updates_dict.update({'Fregul': Fregul})
+                        updates_dict.update({'landa': 1}) # The old model is completely forgoten
+
+                        print('Estimating Data Value...')
+                        MLmodel.dve.update(MLmodel.model, updates_dict, 'corrs')
+
+                        message = 'DVE = '
+                        for waddr in MLmodel.workers_addresses:
+                            message += '%s: %.3f'%(waddr, MLmodel.dve.dve_dict[waddr]) + ', '
+                        print(message)
+
+                    if not MLmodel.dve_weight:
+                        print('== NO DVE weighting ==')
+                    else:
+                        print('== DVE weighting ==')                       
 
                     MLmodel.KTK_accum = np.zeros((MLmodel.NItrain, MLmodel.NItrain))
                     MLmodel.KTy_accum = np.zeros((MLmodel.NItrain, 1))
                     for waddr in MLmodel.workers_addresses:
-                        MLmodel.KTK_accum += MLmodel.KTK_dict[waddr]
-                        MLmodel.KTy_accum += MLmodel.KTy_dict[waddr].reshape((-1, 1))
+                        if MLmodel.dve_weight:
+                            MLmodel.KTK_accum += MLmodel.KTK_dict[waddr] * MLmodel.dve.dve_dict[waddr]
+                            MLmodel.KTy_accum += MLmodel.KTy_dict[waddr].reshape((-1, 1)) * MLmodel.dve.dve_dict[waddr]
+                        else:
+                            MLmodel.KTK_accum += MLmodel.KTK_dict[waddr]
+                            MLmodel.KTy_accum += MLmodel.KTy_dict[waddr].reshape((-1, 1))
 
-                    MLmodel.new_w = np.dot(np.linalg.inv(MLmodel.KTK_accum + MLmodel.Kcc), MLmodel.KTy_accum)        
+                    MLmodel.new_w = np.dot(np.linalg.inv(MLmodel.KTK_accum + Fregul), MLmodel.KTy_accum)        
                     MLmodel.display('PROC_MASTER_END', verbose=False)
 
                 except Exception as err:
@@ -661,6 +760,14 @@ class BSVM_Master(Common_to_all_POMs):
         self.display(self.name + ': Starting training')
         self.display('MASTER_INIT', verbose=False)
 
+        ##################################################################
+        # Defenses not suported
+        if self.aggregator is not None:
+            self.display('=' * 50, verbose=True)
+            self.display('** WARNING **: this model does not support external aggregation. The provided aggregator will not be used.', verbose=True)
+            self.display('=' * 50, verbose=True)
+        ##################################################################
+
         self.FSMmaster.go_update_tr_data(self)
         self.run_Master()
 
@@ -677,6 +784,14 @@ class BSVM_Master(Common_to_all_POMs):
             #if self.Xval_b is not None: 
             #    self.Xval_b = self.add_bias(self.Xval_b).astype(float)
             #    self.yval = self.yval.astype(float)
+
+        if self.Xval is not None:
+            self.use_Xval = True # Use Xval for training if available
+            self.display('Warning: Validation set is used during training', verbose=True)
+
+        if self.Xval is None and self.use_dve:
+            print('WARNING: Data Value estimation is not possible, no validation set is provided')
+            self.use_dve = False
 
         '''
         self.FSMmaster.go_selecting_C(self)
@@ -724,7 +839,7 @@ class BSVM_Master(Common_to_all_POMs):
             self.NItrain = self.NI
 
         # Computing and storing KXC_val
-        if self.Xval is not None:
+        if self.use_Xval:
             XC2 = -2 * np.dot(self.Xval, self.C.T)
             XC2 += np.sum(np.multiply(self.Xval, self.Xval), axis=1).reshape((-1, 1))
             XC2 += np.sum(np.multiply(self.C, self.C), axis=1).reshape((1, self.NC))
@@ -734,8 +849,13 @@ class BSVM_Master(Common_to_all_POMs):
 
             self.yval.astype(float).reshape((-1, 1))
 
-        self.model.w = np.random.normal(0, 0.0001, (self.NItrain, 1))      # weights in plaintext, first value is bias
+        self.w = np.random.normal(0, 0.0001, (self.NItrain, 1))      # weights in plaintext, first value is bias
         self.w_old = np.random.normal(0, 1.0, (self.NItrain, 1))
+        self.model.w = np.copy(self.w[0:self.w_orig_size, :])
+
+        if self.use_dve:
+            # Init DVE object
+            self.dve = DVE_online('song_mr', 0.5, self.model, self.workers_addresses, self.Xval, self.yval, metric='binclass') 
 
         self.stop_training = False
         self.kiter = 0
@@ -748,7 +868,7 @@ class BSVM_Master(Common_to_all_POMs):
         self.ACC_val_old = 0
         while not self.stop_training:
             self.display('MASTER_ITER_START', verbose=False)
-            self.w_old = self.model.w.copy()
+            self.w_old = self.w.copy()
 
             #self.ce_val_old = self.ce_val
             #self.FSMmaster.go_getting_KTK(self)
@@ -772,9 +892,9 @@ class BSVM_Master(Common_to_all_POMs):
 
             self.display('PROC_MASTER_START', verbose=False)
 
-            if self.Xval is None:  # A validation set is not provided
-                self.model.w = (1 - self.landa) * self.w_old + self.landa * self.new_w
-                inc_w = np.linalg.norm(self.model.w - self.w_old) / np.linalg.norm(self.w_old)
+            if not self.use_Xval:  # A validation set is not provided
+                self.w = (1 - self.landa) * self.w_old + self.landa * self.new_w
+                inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
                 message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, self.kiter, inc_w)
                 #self.display(message)
                 print(message)           
@@ -789,12 +909,12 @@ class BSVM_Master(Common_to_all_POMs):
                 ACC_val = np.mean(np.sign(preds_val).ravel() == (self.yval * 2 -1))
                 if ACC_val > self.ACC_val_old: 
                     # retain the new
-                    self.model.w = (1 - self.landa) * self.w_old + self.landa * self.new_w
+                    self.w = (1 - self.landa) * self.w_old + self.landa * self.new_w
                     self.ACC_val_old = ACC_val
                     message = 'Maxiter = %d, iter = %d, ACC val = %f' % (self.Nmaxiter, self.kiter, ACC_val)
                     print(message)
                 else: # restore the previous one and stop
-                    self.model.w = self.w_old
+                    self.w = self.w_old
                     self.stop_training = True
 
                 '''              
@@ -805,7 +925,7 @@ class BSVM_Master(Common_to_all_POMs):
                 Kcc_ = Kcc_[:, 0: NIval]
                 '''
 
-                self.w_old = self.model.w.copy()
+                self.w_old = self.w.copy()
       
                 '''
                 if CEval_opt < self.ce_val_old:  
@@ -895,6 +1015,9 @@ class BSVM_Master(Common_to_all_POMs):
                 if inc_w <= self.conv_stop:
                     self.stop_training = True
                 '''
+
+            self.model.w = np.copy(self.w[0:self.w_orig_size, :])
+
             self.display('PROC_MASTER_END', verbose=False)
 
             self.display('MASTER_ITER_END', verbose=False)
@@ -903,7 +1026,7 @@ class BSVM_Master(Common_to_all_POMs):
         self.model.niter = self.kiter
         self.model.is_trained = True
 
-        self.model.w = self.model.w[0:self.w_orig_size, :]
+        self.model.w = self.w[0:self.w_orig_size, :]
         self.display('MASTER_FINISH', verbose=False)
 
     def Update_State_Master(self):

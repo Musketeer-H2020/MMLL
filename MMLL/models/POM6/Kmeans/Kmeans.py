@@ -197,6 +197,7 @@ class Kmeans_Master(Common_to_all_POMs):
         self.name = self.model_type + '_Master'                 # Name
         self.master_address = master_address
         self.workers_addresses = workers_addresses
+        self.aggregator = None
 
         try:
             kwargs.update(kwargs['model_parameters'])
@@ -227,12 +228,6 @@ class Kmeans_Master(Common_to_all_POMs):
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
         # we extract the model_parameters as extra kwargs, to be all jointly processed
-        try:
-            kwargs.update(kwargs['model_parameters'])
-            del kwargs['model_parameters']
-        except Exception as err:
-            pass
-        self.process_kwargs(kwargs)
 
         self.create_FSM_master()
         self.FSMmaster.master_address = master_address

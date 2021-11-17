@@ -1,0 +1,164 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Missing data imputation &#8212; MMLL 2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Deep learning" href="deep_learning.html" />
+    <link rel="prev" title="Conversion to numeric" href="data2num.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="missing-data-imputation">
+<h1>Missing data imputation<a class="headerlink" href="#missing-data-imputation" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<span class="target" id="module-MMLL.preprocessors.data_imputation"></span><p>Preprocessing object for missing data imputation (mean)
+&#64;author:  Angel Navia Vázquez</p>
+<dl class="py class">
+<dt id="MMLL.preprocessors.data_imputation.imputation_model_V">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.preprocessors.data_imputation.</span></code><code class="sig-name descname"><span class="pre">imputation_model_V</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_data_description</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.preprocessors.data_imputation.imputation_model_V" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>input_data_description</strong> (<em>dict</em>) – Description of the input features</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.preprocessors.data_imputation.imputation_model_V.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.preprocessors.data_imputation.imputation_model_V.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform for missing data imputation in vertical partition</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>X</strong> (<em>ndarray</em>) – Matrix with the input values</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>transformed values</strong></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">MMLL</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../nodes.html">Nodes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MLmodels.html">Machine learning models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../comms.html">Communications</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../preprocessors.html">Preprocessors</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="data2num.html">Conversion to numeric</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Missing data imputation</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="deep_learning.html">Deep learning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="feature_extract.html">Feature extraction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_reshape.html">Image reshape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_to_vector.html">Image to vector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="logscale.html">Logarithmic scale</a></li>
+<li class="toctree-l2"><a class="reference internal" href="noise_injection.html">Noise injection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="normalizer.html">Normalization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="outlier_clipping.html">Outlier clipping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pca.html">Principal Component Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="random_projection.html">Random projection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="random_projection_sparse.html">Sparse random projection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tfidf_matrix.html">Term Frequency - Inverse Document Frequency</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../optimizers.html">Optimizers</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../preprocessors.html">Preprocessors</a><ul>
+      <li>Previous: <a href="data2num.html" title="previous chapter">Conversion to numeric</a></li>
+      <li>Next: <a href="deep_learning.html" title="next chapter">Deep learning</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Univ. Carlos III and Tree Technologies.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/preprocessors/data_imputation.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

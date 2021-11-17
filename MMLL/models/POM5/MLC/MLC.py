@@ -9,12 +9,14 @@ __date__ = "Febr. 2021"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
+from MMLL.data_value.DVEO import DVE_online
 from transitions import State
 from transitions.extensions import GraphMachine
 import pickle
 from pympler import asizeof #asizeof.asizeof(my_object)
 import dill
 import time
+import copy
 
 class Model():
     """
@@ -75,6 +77,63 @@ class Model():
         winners = list(np.argmax(X, axis=0))
         o = [self.classes[pos] for pos in winners] 
         return preds_dict, o
+
+    def predict_with(self, model_params, X):
+        """
+        Predicts outputs given the provided model parameters
+
+        Parameters
+        ----------
+
+        model_params: list
+            list with the parameters of different models (can be just one). If more than one are provided, 
+            then the accumulation is used 
+
+        X_b: ndarray
+            Matrix with the input values
+
+        Returns
+        -------
+        prediction_values: ndarray
+
+        """
+        Nmodels = len(model_params)
+        
+        # Storing the current model
+        self.w_dict_backup = copy.deepcopy(self.w_dict)
+
+        self.w_dict = copy.deepcopy(model_params[0])
+
+        classes = list(self.w_dict.keys())
+
+        if Nmodels > 1: # Accumulating  models
+            for k in range(1, Nmodels):
+                for cla in classes:
+                    self.w_dict[cla] += model_params[k][cla]
+
+        #prediction = self.sigm(np.dot(X_b, self.w.ravel()))
+        prediction = self.predict(X)
+
+        # Restoring the current model
+        self.w_dict = copy.deepcopy(self.w_dict_backup)
+
+        return prediction
+
+    def get_parameters(self):
+        """
+        Returns model parameters such that it is possible to rebuild the model using the set of parameters
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        model_params: it can be a matrix, or any other structure, but the 
+        method "predict_with" must know how to handle it
+
+        """
+        return self.w_dict
 
     def save(self, filename=None):
         """
@@ -251,6 +310,9 @@ class MLC_Master(Common_to_all_POMs):
         #self.yval = yval
         self.epsilon = 0.00000001  # to avoid log(0)
         self.momentum = 0
+        self.use_dve = False
+        self.dve_weight = False
+        self.aggregator = None
 
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
@@ -533,20 +595,44 @@ class MLC_Master(Common_to_all_POMs):
                     MLmodel.ce_val_old = MLmodel.ce_val
                     MLmodel.ce_val = 0
 
+                    # We need the grads_dict unencrypted
+                    MLmodel.grads_dict_decrypt = copy.deepcopy(MLmodel.grads_dict)
                     for cla in MLmodel.classes:
-                        grad_acum = np.zeros((MLmodel.NI + 1, 1))
-                        #NPtr_train = 0
                         for waddr in MLmodel.workers_addresses:
                             grad_encr = MLmodel.grads_dict[waddr][cla]
                             grad_decr = MLmodel.decrypter.decrypt(grad_encr)
+                            MLmodel.grads_dict_decrypt[waddr][cla] = grad_decr
+
+                    if MLmodel.use_dve:
+                        incs_dict = copy.deepcopy(MLmodel.grads_dict_decrypt)
+                        for waddr in MLmodel.workers_addresses:
+                            for cla in MLmodel.classes:
+                                incs_dict[waddr][cla] = -incs_dict[waddr][cla]
+
+                        MLmodel.dve.update(MLmodel.model, incs_dict, 'incs')
+
+                        message = 'DVE = '
+                        for waddr in MLmodel.workers_addresses:
+                            message += '%s: %.3f'%(waddr, MLmodel.dve.dve_dict[waddr]) + ', '
+                        print(message)
+
+                    if not MLmodel.dve_weight:
+                        print('== NO DVE weighting ==')
+                    else:
+                        print('== DVE weighting ==')                       
+
+                    for cla in MLmodel.classes:
+                        grad_acum = np.zeros((MLmodel.NI + 1, 1))
+                        for waddr in MLmodel.workers_addresses:
+                            grad_decr = MLmodel.grads_dict_decrypt[waddr][cla]
                             grad_acum += grad_decr
-                            #NPtr_train += MLmodel.NP_dict[waddr][cla]
 
-                        #grad_acum = grad_acum / NPtr_train                  
-                        grad_acum = MLmodel.mu * grad_acum / len(MLmodel.workers_addresses)                  
+                        if not MLmodel.dve_weight:
+                            grad_acum = MLmodel.mu * grad_acum / len(MLmodel.workers_addresses)                  
+                        else:
+                            grad_acum = MLmodel.mu * grad_acum * MLmodel.dve.dve_dict[waddr]                  
 
-                        MLmodel.Xval = None # Only this option
-                        if MLmodel.Xval is None:  # A validation set is not provided
+                        if not MLmodel.use_Xval:  # A validation set is not used here
                             #MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - MLmodel.mu * grad_acum
                             # Momentum
                             v_1 = np.copy(MLmodel.grad_old_dict[cla]) # old gradient
@@ -555,10 +641,9 @@ class MLC_Master(Common_to_all_POMs):
                             MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - v
                             MLmodel.grad_old_dict[cla] = grad_acum
                             
-
                             # We update the encrypted version
                             MLmodel.w_encr_dict[cla] =  MLmodel.encrypter.encrypt(MLmodel.model.w_dict[cla])
-                            del grad_acum, grad_encr, grad_decr
+                            #del grad_acum, grad_encr, grad_decr
 
                         else:  # We obtain the optimal update for every class
                             NIval = MLmodel.Xval.shape[1]
@@ -702,7 +787,13 @@ class MLC_Master(Common_to_all_POMs):
         self.grad_old_dict = {}
         self.model.classes = self.classes
 
-        self.Xval = None # Do not use Xval
+        if self.Xval is not None:
+            self.use_Xval = False # Do not use Xval for training
+            self.display('Warning: Validation set is not used during training', verbose=True)
+
+        if self.Xval is None and self.use_dve:
+            print('WARNING: Data Value estimation is not possible, no validation set is provided')
+            self.use_dve = False
         
         for cla in self.classes:
             self.model.w_dict.update({cla: np.random.normal(0, 0.001, (self.NI + 1, 1))})
@@ -711,6 +802,10 @@ class MLC_Master(Common_to_all_POMs):
             self.grad_old_dict.update({cla: np.random.normal(0, 0.001, (self.NI + 1, 1))})
 
         self.ce_val = 10
+
+        if self.use_dve:
+            # Init DVE object
+            self.dve = DVE_online('song_mr', 0.5, self.model, self.workers_addresses, self.Xval, self.yval, metric='multiclass') 
 
         self.stop_training = False
         self.kiter = 0
@@ -741,7 +836,7 @@ class MLC_Master(Common_to_all_POMs):
                 inc_w += np.linalg.norm(self.model.w_dict[cla] - self.w_old_dict[cla]) / np.linalg.norm(self.w_old_dict[cla])
                 self.w_old_dict[cla] = np.copy(self.model.w_dict[cla])
 
-            if self.Xval is None:  # A validation set is not provided
+            if not self.use_Xval:  # A validation set is not provided
                 # Stop if convergence is reached
                 if inc_w < self.conv_stop:
                     self.stop_training = True               

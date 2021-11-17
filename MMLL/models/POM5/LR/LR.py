@@ -9,12 +9,14 @@ __date__ = "May 2020"
 
 import numpy as np
 from MMLL.models.Common_to_all_POMs import Common_to_all_POMs
+from MMLL.data_value.DVEO import DVE_online
 from transitions import State
 from transitions.extensions import GraphMachine
 import pickle
 from pympler import asizeof #asizeof.asizeof(my_object)
 import dill
 import time
+import copy
 
 class Model():
     """
@@ -45,6 +47,59 @@ class Model():
         X_b = np.hstack((np.ones((X.shape[0], 1)), X))
         prediction_values = np.dot(X_b, self.w.ravel())
         return prediction_values
+
+    def predict_with(self, model_params, X):
+        """
+        Predicts outputs given the provided model parameters
+
+        Parameters
+        ----------
+
+        model_params: list
+            list with the parameters of different models (can be just one). If more than one are provided, 
+            then the accumulation is used 
+
+        X_b: ndarray
+            Matrix with the input values
+
+        Returns
+        -------
+        prediction_values: ndarray
+
+        """
+        Nmodels = len(model_params)
+        
+        # Storing the current model
+        self.w_backup = np.copy(self.w)
+
+        self.w = np.copy(model_params[0])
+        if Nmodels > 1: # Accumulating  models
+            for k in range(1, Nmodels):
+                self.w += model_params[k]
+
+        #prediction = self.sigm(np.dot(X_b, self.w.ravel()))
+        prediction = self.predict(X)
+
+        # Restoring the current model
+        self.w = np.copy(self.w_backup)
+
+        return prediction
+
+    def get_parameters(self):
+        """
+        Returns model parameters such that it is possible to rebuild the model using the set of parameters
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        model_params: it can be a matrix, or any other structure, but the 
+        method "predict_with" must know how to handle it
+
+        """
+        return self.w
 
     def save(self, filename=None):
         """
@@ -193,6 +248,9 @@ class LR_Master(Common_to_all_POMs):
         self.epsilon = 0.00000001  # to avoid log(0)
         self.momentum = 0
         self.minibatch = 1.0
+        self.use_dve = False
+        self.dve_weight = False
+        self.aggregator = None
 
         for k in range(0, self.Nworkers):
             self.state_dict.update({self.workers_addresses[k]: ''})
@@ -366,6 +424,8 @@ class LR_Master(Common_to_all_POMs):
 
         self.NI = self.input_data_description['NI']
         self.w = np.random.normal(0, 0.1, (self.NI + 1, 1))
+        self.model.w = np.copy(self.w)
+
         self.w_encr = self.encrypter.encrypt(self.w)
         self.grad_old = np.zeros((self.NI + 1, 1))
 
@@ -430,12 +490,23 @@ class LR_Master(Common_to_all_POMs):
         for worker in self.workers_addresses:
             self.receivers_list.append(self.send_to[worker])
 
+        if self.Xval is not None:
+            self.use_Xval = False # Do not use Xval for training
+            self.display('Warning: Validation set is not used during training', verbose=True)
+
+        if self.Xval is None and self.use_dve:
+            print('WARNING: Data Value estimation is not possible, no validation set is provided')
+            self.use_dve = False
 
         self.grads_dict = {}
         
         self.stop_training = False
         self.kiter = 0
         self.mseval = 1000
+
+        if self.use_dve:
+            # Init DVE object
+            self.dve = DVE_online('song_mr', 0, self.model, self.workers_addresses, self.Xval, self.yval, metric='regression') 
 
         while not self.stop_training:
             self.display('MASTER_ITER_START', verbose=False)
@@ -445,24 +516,40 @@ class LR_Master(Common_to_all_POMs):
             self.display('PROC_MASTER_START', verbose=False)
 
             grad = np.zeros((self.NI + 1, 1))
-            for key in self.grads_dict:
-                grad_encr = self.grads_dict[key]
+            grads_decr_dict = {}
+            incs_dict = {}
+            for waddr in self.workers_addresses:
+                grad_encr = self.grads_dict[waddr]
                 #gradq = self.cr.vmasterDec_BCP(gradq_encr, self.cr.PK)
                 #grad_decr = self.cr.vQinv_m(gradq, gradq_encr[0, 0].N)
                 grad_decr = self.decrypter.decrypt(grad_encr)
+                grads_decr_dict.update({waddr: grad_decr})
+                incs_dict.update({waddr: -grad_decr})
                 grad += grad_decr
 
-            grad = self.mu * grad / len(self.workers_addresses)
+            if self.use_dve:
+                self.dve.update(self.model, incs_dict, 'incs')
+
+                message = 'DVE = '
+                for waddr in self.workers_addresses:
+                    message += '%s: %.3f'%(waddr, self.dve.dve_dict[waddr]) + ', '
+                print(message)
+
+            if not self.dve_weight:
+                print('== NO DVE weighting ==')
+            else:
+                print('== DVE weighting ==')                       
+
+            if not self.dve_weight:
+                grad = self.mu * grad / len(self.workers_addresses)                  
+            else:
+                grad = self.mu * grad * self.dve.dve_dict[waddr]                  
 
             self.kiter += 1
             if self.kiter == self.Nmaxiter:
                 self.stop_training = True
 
-            if self.Xval is not None:
-                self.Xval = None
-                self.display('Warning: Validation set is not used during training', verbose=True)
-
-            if self.Xval is None:  # A validation set is not provided
+            if not self.use_Xval:  # A validation set is not provided
                 self.w_old = self.w.copy()
 
                 # Moment update
@@ -518,6 +605,7 @@ class LR_Master(Common_to_all_POMs):
                 message = 'Maxiter = %d, iter = %d, inc_MSE_val = %f, inc_w = %f' % (self.Nmaxiter, self.kiter, inc_mseval, inc_w)
                 #self.display(message, verbose=True)
                 print(message)
+            
             self.w_encr = self.encrypter.encrypt(self.w)
 
             #print(self.w.ravel())

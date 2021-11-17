@@ -179,6 +179,7 @@ class Kmeans_Master(Common_to_all_POMs):
         #self.NC = NC                                # No. Centroids
         #self.Nmaxiter = Nmaxiter
         self.master_address = master_address
+        self.aggregator = None
 
         # Convert workers_addresses -> '0', '1', + send_to dict
         self.broadcast_addresses = workers_addresses

@@ -189,6 +189,7 @@ class Kmeans_Master(Common_to_all_POMs):
         self.verbose = verbose                      # print on screen when true
         self.state_dict = {}                        # dictionary storing the execution state
         self.NI = None
+        self.aggregator = None
         #self.regularization = regularization
         #self.classes = classes
         #self.balance_classes = balance_classes

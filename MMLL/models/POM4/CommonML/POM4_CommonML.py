@@ -119,6 +119,7 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
             State(name='getting_sumXy', on_enter=['while_getting_sumXy']),
             State(name='getting_stats', on_enter=['while_getting_stats']),
+            State(name='getting_stats_metric', on_enter=['while_getting_stats_metric']),
 
             State(name='getting_Rxyb_rxyb_direct', on_enter=['while_getting_Rxyb_rxyb_direct']),
             State(name='getting_Rxyb_rxyb_roundrobin', on_enter=['while_getting_Rxyb_rxyb_roundrobin']),
@@ -181,6 +182,9 @@ class POM4_CommonML_Master(Common_to_all_POMs):
 
             ['go_getting_stats', 'waiting_order', 'getting_stats'],
             ['go_waiting_order', 'getting_stats', 'waiting_order'],
+
+            ['go_getting_stats_metric', 'waiting_order', 'getting_stats_metric'],
+            ['go_waiting_order', 'getting_stats_metric', 'waiting_order'],
 
             ['go_getting_Rxyb_rxyb_direct', 'waiting_order', 'getting_Rxyb_rxyb_direct'],
             ['go_waiting_order', 'getting_Rxyb_rxyb_direct', 'waiting_order'],
@@ -260,6 +264,7 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                     MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
 
                     MLmodel.display(MLmodel.name + ' asking encrypter to cryptonode')
+
                 except:
                     raise
                     '''
@@ -485,6 +490,14 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 MLmodel.display(MLmodel.name + ' broadcasted get_stats to all Workers')
                 return
 
+            def while_getting_stats_metric(self, MLmodel, metric):
+                data = {'metric': metric}
+                packet = {'action': 'get_stats_metric', 'to': 'CommonML', 'sender': MLmodel.master_address, 'data': data}
+                
+                MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
+                MLmodel.display(MLmodel.name + ' broadcasted get_stats_metric to all Workers')
+                return
+
             def while_getting_Rxyb_rxyb_direct(self, MLmodel):   
                 action = 'get_Rxyb_rxyb_direct'
                 packet = {'action': action, 'to': 'CommonML', 'sender': MLmodel.master_address}
@@ -581,7 +594,8 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 message_id = 'empty'
                 packet.update({'message_id': message_id})
                 
-                MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
+                #MLmodel.comms.broadcast(packet, MLmodel.receivers_list)
+                MLmodel.comms.broadcast(packet)
                 MLmodel.display(MLmodel.name + ' sent ping to all Workers')
                 return
 
@@ -1031,6 +1045,9 @@ class POM4_CommonML_Master(Common_to_all_POMs):
         if self.chekAllStates('ACK_send_stats'):
             self.FSMmaster.go_waiting_order(self)
 
+        if self.chekAllStates('ACK_send_stats_metric'):
+            self.FSMmaster.go_waiting_order(self)
+
         if self.chekAllStates('ACK_send_Rxyb_rxyb_direct'):
             self.FSMmaster.go_waiting_order(self)
 
@@ -1191,6 +1208,9 @@ class POM4_CommonML_Master(Common_to_all_POMs):
                 self.sumXminusmeansquared_dict.update({sender: packet['data']['X_mean_squared_sum']})
 
             if packet['action'] == 'ACK_send_stats':
+                self.stats_dict.update({sender: packet['data']['stats_dict']})
+
+            if packet['action'] == 'ACK_send_stats_metric':
                 self.stats_dict.update({sender: packet['data']['stats_dict']})
 
             if packet['action'] == 'ACK_send_Rxyb_rxyb_direct':
@@ -1746,6 +1766,17 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
                 MLmodel.display(MLmodel.name + ' %s: sent ACK_send_stats' % (str(MLmodel.worker_address)))
                 return
 
+            def while_computing_stats_metric(self, MLmodel, packet):
+
+                metric = packet['data']['metric']
+                stats_dict = metric.get_stats(MLmodel.Xtr_b, MLmodel.ytr.astype(float).reshape((-1, 1)))
+
+                data = {'stats_dict':stats_dict}
+                packet = {'action': 'ACK_send_stats_metric', 'sender': MLmodel.worker_address, 'data':data}
+                MLmodel.comms.send(packet, MLmodel.master_address)
+                MLmodel.display(MLmodel.name + ' %s: sent ACK_send_stats_metric' % (str(MLmodel.worker_address)))
+                return
+
             def while_computing_Rxyb_rxyb_direct(self, MLmodel, packet):
                 MLmodel.display('PROC_WORKER_START', verbose=False)
 
@@ -2207,6 +2238,7 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
             State(name='computing_sumX_roundrobin', on_enter=['while_computing_sumX_roundrobin']),
             State(name='computing_X_minus_mean_squared_roundrobin', on_enter=['while_computing_X_minus_mean_squared_roundrobin']),
             State(name='computing_stats', on_enter=['while_computing_stats']),
+            State(name='computing_stats_metric', on_enter=['while_computing_stats_metric']),
             State(name='computing_Rxyb_rxyb_direct', on_enter=['while_computing_Rxyb_rxyb_direct']),
             State(name='computing_Rxyb_rxyb_roundrobin', on_enter=['while_computing_Rxyb_rxyb_roundrobin']),
             State(name='computing_vocab_direct', on_enter=['while_computing_vocab_direct']),
@@ -2254,6 +2286,9 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
 
             ['go_computing_stats', 'waiting_order', 'computing_stats'],
             ['done_computing_stats', 'computing_stats', 'waiting_order'],
+
+            ['go_computing_stats_metric', 'waiting_order', 'computing_stats_metric'],
+            ['done_computing_stats_metric', 'computing_stats_metric', 'waiting_order'],
 
             ['go_computing_Rxyb_rxyb_direct', 'waiting_order', 'computing_Rxyb_rxyb_direct'],
             ['done_computing_Rxyb_rxyb_direct', 'computing_Rxyb_rxyb_direct', 'waiting_order'],
@@ -2394,6 +2429,10 @@ class POM4_CommonML_Worker(Common_to_all_POMs):
         if packet['action'] == 'get_stats':           
             self.FSMworker.go_computing_stats(self, packet)
             self.FSMworker.done_computing_stats(self)
+
+        if packet['action'] == 'get_stats_metric':           
+            self.FSMworker.go_computing_stats_metric(self, packet)
+            self.FSMworker.done_computing_stats_metric(self)
 
         if packet['action'] == 'get_Rxyb_rxyb_direct':           
             self.FSMworker.go_computing_Rxyb_rxyb_direct(self, packet)
@@ -3276,7 +3315,7 @@ class POM4_CommonML_Crypto(Common_to_all_POMs):
                 id of the sender
         """
         self.terminate = False
-        #self.display(self.name + ': received %s from worker %s' % (packet['action'], sender), verbose=True)
+        self.display(self.name + ': received %s' % packet['action'], verbose=True)
         if packet['action'] not in ['update_tr_data', 'ping', 'ask_encr_data', 'STOP']:
             try:
                 self.display('COMMS_CRYPTO_RECEIVED %s from %s, id=%s' % (packet['action'], sender, str(packet['message_id'])), verbose=False)

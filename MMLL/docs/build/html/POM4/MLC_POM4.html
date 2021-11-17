@@ -1,0 +1,390 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multiclass Logistic Classifier &#8212; MMLL 2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Clustering Kmeans" href="Kmeans_POM4.html" />
+    <link rel="prev" title="Logistic Classifier" href="LC_POM4.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="multiclass-logistic-classifier">
+<h1>Multiclass Logistic Classifier<a class="headerlink" href="#multiclass-logistic-classifier" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<span class="target" id="module-MMLL.models.POM4.MLC.MLC"></span><p>Multiclass Logistic Classifier model under POM4</p>
+<dl class="py class">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Crypto">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM4.MLC.MLC.</span></code><code class="sig-name descname"><span class="pre">MLC_Crypto</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cryptonode_address</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master_address</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Crypto" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.models.Common_to_all_POMs.Common_to_all_POMs</span></code></p>
+<p>Class implementing Multiclass Logistic Classifier , run at Crypto</p>
+<p>Create a <code class="xref py py-class docutils literal notranslate"><span class="pre">LR_Crypto</span></code> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>master_address</strong> (<em>string</em>) – address of the master node</p></li>
+<li><p><strong>worker_address</strong> (<em>string</em>) – id of this worker</p></li>
+<li><p><strong>model_type</strong> (<em>string</em>) – type of ML model</p></li>
+<li><p><strong>comms</strong> (<em>comms object instance</em>) – object providing communications</p></li>
+<li><p><strong>logger</strong> (class:<cite>logging.Logger</cite>) – logging object instance</p></li>
+<li><p><strong>verbose</strong> (<em>boolean</em>) – indicates if messages are print or not on screen</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Crypto.ProcessReceivedPacket_Crypto">
+<code class="sig-name descname"><span class="pre">ProcessReceivedPacket_Crypto</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">packet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sender</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Crypto.ProcessReceivedPacket_Crypto" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take an action after receiving a packet</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>packet</strong> (<em>packet object</em>) – packet received (usually a dict with various content)</p></li>
+<li><p><strong>sender</strong> (<em>string</em>) – id of the sender</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Crypto.create_FSM_crypto">
+<code class="sig-name descname"><span class="pre">create_FSM_crypto</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Crypto.create_FSM_crypto" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a Finite State Machine to be run at the Worker Node</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Master">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM4.MLC.MLC.</span></code><code class="sig-name descname"><span class="pre">MLC_Master</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">master_address</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">workers_addresses</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.models.Common_to_all_POMs.Common_to_all_POMs</span></code></p>
+<p>This class implements the Multiclass Logistic Classifier  model, run at Master node. It inherits from Common_to_all_POMs.</p>
+<p>Create a <a class="reference internal" href="#MMLL.models.POM4.MLC.MLC.MLC_Master" title="MMLL.models.POM4.MLC.MLC.MLC_Master"><code class="xref py py-class docutils literal notranslate"><span class="pre">MLC_Master</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>master_address</strong> (<em>string</em>) – address of the master node</p></li>
+<li><p><strong>workers_addresses</strong> (<em>list of strings</em>) – list of the addresses of the workers</p></li>
+<li><p><strong>comms</strong> (<em>comms object instance</em>) – object providing communications</p></li>
+<li><p><strong>logger</strong> (class:<cite>logging.Logger</cite>) – logging object instance</p></li>
+<li><p><strong>verbose</strong> (<em>boolean</em>) – indicates if messages are print or not on screen</p></li>
+<li><p><strong>kwargs</strong> (<em>Keyword arguments.</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Master.ProcessReceivedPacket_Master">
+<code class="sig-name descname"><span class="pre">ProcessReceivedPacket_Master</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">packet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sender</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Master.ProcessReceivedPacket_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process the received packet at Master and take some actions, possibly changing the state</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>packet</strong> (<em>packet object</em>) – packet received (usually a dict with various content)</p></li>
+<li><p><strong>sender</strong> (<em>string</em>) – id of the sender</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Master.Update_State_Master">
+<code class="sig-name descname"><span class="pre">Update_State_Master</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Master.Update_State_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>We update control the flow given some conditions and parameters</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Master.create_FSM_master">
+<code class="sig-name descname"><span class="pre">create_FSM_master</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Master.create_FSM_master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a Finite State Machine to be run at the Master Node</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Master.predict_Master">
+<code class="sig-name descname"><span class="pre">predict_Master</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_b</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Master.predict_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Predicts outputs given the model and inputs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>X_b</strong> (<em>ndarray</em>) – Matrix with the input values</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>prediction_values</strong></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Master.reset">
+<code class="sig-name descname"><span class="pre">reset</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">NI</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Master.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create some empty variables needed by the Master Node</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>NI</strong> (<em>integer</em>) – Number of input features</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Master.train_Master">
+<code class="sig-name descname"><span class="pre">train_Master</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Master.train_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the main training loop, it runs the following actions until
+the stop condition is met:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Update the execution state</p></li>
+<li><p>Process the received packets</p></li>
+<li><p>Perform actions according to the state</p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Worker">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM4.MLC.MLC.</span></code><code class="sig-name descname"><span class="pre">MLC_Worker</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">master_address</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker_address</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xtr_b</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ytr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cryptonode_address</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Worker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.models.Common_to_all_POMs.Common_to_all_POMs</span></code></p>
+<p>Class implementing Multiclass Logistic Classifier , run at Worker</p>
+<p>Create a <a class="reference internal" href="#MMLL.models.POM4.MLC.MLC.MLC_Worker" title="MMLL.models.POM4.MLC.MLC.MLC_Worker"><code class="xref py py-class docutils literal notranslate"><span class="pre">MLC_Worker</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>master_address</strong> (<em>string</em>) – address of the master node</p></li>
+<li><p><strong>worker_address</strong> (<em>string</em>) – id of this worker</p></li>
+<li><p><strong>model_type</strong> (<em>string</em>) – type of ML model</p></li>
+<li><p><strong>comms</strong> (<em>comms object instance</em>) – object providing communications</p></li>
+<li><p><strong>logger</strong> (class:<cite>logging.Logger</cite>) – logging object instance</p></li>
+<li><p><strong>verbose</strong> (<em>boolean</em>) – indicates if messages are print or not on screen</p></li>
+<li><p><strong>Xtr_b</strong> (<em>ndarray</em>) – 2-D numpy array containing the input training patterns</p></li>
+<li><p><strong>ytr</strong> (<em>ndarray</em>) – 1-D numpy array containing the target training values</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Worker.ProcessReceivedPacket_Worker">
+<code class="sig-name descname"><span class="pre">ProcessReceivedPacket_Worker</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">packet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sender</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Worker.ProcessReceivedPacket_Worker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take an action after receiving a packet</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>packet</strong> (<em>packet object</em>) – packet received (usually a dict with various content)</p></li>
+<li><p><strong>sender</strong> (<em>string</em>) – id of the sender</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.MLC_Worker.create_FSM_worker">
+<code class="sig-name descname"><span class="pre">create_FSM_worker</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.MLC_Worker.create_FSM_worker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a Finite State Machine to be run at the Worker Node</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="MMLL.models.POM4.MLC.MLC.Model">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM4.MLC.MLC.</span></code><code class="sig-name descname"><span class="pre">Model</span></code><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.Model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Multiclass Logistic Classifier model.</p>
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.Model.predict">
+<code class="sig-name descname"><span class="pre">predict</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.Model.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Predicts outputs given the inputs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>X</strong> (<em>ndarray</em>) – Matrix with the input values</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>prediction_values</strong></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.Model.save">
+<code class="sig-name descname"><span class="pre">save</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.Model.save" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Saves the trained model to file. The valid file extensions are:</dt><dd><ul class="simple">
+<li><p>“pkl”: saves the model as a Python3 pickle file</p></li>
+<li><p>“onnx”: saves the model using Open Neural Network Exchange format (ONNX)’</p></li>
+<li><p>“pmml”: saves the model using Predictive Model Markup Language (PMML)’</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>filename</strong> (<em>string</em>) – path+filename</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM4.MLC.MLC.Model.sigm">
+<code class="sig-name descname"><span class="pre">sigm</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM4.MLC.MLC.Model.sigm" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the sigmoid function</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>x</strong> (<em>float</em>) – input value</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>sigm(x)</strong></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">MMLL</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../nodes.html">Nodes</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../MLmodels.html">Machine learning models</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../POM1/POM1.html">Privacy Operation Mode 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM2/POM2.html">Privacy Operation Mode 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM3/POM3.html">Privacy Operation Mode 3</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="POM4.html">Privacy Operation Mode 4</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="Common_POM4.html">Common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="LR_POM4.html">Linear Regression</a></li>
+<li class="toctree-l3"><a class="reference internal" href="LC_POM4.html">Logistic Classifier</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Multiclass Logistic Classifier</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Kmeans_POM4.html">Clustering Kmeans</a></li>
+<li class="toctree-l3"><a class="reference internal" href="KR_POM4.html">Kernel Regression</a></li>
+<li class="toctree-l3"><a class="reference internal" href="BSVM_POM4.html">Budget Distributed Support Vector Machine</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../POM5/POM5.html">Privacy Operation Mode 5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM6/POM6.html">Privacy Operation Mode 6</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../comms.html">Communications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../preprocessors.html">Preprocessors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../optimizers.html">Optimizers</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../MLmodels.html">Machine learning models</a><ul>
+  <li><a href="POM4.html">Privacy Operation Mode 4</a><ul>
+      <li>Previous: <a href="LC_POM4.html" title="previous chapter">Logistic Classifier</a></li>
+      <li>Next: <a href="Kmeans_POM4.html" title="next chapter">Clustering Kmeans</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Univ. Carlos III and Tree Technologies.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/POM4/MLC_POM4.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

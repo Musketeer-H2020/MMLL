@@ -1,0 +1,312 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Support Vector Machine &#8212; MMLL 2.0 documentation</title>
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Federated Budget Support Vector Machine" href="FBSVM_POM2.html" />
+    <link rel="prev" title="Neural networks" href="NN_POM2.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="support-vector-machine">
+<h1>Support Vector Machine<a class="headerlink" href="#support-vector-machine" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<span class="target" id="module-MMLL.models.POM2.SVM.SVM"></span><p>Semiparametric Support Vector Machine model under POM2.</p>
+<dl class="py class">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_Master">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM2.SVM.SVM.</span></code><code class="sig-name descname"><span class="pre">SVM_Master</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">NC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nmaxiter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tolerance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">C</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">NmaxiterGD</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="Common_POM2.html#MMLL.models.POM2.CommonML.POM2_CommonML.POM2_CommonML_Master" title="MMLL.models.POM2.CommonML.POM2_CommonML.POM2_CommonML_Master"><code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.models.POM2.CommonML.POM2_CommonML.POM2_CommonML_Master</span></code></a></p>
+<p>This class implements SVM, run at Master node. It inherits from <code class="xref py py-class docutils literal notranslate"><span class="pre">POM2_CommonML_Master</span></code>.</p>
+<p>Create a <a class="reference internal" href="#MMLL.models.POM2.SVM.SVM.SVM_Master" title="MMLL.models.POM2.SVM.SVM.SVM_Master"><code class="xref py py-class docutils literal notranslate"><span class="pre">SVM_Master</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>comms</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Comms_master</span></code>) – Object providing communication functionalities.</p></li>
+<li><p><strong>logger</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">mylogging.Logger</span></code>) – Logging object instance.</p></li>
+<li><p><strong>verbose</strong> (<em>boolean</em>) – Indicates whether to print messages on screen nor not.</p></li>
+<li><p><strong>NC</strong> (<em>int</em>) – Number of support vectors in the semiparametric model.</p></li>
+<li><p><strong>Nmaxiter</strong> (<em>int</em>) – Maximum number of iterations.</p></li>
+<li><p><strong>tolerance</strong> (<em>float</em>) – Minimum tolerance for continuing training.</p></li>
+<li><p><strong>sigma</strong> (<em>float</em>) – The parameter of the gaussian kernel.</p></li>
+<li><p><strong>C</strong> (<em>float</em>) – The cost parameter in the cost function.</p></li>
+<li><p><strong>NmaxiterGD</strong> (<em>int</em>) – Maximum number of iterations for the SVM.</p></li>
+<li><p><strong>eta</strong> (<em>float</em>) – The step of the gradient descent algorithm.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_Master.ProcessReceivedPacket_Master_">
+<code class="sig-name descname"><span class="pre">ProcessReceivedPacket_Master_</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">packet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sender</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_Master.ProcessReceivedPacket_Master_" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process the received packet at master.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>packet</strong> (<em>dictionary</em>) – Packet received from a worker.</p></li>
+<li><p><strong>sender</strong> (<em>string</em>) – Identification of the sender.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_Master.TakeAction_Master">
+<code class="sig-name descname"><span class="pre">TakeAction_Master</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_Master.TakeAction_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Function to take actions according to the state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_Master.Update_State_Master">
+<code class="sig-name descname"><span class="pre">Update_State_Master</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_Master.Update_State_Master" title="Permalink to this definition">¶</a></dt>
+<dd><p>Function to control the state of the execution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>None</strong> – </p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_Worker">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM2.SVM.SVM.</span></code><code class="sig-name descname"><span class="pre">SVM_Worker</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">master_address</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logger</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Xtr_b</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ytr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_Worker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="Common_POM2.html#MMLL.models.POM2.CommonML.POM2_CommonML.POM2_CommonML_Worker" title="MMLL.models.POM2.CommonML.POM2_CommonML.POM2_CommonML_Worker"><code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.models.POM2.CommonML.POM2_CommonML.POM2_CommonML_Worker</span></code></a></p>
+<p>Class implementing a semiparametric SVM, run at Worker node. It inherits from <code class="xref py py-class docutils literal notranslate"><span class="pre">POM2_CommonML_Worker</span></code>.</p>
+<p>Create a <a class="reference internal" href="#MMLL.models.POM2.SVM.SVM.SVM_Worker" title="MMLL.models.POM2.SVM.SVM.SVM_Worker"><code class="xref py py-class docutils literal notranslate"><span class="pre">SVM_Worker</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>master_address</strong> (<em>string</em>) – Identifier of the master instance.</p></li>
+<li><p><strong>comms</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Comms_worker</span></code>) – Object providing communication functionalities.</p></li>
+<li><p><strong>logger</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">mylogging.Logger</span></code>) – Logging object instance.</p></li>
+<li><p><strong>verbose</strong> (<em>boolean</em>) – Indicates whether to print messages on screen nor not.</p></li>
+<li><p><strong>Xtr_b</strong> (<em>ndarray</em>) – Array containing the inputs for training.</p></li>
+<li><p><strong>ytr</strong> (<em>ndarray</em>) – Array containing the labels for training.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_Worker.ProcessReceivedPacket_Worker">
+<code class="sig-name descname"><span class="pre">ProcessReceivedPacket_Worker</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">packet</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_Worker.ProcessReceivedPacket_Worker" title="Permalink to this definition">¶</a></dt>
+<dd><p>Process the received packet at worker.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>packet</strong> (<em>dictionary</em>) – Packet received from the master.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_Worker.get_gradients">
+<code class="sig-name descname"><span class="pre">get_gradients</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">weights</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_Worker.get_gradients" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the gradients to update the weights using the local data of this worker node.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>weights</strong> (<em>ndarray</em>) – The weights of the SVM model.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>gradients</strong> (<em>ndarray</em>) – The gradient of every weight.</p></li>
+<li><p><strong>cost_function</strong> (<em>float</em>) – The part of the cost function associated to the local dataset.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_Worker.is_trained">
+<code class="sig-name descname"><span class="pre">is_trained</span></code><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_Worker.is_trained" title="Permalink to this definition">¶</a></dt>
+<dd><p># Train Kmeans first
+kmeans_worker = Kmeans_Worker(master_address, comms, logger, verbose, Xtr_b.copy())
+kmeans_worker.run_worker()</p>
+<p># Save results from Kmeans
+self.model.centroids = kmeans_worker.model.centroids           # Save centroids
+self.num_centroids = self.model.centroids.shape[0]             # Number of centroids
+self.preprocessor_ready = kmeans_worker.preprocessor_ready     # Store flag for preprocessing
+self.public_key = kmeans_worker.public_key                     # Public key
+self.private_key = kmeans_worker.private_key                   # Private key
+if self.preprocessor_ready:</p>
+<blockquote>
+<div><p>self.Xtr_b = np.copy(kmeans_worker.Xtr_b)                  # Normalize data
+self.prep_model = kmeans_worker.prep_model                 # Store preprocessing object</p>
+</div></blockquote>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_model">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">MMLL.models.POM2.SVM.SVM.</span></code><code class="sig-name descname"><span class="pre">SVM_model</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logger</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">MMLL.models.Common_to_models.Common_to_models</span></code></p>
+<p>This class contains the Semiparametric SVM model.</p>
+<p>Create a <a class="reference internal" href="#MMLL.models.POM2.SVM.SVM.SVM_model" title="MMLL.models.POM2.SVM.SVM.SVM_model"><code class="xref py py-class docutils literal notranslate"><span class="pre">SVM_model</span></code></a> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>logger</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">mylogging.Logger</span></code>) – Logging object instance.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_model.kernelMatrix">
+<code class="sig-name descname"><span class="pre">kernelMatrix</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">setDim1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">setDim2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_model.kernelMatrix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes a kernel matrix given two datasets.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>setDim1</strong> (<em>ndarray</em>) – Array containing M input patterns.</p></li>
+<li><p><strong>setDim2</strong> (<em>ndarray</em>) – Array containing N input patterns.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>preds</strong> – An MxN kernel matrix, every position contains the kernel evaluation of a data from setDim1 with another from setDim2.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="MMLL.models.POM2.SVM.SVM.SVM_model.predict">
+<code class="sig-name descname"><span class="pre">predict</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X_b</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#MMLL.models.POM2.SVM.SVM.SVM_model.predict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Uses the model to predict new outputs given the inputs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>X_b</strong> (<em>ndarray</em>) – Array containing the input patterns.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><strong>preds</strong> – Array containing the predictions.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">MMLL</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../nodes.html">Nodes</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../MLmodels.html">Machine learning models</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../POM1/POM1.html">Privacy Operation Mode 1</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="POM2.html">Privacy Operation Mode 2</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="Common_POM2.html">Common</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Kmeans_POM2.html">Kmeans</a></li>
+<li class="toctree-l3"><a class="reference internal" href="NN_POM2.html">Neural networks</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Support Vector Machine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="FBSVM_POM2.html">Federated Budget Support Vector Machine</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../POM3/POM3.html">Privacy Operation Mode 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM4/POM4.html">Privacy Operation Mode 4</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM5/POM5.html">Privacy Operation Mode 5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../POM6/POM6.html">Privacy Operation Mode 6</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../comms.html">Communications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../preprocessors.html">Preprocessors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../optimizers.html">Optimizers</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../MLmodels.html">Machine learning models</a><ul>
+  <li><a href="POM2.html">Privacy Operation Mode 2</a><ul>
+      <li>Previous: <a href="NN_POM2.html" title="previous chapter">Neural networks</a></li>
+      <li>Next: <a href="FBSVM_POM2.html" title="next chapter">Federated Budget Support Vector Machine</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, Univ. Carlos III and Tree Technologies.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/POM2/SVM_POM2.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
