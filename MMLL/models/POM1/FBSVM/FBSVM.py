@@ -313,7 +313,7 @@ class FBSVM_Worker(POM1_CommonML_Worker):
     Class implementing FBSVM, run at Worker. It inherits from :class:`POM1_CommonML_Worker`.
     '''
 
-    def __init__(self, master_address, comms, logger, verbose=False, Xtr_b=None, ytr=None):
+    def __init__(self, master_address, comms, logger, verbose=False, Xtr_b=None, ytr=None, worker_operations=None):
         """
         Create a :class:`FBSVM_Worker` instance.
 
@@ -337,8 +337,23 @@ class FBSVM_Worker(POM1_CommonML_Worker):
         ytr: ndarray
             Array containing the labels for training.
         """
+        self.worker_operations = None
+
+        if worker_operations is not None:
+            Xtr_b, ytr = worker_operations.preprocess(Xtr_b,ytr)
+            self.worker_operations = worker_operations
+
         self.Xtr_b = Xtr_b
         self.ytr = ytr.reshape((-1, 1))
+
+        class FBSVM_keras_model:
+            def __init__(self, worker):
+                self.worker = worker
+
+            def set_weights(w):
+                self.worker.weights = w
+
+        self.keras_model = FBSVM_keras_model(self)
 
         super().__init__(master_address, comms, logger, verbose)    # Initialize common class for POM1
         self.name = 'POM1_FBSVM_Worker'                             # Name
@@ -387,43 +402,46 @@ class FBSVM_Worker(POM1_CommonML_Worker):
         if packet['action'] == 'LOCAL_TRAIN':
             self.display(self.name + ' %s: Updating local model' %self.worker_address)
             weights = packet['data']['weights']
+            if self.worker_operations is not None:
+                self.worker_operations.process(self.model, weights, self.Xtr_b, self.ytr)
+                w_worker = self.weights
+            else:
+                Kcc_ = np.zeros((self.num_centroids+1, self.num_centroids+1))
+                Kcc_[1:, 1:] = self.Kcc
 
-            Kcc_ = np.zeros((self.num_centroids+1, self.num_centroids+1))
-            Kcc_[1:, 1:] = self.Kcc
+                # We use the global model as starting point
+                w_worker = np.copy(weights)
+                Lp_old = 1e20 # Any very large value
+                stop_training = False
+                kiter = 1
+                while not stop_training:
+                    w_worker_old = np.copy(w_worker)
+                    o = np.dot(self.KXC, w_worker)
+                    e = self.ytr - o
+                    ey = (e * self.ytr).ravel()
+                    a = 2 * self.C / self.eps * np.ones(self.tr_size)
+                    which = ey < 0
+                    a[which] = 0
+                    which = ey >= self.eps
+                    a[which] = 2 * self.C / ey[which]
+                    a = a.reshape((-1, 1))
+                    KTK = np.dot(self.KXC.T, self.KXC * a)
+                    KTy = np.dot(self.KXC.T, (self.ytr * a).reshape(self.tr_size, 1))
+                    w_worker_new = np.dot(np.linalg.inv(KTK + Kcc_), KTy)
 
-            # We use the global model as starting point
-            w_worker = np.copy(weights)
-            Lp_old = 1e20 # Any very large value
-            stop_training = False
-            kiter = 1
-            while not stop_training:
-                w_worker_old = np.copy(w_worker)
-                o = np.dot(self.KXC, w_worker)
-                e = self.ytr - o
-                ey = (e * self.ytr).ravel()
-                a = 2 * self.C / self.eps * np.ones(self.tr_size)
-                which = ey < 0
-                a[which] = 0
-                which = ey >= self.eps
-                a[which] = 2 * self.C / ey[which]
-                a = a.reshape((-1, 1))
-                KTK = np.dot(self.KXC.T, self.KXC * a)
-                KTy = np.dot(self.KXC.T, (self.ytr * a).reshape(self.tr_size, 1))
-                w_worker_new = np.dot(np.linalg.inv(KTK + Kcc_), KTy)
+                    Lp = 0.5 * np.dot(np.dot(w_worker_new.T, Kcc_), w_worker_new)[0, 0] + 0.5 * np.sum(a * e * e)
 
-                Lp = 0.5 * np.dot(np.dot(w_worker_new.T, Kcc_), w_worker_new)[0, 0] + 0.5 * np.sum(a * e * e)
+                    # We continue training until error increases or max iters are reached
+                    if kiter == self.num_epochs_worker:
+                        stop_training = True
+                    if Lp > Lp_old:
+                        stop_training = True
+                    else:
+                        w_worker = w_worker_new
 
-                # We continue training until error increases or max iters are reached 
-                if kiter == self.num_epochs_worker:
-                    stop_training = True
-                if Lp > Lp_old:
-                    stop_training = True
-                else:
-                    w_worker = w_worker_new
-
-                Lp_old = Lp
-                self.display(self.name + ' %s: Iter=%d, Lp=%0.2f' %(self.worker_address, kiter, Lp))
-                kiter += 1 
+                    Lp_old = Lp
+                    self.display(self.name + ' %s: Iter=%d, Lp=%0.2f' %(self.worker_address, kiter, Lp))
+                    kiter += 1
 
             action = 'UPDATE_MODEL'
             data = {'weights': [w_worker]}
