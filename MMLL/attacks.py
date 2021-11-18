@@ -145,8 +145,10 @@ def max_crossentropy(y_true, y_pred, clip_max=10000.0):
 
 
 class WorkerStealthyAttack(WorkerAttack):
-    LOSSES = {'crossentropy': tf.losses.categorical_crossentropy,
-              'max_crossentropy': max_crossentropy}
+    LOSSES = {
+        'crossentropy': tf.losses.categorical_crossentropy,
+        'max_crossentropy': max_crossentropy
+    }
 
     def __init__(self, num_labels, loss='crossentropy', ρ=1e-4, **kwargs):
         self.num_labels = num_labels
@@ -183,25 +185,34 @@ class WorkerStealthyAttack(WorkerAttack):
             if isinstance(benign_layer, (Dense, Conv2D)):
                 kernel_regularizer = StealthyL2Regularizer(
                     benign_layer.kernel.value(), ρ=self.ρ)
-                assign_layer_regularizer(malicious_layer, malicious_layer.kernel,
+                assign_layer_regularizer(malicious_layer,
+                                         malicious_layer.kernel,
                                          kernel_regularizer)
                 if benign_layer.bias is not None:
                     bias_regularizer = StealthyL2Regularizer(
                         benign_layer.bias.value(), ρ=self.ρ)
-                    assign_layer_regularizer(malicious_layer, malicious_layer.bias,
+                    assign_layer_regularizer(malicious_layer,
+                                             malicious_layer.bias,
                                              bias_regularizer)
         rebuild_model(malicious_model,
                       loss=self.LOSSES[self.loss],
                       metrics=['accuracy', 'categorical_crossentropy'],
                       ref_model=model.keras_model)
         malicious_model.set_weights(weights)
-        malicious_model.fit(
-            self.Xmal,
-            self.ymal,
-            epochs=10 *
-            epochs,  # increase the number of local epochs to fit malicious data
-            batch_size=batch_size,
-            verbose=False)
+        if self.loss == "crossentropy":
+            # NOTE: fitting random labels, so we need to increase the number of epochs
+            malicious_model.fit(self.Xmal,
+                                self.ymal,
+                                epochs=10 * epochs,
+                                batch_size=batch_size,
+                                verbose=False)
+        elif self.loss == "max_crossentropy":
+            # NOTE: maximizing loss on the training data
+            malicious_model.fit(self.Xmal,
+                                self.ymal,
+                                epochs=epochs,
+                                batch_size=batch_size,
+                                verbose=False)
         # update model weights
         model.keras_model.set_weights(malicious_model.get_weights())
         model.keras_model.evaluate(self.Xmal, self.ymal, verbose=True)
