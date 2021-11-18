@@ -10,10 +10,10 @@ __author__ = "Alexander Matyasko"
 __date__ = "November 2021"
 
 from abc import ABC, abstractmethod
-from functools import partial
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.layers import Conv2D, Dense
 from tensorflow.keras.regularizers import Regularizer
 from tensorflow.keras.utils import to_categorical
 
@@ -166,15 +166,16 @@ class WorkerStealthyAttack(WorkerAttack):
         malicious_model = tf.keras.models.clone_model(model.keras_model)
         for benign_layer, malicious_layer in zip(benign_model.layers,
                                                  malicious_model.layers):
-            kernel_regularizer = StealthyL2Regularizer(
-                benign_layer.kernel.value(), ρ=self.ρ)
-            assign_layer_regularizer(malicious_layer, malicious_layer.kernel,
-                                     kernel_regularizer)
-            if benign_layer.bias is not None:
-                bias_regularizer = StealthyL2Regularizer(
-                    benign_layer.bias.value(), ρ=self.ρ)
-                assign_layer_regularizer(malicious_layer, malicious_layer.bias,
-                                         bias_regularizer)
+            if isinstance(benign_layer, (Dense, Conv2D)):
+                kernel_regularizer = StealthyL2Regularizer(
+                    benign_layer.kernel.value(), ρ=self.ρ)
+                assign_layer_regularizer(malicious_layer, malicious_layer.kernel,
+                                         kernel_regularizer)
+                if benign_layer.bias is not None:
+                    bias_regularizer = StealthyL2Regularizer(
+                        benign_layer.bias.value(), ρ=self.ρ)
+                    assign_layer_regularizer(malicious_layer, malicious_layer.bias,
+                                             bias_regularizer)
         rebuild_model(malicious_model,
                       metrics=['accuracy', 'categorical_crossentropy'],
                       ref_model=model.keras_model)
