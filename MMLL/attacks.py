@@ -94,11 +94,20 @@ class WorkerLabelFlippingAttack(WorkerAttack):
 
     def process(self, model, weights, Xtr_b, ytr, epochs=1, batch_size=128):
         model.keras_model.set_weights(weights)
-        model.keras_model.fit(Xtr_b,
-                              ytr,
-                              epochs=epochs,
-                              batch_size=batch_size,
-                              verbose=1)
+        if self.target_class is not None:
+            model.keras_model.fit(Xtr_b,
+                                  ytr,
+                                  epochs=epochs,
+                                  batch_size=batch_size,
+                                  verbose=1)
+        else:
+            model.keras_model.fit(
+                Xtr_b,
+                ytr,
+                epochs=10 *
+                epochs,  # increase the number of epochs to fit random labels
+                batch_size=batch_size,
+                verbose=1)
 
 
 class WorkerByzantineAttack(WorkerAttack):
