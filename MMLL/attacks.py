@@ -136,8 +136,13 @@ def max_crossentropy(y_true, y_pred, clip_max=10000.0):
 
 
 class WorkerStealthyAttack(WorkerAttack):
-    def __init__(self, num_labels, ρ=1e-4, **kwargs):
+    LOSSES = {'crossentropy': tf.losses.categorical_crossentropy,
+              'max_crossentropy': max_crossentropy}
+
+    def __init__(self, num_labels, loss='crossentropy', ρ=1e-4, **kwargs):
         self.num_labels = num_labels
+        assert loss in self.LOSSES
+        self.loss = loss
         self.ρ = ρ
         super().__init__(**kwargs)
 
@@ -177,6 +182,7 @@ class WorkerStealthyAttack(WorkerAttack):
                     assign_layer_regularizer(malicious_layer, malicious_layer.bias,
                                              bias_regularizer)
         rebuild_model(malicious_model,
+                      loss=self.LOSSES[self.loss],
                       metrics=['accuracy', 'categorical_crossentropy'],
                       ref_model=model.keras_model)
         malicious_model.set_weights(weights)
