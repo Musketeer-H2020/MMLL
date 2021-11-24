@@ -987,11 +987,9 @@ class Common_to_all_POMs(Common_to_all_objects):
 
         #self.model_decr_bl
         # deblinding
-
         #print('STOP AT deblinding')
         #import code
         #code.interact(local=locals())
-
         #print('COMMON decrypt_model')
 
         try:
@@ -1040,4 +1038,3 @@ class Common_to_all_POMs(Common_to_all_objects):
             raise
             
         return self.model_decr_dict
-

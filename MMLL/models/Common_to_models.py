@@ -172,8 +172,6 @@ class Common_to_models():
                 self.display('Model Save Error: Model cannot be saved, check the provided filename.')
                 raise
 
-
-
     def display(self, message):
         """
         Use a logger to display messages on the console and/or file.

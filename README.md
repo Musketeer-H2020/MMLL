@@ -139,8 +139,6 @@ sudo apt-get install python3.7-dev -y
 pip install git+https://github.com/Musketeer-H2020/MMLL.git
 ```
 
-
-
 ## Acknowledgement 
 
 This project has received funding from the European Union’s Horizon 2020 research and innovation programme under grant agreement No 824988. https://musketeer.eu/
