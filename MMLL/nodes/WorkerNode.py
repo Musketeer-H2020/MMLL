@@ -55,10 +55,14 @@ class WorkerNode(Common_to_all_objects):
             self.display('WorkerNode %s: Loading Data Connector' % str(self.worker_address))
             self.display('WorkerNode %s: Initiated' % str(self.worker_address))
             self.data_is_ready = False
+            self.worker_operations = None
 
         except Exception as err:
             self.display('WorkerNode: Error at __init__: ', err)
             raise
+
+    def set_worker_operations(self, worker_operations):
+        self.worker_operations = worker_operations
 
 
     def set_training_data(self, dataset_name, Xtr=None, ytr=None, input_data_description=None, target_data_description=None):
@@ -217,7 +221,7 @@ class WorkerNode(Common_to_all_objects):
 
                 elif model_type == 'NN':
                     from MMLL.models.POM1.NeuralNetworks.neural_network import NN_Worker
-                    self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr)
+                    self.workerMLmodel = NN_Worker(self.master_address, self.comms, self.logger,  self.verbose, self.Xtr_b, self.ytr, self.worker_operations)
 
                 elif model_type == 'SVM':
                     from MMLL.models.POM1.SVM.SVM import SVM_Worker
