@@ -494,27 +494,66 @@ class Kmeans_Master(Common_to_all_POMs):
             
             self.display('PROC_MASTER_START', verbose=False)
            
-            newC = np.zeros((self.NC, self.NI))
-            TotalP = np.zeros((self.NC, 1))
+            if self.aggregator is not None:
+                ##################################################################
+                # Adversarial Defenses
+                err_msg = '\n' + '=' * 80 + '\nAn error occurred while using the external aggregator ' + str(self.aggregator) + ': '
+                self.C_old = self.C.copy()
+                try:
+                    # self.C_inc_dict
+                    # self.N_inc_dict
 
-            for waddr in self.workers_addresses:
-                cinc = self.C_inc_dict[waddr]
-                ninc = self.N_inc_dict[waddr]
+                    updated_model = self.aggregator.aggregate(self.C, [self.C_inc_dict, self.N_inc_dict])
+                    
+                    if updated_model.shape == self.C.shape:
+                        self.C = np.copy(updated_model)
+                        self.display('======> Model updated using external aggregator: ', verbose=True)
+                        self.display(self.aggregator, verbose=True)
+                    else:
+                        err = 'Current and updated model parameters have different size: ' + str(self.C.shape) + ' vs ' + str(updated_model.shape)
+                        self.display(err_msg, verbose=True)
+                        raise ValueError(err_msg + err)
+
+                except Exception as err:
+                    self.display('=' * 80, verbose=True) 
+                    self.display(err_msg, verbose=True)
+                    self.display(err, verbose=True)
+                    self.display('=' * 80, verbose=True) 
+                    raise
+
+            else: # Model update without defenses
+
+                self.C_old = self.C.copy()
+
+                newC = np.zeros((self.NC, self.NI))
+                TotalP = np.zeros((self.NC, 1))
+
+                for waddr in self.workers_addresses:
+                    cinc = self.C_inc_dict[waddr]
+                    ninc = self.N_inc_dict[waddr]
+                    for kc in range(0, self.NC):
+                        try:
+                            newC[kc, :] += cinc[kc]
+                            TotalP[kc] += ninc[kc]
+                        except:
+                            pass
+                
                 for kc in range(0, self.NC):
-                    try:
-                        newC[kc, :] += cinc[kc]
-                        TotalP[kc] += ninc[kc]
-                    except:
-                        pass
-            
-            for kc in range(0, self.NC):
-                if TotalP[kc] > 0:
-                    newC[kc, :] = newC[kc, :] / TotalP[kc]
+                    if TotalP[kc] > 0:
+                        newC[kc, :] = newC[kc, :] / TotalP[kc]
 
-            self.C_old = self.C.copy()
-            self.C = newC
+                self.C = newC
+
 
             self.display('---------------')
+            TotalP = np.zeros((self.NC, 1))
+            for waddr in self.workers_addresses:
+                for kc in range(0, self.NC):
+                    try:
+                        TotalP[kc] += self.N_inc_dict[waddr][kc]
+                    except:
+                        pass
+
             l = [int(p) for p in list(TotalP.ravel())]
             self.display(str(l))
 

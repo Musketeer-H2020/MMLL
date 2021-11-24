@@ -466,36 +466,73 @@ class Kmeans_Master(Common_to_all_POMs):
 
                     MLmodel.display('PROC_MASTER_START', verbose=False)
 
-                    NC = MLmodel.NC
-                    NI = MLmodel.NI
-                    newC = np.zeros((NC, NI))
-                    TotalP = np.zeros((NC, 1))
-                    #Dacum = np.zeros((NC, 1))
 
-                    for user in MLmodel.workers_addresses:
-                        cinc = MLmodel.Cinc_dict[user]
-                        for kc in range(0, NC):
-                            TotalP[kc] += cinc['Ninc'][kc]
-                            if cinc['C_inc'][kc] is not None:
-                                newC[kc, :] += cinc['C_inc'][kc]
-                                '''
-                                try:
+                    if MLmodel.aggregator is not None:
+                        ##################################################################
+                        # Adversarial Defenses
+                        err_msg = '\n' + '=' * 80 + '\nAn error occurred while using the external aggregator ' + str(MLmodel.aggregator) + ': '
+                        try:
+                            # self.C_inc_dict
+                            # self.N_inc_dict
+
+                            MLmodel.C_old = MLmodel.model.c[:, 0:MLmodel.c_orig_size].copy()
+                            C_inc_dict = {}
+                            N_inc_dict = {}
+                            for waddr in MLmodel.workers_addresses:
+                                C_tmp_dict = {}
+                                N_tmp_dict = {}
+                                for kc in range(MLmodel.NC):
+                                    N_tmp_dict.update({kc: MLmodel.Cinc_dict[waddr]['Ninc'][kc]})
+                                    aux = MLmodel.Cinc_dict[waddr]['C_inc'][kc]
+                                    if aux is not None: 
+                                        C_tmp_dict.update({kc: aux[0: MLmodel.c_orig_size]})
+
+                                C_inc_dict.update({waddr: C_tmp_dict})
+                                N_inc_dict.update({waddr: N_tmp_dict})
+
+                            updated_model = MLmodel.aggregator.aggregate(MLmodel.C_old, [C_inc_dict, N_inc_dict])
+                            
+                            if updated_model.shape == MLmodel.C_old.shape:
+                                MLmodel.model.c[:, 0:MLmodel.c_orig_size] = updated_model
+                                MLmodel.display('======> Model updated using external aggregator: ', verbose=True)
+                                MLmodel.display(MLmodel.aggregator, verbose=True)
+                            else:
+                                err = 'Current and updated model parameters have different size: ' + str(MLmodel.C_old.shape) + ' vs ' + str(updated_model.shape)
+                                MLmodel.display(err_msg, verbose=True)
+                                raise ValueError(err_msg + err)
+
+                        except Exception as err:
+                            self.display('=' * 80, verbose=True) 
+                            self.display(err_msg, verbose=True)
+                            self.display(err, verbose=True)
+                            self.display('=' * 80, verbose=True) 
+                            raise
+
+                    else: # Model update without defenses
+
+                        newC = np.zeros((MLmodel.NC, MLmodel.NI))
+                        TotalP = np.zeros((MLmodel.NC, 1))
+                        #Dacum = np.zeros((NC, 1))
+
+                        for user in MLmodel.workers_addresses:
+                            cinc = MLmodel.Cinc_dict[user]
+                            for kc in range(0, MLmodel.NC):
+                                TotalP[kc] += cinc['Ninc'][kc]
+                                if cinc['C_inc'][kc] is not None:
                                     newC[kc, :] += cinc['C_inc'][kc]
-                                except:
-                                    pass
-                                    print('ERR HERE')
-                                    import code
-                                    code.interact(local=locals())
-                                '''
 
-
-                    for kc in range(0, NC):
-                        if TotalP[kc] > 0:
-                            newC[kc, :] = newC[kc, :] / TotalP[kc]
-                    
-                    MLmodel.model.c = newC
+                        for kc in range(0, MLmodel.NC):
+                            if TotalP[kc] > 0:
+                                newC[kc, :] = newC[kc, :] / TotalP[kc]
+                        
+                        MLmodel.model.c = newC
 
                     MLmodel.display('---------------')
+                    TotalP = np.zeros((MLmodel.NC, 1))
+                    for user in MLmodel.workers_addresses:
+                        cinc = MLmodel.Cinc_dict[user]
+                        for kc in range(0, MLmodel.NC):
+                            TotalP[kc] += cinc['Ninc'][kc]
                     l = [int(p) for p in list(TotalP.ravel())]
                     MLmodel.display(str(l))
                     '''
@@ -511,7 +548,7 @@ class Kmeans_Master(Common_to_all_POMs):
                     Underpop = list(np.where(TotalP < 0.3 * Nmean)[0])
                     for which_under in Underpop:
                         which_over = Overpop[np.random.randint(0, len(Overpop))]
-                        newc = MLmodel.model.c[which_over, :] + np.random.normal(0, 0.01, (1, NI))
+                        newc = MLmodel.model.c[which_over, :] + np.random.normal(0, 0.01, (1, MLmodel.NI))
                         MLmodel.model.c[which_under, :] = newc
                     MLmodel.display(str(Overpop) + ' ' + str(Underpop))
                     MLmodel.display(str(len(Overpop)) + ' ' + str(len(Underpop)))

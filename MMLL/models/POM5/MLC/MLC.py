@@ -621,60 +621,107 @@ class MLC_Master(Common_to_all_POMs):
                     else:
                         print('== DVE weighting ==')                       
 
-                    for cla in MLmodel.classes:
-                        grad_acum = np.zeros((MLmodel.NI + 1, 1))
-                        for waddr in MLmodel.workers_addresses:
-                            grad_decr = MLmodel.grads_dict_decrypt[waddr][cla]
-                            grad_acum += grad_decr
+                    if MLmodel.aggregator is not None:
+                        ##################################################################
+                        # Adversarial Defenses
+                        err_msg = '\n' + '=' * 80 + '\nAn error occurred while using the external aggregator ' + str(MLmodel.aggregator) + ': '
 
-                        if not MLmodel.dve_weight:
-                            grad_acum = MLmodel.mu * grad_acum / len(MLmodel.workers_addresses)                  
-                        else:
-                            grad_acum = MLmodel.mu * grad_acum * MLmodel.dve.dve_dict[waddr]                  
-
-                        if not MLmodel.use_Xval:  # A validation set is not used here
-                            #MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - MLmodel.mu * grad_acum
-                            # Momentum
-                            v_1 = np.copy(MLmodel.grad_old_dict[cla]) # old gradient
-                            momentum = MLmodel.momentum * v_1
-                            v = momentum + grad_acum
-                            MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - v
-                            MLmodel.grad_old_dict[cla] = grad_acum
+                        try:
+                            MLmodel.w_old_dict = copy.deepcopy(MLmodel.model.w_dict)                              
+                            updated_model = MLmodel.aggregator.aggregate(MLmodel.model.w_dict, MLmodel.grads_dict_decrypt)                        
                             
-                            # We update the encrypted version
-                            MLmodel.w_encr_dict[cla] =  MLmodel.encrypter.encrypt(MLmodel.model.w_dict[cla])
-                            #del grad_acum, grad_encr, grad_decr
+                            # Error check
+                            if not isinstance(updated_model, dict):
+                                err = 'ERROR: the updated model must be a dictionary\n'
+                                MLmodel.display(err_msg, verbose=True)
+                                raise ValueError(err_msg + err)
+                            else: # is dict
+                                if len(set(updated_model.keys()) - set(MLmodel.model.w_dict.keys())) != 0: # classes not OK
+                                    err = 'ERROR: the updated model has incorrect classes\n'
+                                    MLmodel.display(err_msg, verbose=True)
+                                    raise ValueError(err_msg + err)
+                                else:
+                                    # Checking parameters size
+                                    sizes_ok = True
+                                    for cla in MLmodel.classes:
+                                        weights = np.array(updated_model[cla]).reshape((-1, 1))
+                                        updated_model[cla] = weights
+                                        if weights.shape != MLmodel.model.w_dict[cla].shape:
+                                            sizes_ok = False
+                                    if not sizes_ok:
+                                        err = 'ERROR: the updated weight parameters have incorrect sizes\n'
+                                        MLmodel.display(err_msg, verbose=True)
+                                        raise ValueError(err_msg + err)
+                                    else:
+                                        # Updating model
+                                        MLmodel.model.w_dict = copy.deepcopy(updated_model)
+                                        MLmodel.display('======> Model updated using external aggregator: ', verbose=True)
+                                        MLmodel.display(MLmodel.aggregator, verbose=True)
 
-                        else:  # We obtain the optimal update for every class
-                            NIval = MLmodel.Xval.shape[1]
-                            w_ = MLmodel.model.w_dict[cla][0: NIval + 1]
-                            grad_acum_ = grad_acum[0: NIval + 1]
+                        except Exception as err:
+                            MLmodel.display('=' * 80, verbose=True) 
+                            MLmodel.display(err_msg, verbose=True)
+                            MLmodel.display(err, verbose=True)
+                            MLmodel.display('=' * 80, verbose=True) 
+                            raise
+                        ##################################################################
+                    else: # Model update without defenses
 
-                            CE_val = []
-                            mus = np.arange(-0.52, 10.0, 0.1)
-                            Xw = np.dot(MLmodel.add_bias(MLmodel.Xval), w_)
-                            Xgrad = np.dot(MLmodel.add_bias(MLmodel.Xval), grad_acum_)
-                            yval = np.array(MLmodel.yval == cla).astype(float).reshape((-1, 1))
 
-                            for mu in mus:
-                                s_val = Xw - mu * Xgrad
-                                o_val = MLmodel.sigm(s_val).ravel()
-                                ce_val = np.mean(MLmodel.cross_entropy(o_val, yval, MLmodel.epsilon))
-                                CE_val.append(ce_val)
+                        for cla in MLmodel.classes:
+                            grad_acum = np.zeros((MLmodel.NI + 1, 1))
+                            for waddr in MLmodel.workers_addresses:
+                                grad_decr = MLmodel.grads_dict_decrypt[waddr][cla]
+                                grad_acum += grad_decr
 
-                            del Xw, Xgrad, s_val, o_val
+                            if not MLmodel.dve_weight:
+                                grad_acum = MLmodel.mu * grad_acum / len(MLmodel.workers_addresses)                  
+                            else:
+                                grad_acum = MLmodel.mu * grad_acum * MLmodel.dve.dve_dict[waddr]                  
 
-                            min_pos = np.argmin(CE_val)
-                            mu_opt = mus[min_pos]
-                            del mus
-                            MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - mu_opt * grad_acum
-                            del grad_acum
-                            ceval = CE_val[min_pos]
-                            MLmodel.ce_val += ceval
-                            del CE_val
-                            print('Optimal mu = %f for class=%s, CE val=%f' % (mu_opt, cla, ceval))
+                            if not MLmodel.use_Xval:  # A validation set is not used here
+                                #MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - MLmodel.mu * grad_acum
+                                # Momentum
+                                v_1 = np.copy(MLmodel.grad_old_dict[cla]) # old gradient
+                                momentum = MLmodel.momentum * v_1
+                                v = momentum + grad_acum
+                                MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - v
+                                MLmodel.grad_old_dict[cla] = grad_acum
+                                
+                                # We update the encrypted version
+                                MLmodel.w_encr_dict[cla] =  MLmodel.encrypter.encrypt(MLmodel.model.w_dict[cla])
+                                #del grad_acum, grad_encr, grad_decr
 
-                            MLmodel.ce_val = MLmodel.ce_val / len(MLmodel.classes)
+                            else:  # We obtain the optimal update for every class
+                                NIval = MLmodel.Xval.shape[1]
+                                w_ = MLmodel.model.w_dict[cla][0: NIval + 1]
+                                grad_acum_ = grad_acum[0: NIval + 1]
+
+                                CE_val = []
+                                mus = np.arange(-0.52, 10.0, 0.1)
+                                Xw = np.dot(MLmodel.add_bias(MLmodel.Xval), w_)
+                                Xgrad = np.dot(MLmodel.add_bias(MLmodel.Xval), grad_acum_)
+                                yval = np.array(MLmodel.yval == cla).astype(float).reshape((-1, 1))
+
+                                for mu in mus:
+                                    s_val = Xw - mu * Xgrad
+                                    o_val = MLmodel.sigm(s_val).ravel()
+                                    ce_val = np.mean(MLmodel.cross_entropy(o_val, yval, MLmodel.epsilon))
+                                    CE_val.append(ce_val)
+
+                                del Xw, Xgrad, s_val, o_val
+
+                                min_pos = np.argmin(CE_val)
+                                mu_opt = mus[min_pos]
+                                del mus
+                                MLmodel.model.w_dict[cla] = MLmodel.model.w_dict[cla] - mu_opt * grad_acum
+                                del grad_acum
+                                ceval = CE_val[min_pos]
+                                MLmodel.ce_val += ceval
+                                del CE_val
+                                print('Optimal mu = %f for class=%s, CE val=%f' % (mu_opt, cla, ceval))
+
+                                MLmodel.ce_val = MLmodel.ce_val / len(MLmodel.classes)
 
                     MLmodel.display('PROC_MASTER_END', verbose=False)
 

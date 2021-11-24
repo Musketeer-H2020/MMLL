@@ -643,11 +643,11 @@ class MLC_Master(Common_to_all_POMs):
                                     model_encr_bl_dict.update({cla: x + bl})
                                 except Exception as err:
                                     print('ERROR at  while_decrypt_modelM')
-                                    print('***** NUMERICAL OVERFLOW *******')
+                                    print('***** NUMERICAL OVERFLOW *******')                                   
                                     print(err)
-                                    raise
                                     #import code
                                     #code.interact(local=locals())
+                                    raise
 
                         if key == 'gM':  # gradients multiclass
 
@@ -957,7 +957,7 @@ class MLC_Master(Common_to_all_POMs):
                     exp_s = np.exp(-s)
                     o_orig = 1 / (1 + np.exp(-s))
                     y_orig = self.decrypter.decrypt(self.y_encr_dict[which][cla].reshape(-1, 1))
-                    e_orig = y_orig - o_orig
+                    e_orig = o_orig - y_orig
                     eX_orig = X0 * e_orig
                     eX_decr = self.decrypter.decrypt(self.eX_encr_dict[which][cla])
                     err += np.linalg.norm(eX_orig - eX_decr)
@@ -1007,9 +1007,7 @@ class MLC_Master(Common_to_all_POMs):
 
                 for waddr in self.workers_addresses:
                     tmp_dict = grad_encr_dict_workers[waddr]
-
                     tmp_dict_decr = self.decrypt_modelM({'wM': tmp_dict})['wM']
-
                     grads_dict_workers.update({waddr: copy.deepcopy(tmp_dict_decr)})
 
                     for cla in self.classes: # grads to increments
@@ -1024,74 +1022,159 @@ class MLC_Master(Common_to_all_POMs):
                     message += '%s: %.3f'%(waddr, self.dve.dve_dict[waddr]) + ', '
                 print(message)
 
-            if not self.dve_weight:
-                print('== NO DVE weighting ==')
-            else:
-                print('== DVE weighting ==')                       
+            if self.aggregator is not None:
+                ##################################################################
+                # Adversarial Defenses
+                err_msg = '\n' + '=' * 80 + '\nAn error occurred while using the external aggregator ' + str(self.aggregator) + ': '
+                try:
+                    self.w_dict_old = copy.deepcopy(self.model.w_dict)
 
-            for cla in self.classes:
-                grad_acum = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
-
-                if self.dve_weight:
+                    grad_encr_dict_workers = {}  # one per worker and class
                     for waddr in self.workers_addresses:
-                        grad_decr = grads_dict_workers[waddr][cla]
-                        grad_acum += grad_decr * self.dve.dve_dict[waddr]
+                        tmp_dict = {}
+                        for cla in self.classes:
+                            eX_encr = self.eX_encr_dict[waddr][cla]
+                            grad_encr = np.mean(eX_encr, axis=0).reshape((-1, 1))
+                            tmp_dict.update({cla: grad_encr})
 
-                    grad_acum = self.mu * grad_acum                
+                        grad_encr_dict_workers.update({waddr: tmp_dict})
 
-                else:
-                    grad_acum = self.mu * grad_encr_dict[cla] / len(self.workers_addresses)
+                    grads_dict_workers = {}
+
+                    for waddr in self.workers_addresses:
+                        tmp_dict = grad_encr_dict_workers[waddr]
+                        tmp_dict_decr = self.decrypt_modelM({'wM': tmp_dict})['wM']
+                        grads_dict_workers.update({waddr: copy.deepcopy(tmp_dict_decr)})
+                        
+                    updated_model = self.aggregator.aggregate(self.model.w_dict, grads_dict_workers)
+                    #print(updated_model)
                     
-                # Momentum
-                v_1 = np.copy(self.grad_old_dict[cla]) # old gradient
-                momentum = self.momentum * v_1
-                v = momentum + grad_acum
-                self.w_encr_dict[cla] = self.w_encr_dict[cla] - v
-                self.grad_old_dict[cla] = grad_acum
+                    # Error check
+                    if not isinstance(updated_model, dict):
+                        err = 'ERROR: the updated model must be a dictionary\n'
+                        self.display(err_msg, verbose=True)
+                        raise ValueError(err_msg + err)
+                    else: # is dict
+                        if len(set(updated_model.keys()) - set(self.model.w_dict.keys())) != 0: # classes not OK
+                            err = 'ERROR: the updated model has incorrect classes\n'
+                            self.display(err_msg, verbose=True)
+                            raise ValueError(err_msg + err)
+                        else:
+                            # Checking parameters size
+                            sizes_ok = True
+                            for cla in self.classes:
+                                weights = np.array(updated_model[cla]).reshape((-1, 1))
+                                updated_model[cla] = weights
+                                if weights.shape != self.model.w_dict[cla].shape:
+                                    sizes_ok = False
+                            if not sizes_ok:
+                                err = 'ERROR: the updated weight parameters have incorrect sizes\n'
+                                self.display(err_msg, verbose=True)
+                                raise ValueError(err_msg + err)
+                            else:
+                                # Updating model
+                                self.model.w_dict = copy.deepcopy(updated_model)
+                                self.display('======> Model updated using external aggregator: ', verbose=True)
+                                self.display(self.aggregator, verbose=True)
 
-            '''
-            for cla in self.classes:
-                #self.w_encr_dict[cla] = self.w_encr_dict[cla] + self.mu * grad_encr_dict[cla]
-                
+                except Exception as err:
+                    self.display('=' * 80, verbose=True) 
+                    self.display(err_msg, verbose=True)
+                    self.display(err, verbose=True)
+                    self.display('=' * 80, verbose=True) 
+                    raise
+                ##################################################################
+
+                for cla in self.classes:
+                    self.w_encr_dict[cla] = self.encrypter.encrypt(self.model.w_dict[cla])           
+               
+                # stopping
+                inc_w = 0
+                for cla in self.classes:
+                    inc_w += np.linalg.norm(self.model.w_dict[cla] - self.w_old_dict[cla]) / np.linalg.norm(self.w_old_dict[cla])
+                    self.w_old_dict[cla] = np.copy(self.model.w_dict[cla])           
+
+                # Stop if convergence is reached
+                if inc_w < self.conv_stop:
+                    self.stop_training = True
+                if kiter == self.Nmaxiter:
+                    self.stop_training = True
+               
+                message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
+                self.display(message, True)
+                kiter += 1
+
+            else: # Model update without defenses
+
                 if not self.dve_weight:
-                    grad_acum = self.mu * grad_encr_dict[cla] / len(self.workers_addresses)                  
+                    print('== NO DVE weighting ==')
                 else:
-                    grad_acum = self.mu * grad_encr_dict[cla] * self.dve.dve_dict[waddr]                  
-                # Momentum
-                v_1 = np.copy(self.grad_old_dict[cla]) # old gradient
-                momentum = self.momentum * v_1
-                v = momentum + grad_acum
-                self.w_encr_dict[cla] = self.w_encr_dict[cla] - v
-                self.grad_old_dict[cla] = grad_acum
-            '''
-            # Decrypting the model
-            self.model_decr_dict = self.decrypt_modelM({'wM': self.w_encr_dict})
+                    print('== DVE weighting ==')                       
 
-            #self.w_old = dict(self.model.w_dict)
-            self.model.w_dict = dict(self.model_decr_dict['wM'])
+                for cla in self.classes:
+                    grad_acum = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
 
-            #print(self.model.w_dict)
+                    if self.dve_weight:
+                        for waddr in self.workers_addresses:
+                            grad_decr = grads_dict_workers[waddr][cla]
+                            grad_acum += grad_decr * self.dve.dve_dict[waddr]
 
-            for cla in self.classes:
-                self.w_encr_dict[cla] = self.encrypter.encrypt(self.model.w_dict[cla])           
-            
-            # stopping
-            inc_w = 0
-            for cla in self.classes:
-                inc_w += np.linalg.norm(self.model.w_dict[cla] - self.w_old_dict[cla]) / np.linalg.norm(self.w_old_dict[cla])
-                self.w_old_dict[cla] = np.copy(self.model.w_dict[cla])           
+                        grad_acum = self.mu * grad_acum                
 
-            # Stop if convergence is reached
-            if inc_w < self.conv_stop:
-                self.stop_training = True
-            if kiter == self.Nmaxiter:
-                self.stop_training = True
-           
-            message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
-            self.display(message, True)
-            kiter += 1
-            self.display('PROC_MASTER_END', verbose=False)
-            self.display('MASTER_ITER_END', verbose=False)
+                    else:
+                        grad_acum = self.mu * grad_encr_dict[cla] / len(self.workers_addresses)
+                        
+                    # Momentum
+                    v_1 = np.copy(self.grad_old_dict[cla]) # old gradient
+                    momentum = self.momentum * v_1
+                    v = momentum + grad_acum
+                    self.w_encr_dict[cla] = self.w_encr_dict[cla] - v
+                    self.grad_old_dict[cla] = grad_acum
+
+                '''
+                for cla in self.classes:
+                    #self.w_encr_dict[cla] = self.w_encr_dict[cla] + self.mu * grad_encr_dict[cla]
+                    
+                    if not self.dve_weight:
+                        grad_acum = self.mu * grad_encr_dict[cla] / len(self.workers_addresses)                  
+                    else:
+                        grad_acum = self.mu * grad_encr_dict[cla] * self.dve.dve_dict[waddr]                  
+                    # Momentum
+                    v_1 = np.copy(self.grad_old_dict[cla]) # old gradient
+                    momentum = self.momentum * v_1
+                    v = momentum + grad_acum
+                    self.w_encr_dict[cla] = self.w_encr_dict[cla] - v
+                    self.grad_old_dict[cla] = grad_acum
+                '''
+                # Decrypting the model
+                self.model_decr_dict = self.decrypt_modelM({'wM': self.w_encr_dict})
+                #print(self.model_decr_dict)
+
+                #self.w_old = dict(self.model.w_dict)
+                self.model.w_dict = copy.deepcopy(self.model_decr_dict['wM'])
+
+                #print(self.model.w_dict)
+
+                for cla in self.classes:
+                    self.w_encr_dict[cla] = self.encrypter.encrypt(self.model.w_dict[cla])           
+                
+                # stopping
+                inc_w = 0
+                for cla in self.classes:
+                    inc_w += np.linalg.norm(self.model.w_dict[cla] - self.w_old_dict[cla]) / np.linalg.norm(self.w_old_dict[cla])
+                    self.w_old_dict[cla] = np.copy(self.model.w_dict[cla])           
+
+                # Stop if convergence is reached
+                if inc_w < self.conv_stop:
+                    self.stop_training = True
+                if kiter == self.Nmaxiter:
+                    self.stop_training = True
+               
+                message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
+                self.display(message, True)
+                kiter += 1
+                self.display('PROC_MASTER_END', verbose=False)
+                self.display('MASTER_ITER_END', verbose=False)
 
         self.model.niter = kiter
         self.model.is_trained = True

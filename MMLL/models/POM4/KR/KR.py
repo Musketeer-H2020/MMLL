@@ -942,38 +942,81 @@ class KR_Master(Common_to_all_POMs):
                 print('Error in eX = %f' % np.linalg.norm(eX_orig - eX_decr))  # OK
 
             self.display('PROC_MASTER_START', verbose=False)
+            grad_encr_dict = {}
             grad_encr = self.encrypter.encrypt(np.zeros((self.NC + 1, 1)))
             for waddr in self.selected_workers:
                 eX_encr = self.eX_encr_dict[waddr]
                 #grad_encr += np.sum(eX_encr, axis=0).reshape((-1, 1)) / NPtotal
-                grad_encr += np.mean(eX_encr, axis=0).reshape((-1, 1))
+                #grad_encr += np.mean(eX_encr, axis=0).reshape((-1, 1))
+                grad_encr_worker = np.mean(eX_encr, axis=0).reshape((-1, 1))
+                grad_encr += grad_encr_worker
+                grad_encr_dict.update({waddr: grad_encr_worker})
 
             if check:
                 grad_orig = np.sum(eX_orig, axis=0).reshape((-1, 1))
                 grad_decr = self.decrypter.decrypt(np.sum(self.eX_encr_dict[which], axis=0).reshape((-1, 1)))
                 print('Error in grad = %f' % np.linalg.norm(grad_orig - grad_decr))  # OK
 
-            #self.w_encr += self.mu * grad_encr
-            grad_encr += np.random.normal(0, self.regularization, grad_encr.shape)
+            if self.aggregator is not None:
+                ##################################################################
+                # Adversarial Defenses
+                err_msg = '\n' + '=' * 80 + '\nAn error occurred while using the external aggregator ' + str(self.aggregator) + ': '
+                try:
+                    self.w_old = np.copy(self.model.w)
 
-            # Momentum
-            v_1 = np.copy(self.grad_old) # old gradient
-            #v_1 = self.landa * v_1 + (1 - self.landa) * np.copy(grad)
-            momentum = self.momentum * v_1
-            grad_encr = self.mu * grad_encr / len(self.workers_addresses)                  
-            v_encr = momentum + grad_encr
-            self.w_encr = self.w_encr.reshape((-1, 1)) - v_encr
-            self.grad_old = np.copy(grad_encr)
+                    grads_dict = {}
+                    for waddr in self.workers_addresses:
+                        grad_decr = self.decrypt_model({'grad': grad_encr_dict[waddr]})['grad']
+                        grads_dict.update({waddr: grad_decr / len(self.workers_addresses)})
+                        
+                    updated_model = self.aggregator.aggregate(self.model.w, grads_dict)
+                    
+                    if updated_model.shape == self.model.w.shape:
+                        self.model.w = np.copy(updated_model)
+                        self.display('======> Model updated using external aggregator: ', verbose=True)
+                        self.display(self.aggregator, verbose=True)
+                    else:
+                        err = 'Current and updated model parameters have different size: ' + str(self.model.w.shape) + ' vs ' + str(updated_model.shape)
+                        self.display(err_msg, verbose=True)
+                        raise ValueError(err_msg + err)
+
+                except Exception as err:
+                    self.display('=' * 80, verbose=True) 
+                    self.display(err_msg, verbose=True)
+                    self.display(err, verbose=True)
+                    self.display('=' * 80, verbose=True) 
+                    raise
+                ##################################################################
+                # Stop if convergence is reached
+                inc_w = np.linalg.norm(self.model.w - self.w_old) / np.linalg.norm(self.w_old)
+                if inc_w < self.conv_stop:
+                    self.stop_training = True
+                message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
+                print(message)
+
+            else: # Model update without defenses
+
+                #self.w_encr += self.mu * grad_encr
+                grad_encr += np.random.normal(0, self.regularization, grad_encr.shape)
+
+                # Momentum
+                v_1 = np.copy(self.grad_old) # old gradient
+                #v_1 = self.landa * v_1 + (1 - self.landa) * np.copy(grad)
+                momentum = self.momentum * v_1
+                grad_encr = self.mu * grad_encr / len(self.workers_addresses)                  
+                v_encr = momentum + grad_encr
+                self.w_encr = self.w_encr.reshape((-1, 1)) - v_encr
+                self.grad_old = np.copy(grad_encr)
 
 
-            self.display('PROC_MASTER_END', verbose=False)
-            
-            # Decrypting the model
-            self.model_decr = self.decrypt_model({'w': self.w_encr})
-            
-            self.display('PROC_MASTER_START', verbose=False)
-            self.w_old = np.copy(self.model.w)
-            self.model.w = np.copy(self.model_decr['w'])
+                self.display('PROC_MASTER_END', verbose=False)
+                
+                # Decrypting the model
+                self.model_decr = self.decrypt_model({'w': self.w_encr})
+                
+                self.display('PROC_MASTER_START', verbose=False)
+                self.w_old = np.copy(self.model.w)
+                self.model.w = np.copy(self.model_decr['w'])
 
             # stopping
             inc_w = np.linalg.norm(self.model.w - self.w_old) / np.linalg.norm(self.w_old)

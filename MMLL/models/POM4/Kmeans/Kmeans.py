@@ -236,6 +236,7 @@ class Kmeans_Master(Common_to_all_POMs):
             State(name='store_Xyblinded', on_enter=['while_store_Xyblinded']),
             State(name='mult_XB', on_enter=['while_mult_XB']),
             State(name='decrypt_model', on_enter=['while_decrypt_model']),
+            State(name='decrypt_modelM', on_enter=['while_decrypt_modelM']),
             State(name='mult_AB', on_enter=['while_mult_AB']),
             State(name='compute_argmin', on_enter=['while_compute_argmin'])
         ]
@@ -249,6 +250,9 @@ class Kmeans_Master(Common_to_all_POMs):
 
             ['go_decrypt_model', 'waiting_order', 'decrypt_model'],
             ['done_decrypt_model', 'decrypt_model', 'waiting_order'],
+
+            ['go_decrypt_modelM', 'waiting_order', 'decrypt_modelM'],
+            ['done_decrypt_modelM', 'decrypt_modelM', 'waiting_order'],
 
             ['go_mult_AB', 'waiting_order', 'mult_AB'],
             ['done_mult_AB', 'mult_AB', 'waiting_order'],
@@ -355,6 +359,64 @@ class Kmeans_Master(Common_to_all_POMs):
                     '''
                 return
 
+
+            def while_decrypt_modelM(self, MLmodel, model_encr_dict):
+                try:
+
+                    MLmodel.display('PROC_MASTER_START', verbose=False)
+                    # Adding blinding to model
+                    MLmodel.bl_dict = {}
+                    MLmodel.model_encr_bl_dict = {}
+                    bl_dict = {}
+                    model_encr_bl_dict = {}
+
+                    for key in list(model_encr_dict.keys()):
+                        if key == 'wM':
+                            classes = list(model_encr_dict['wM'].keys())
+                            for cla in classes: 
+                                x = model_encr_dict[key][cla]
+                                M, N = x.shape
+                                bl = np.random.normal(0, 1, (M, N))
+                                bl_dict.update({cla: bl})
+                                try:
+                                    model_encr_bl_dict.update({cla: x + bl})
+                                except Exception as err:
+                                    print('ERROR at  while_decrypt_modelM')
+                                    print('***** NUMERICAL OVERFLOW *******')                                   
+                                    print(err)
+                                    #import code
+                                    #code.interact(local=locals())
+                                    raise
+
+                        MLmodel.bl_dict.update({key: bl_dict})
+                        MLmodel.model_encr_bl_dict.update({key: model_encr_bl_dict})
+
+                    MLmodel.display('PROC_MASTER_END', verbose=False)
+
+                    data = {'model_bl': MLmodel.model_encr_bl_dict}
+                    action = 'send_modelM_encr_bl'
+                    packet = {'action': action, 'to': 'CommonML', 'data': data, 'sender': MLmodel.master_address}
+                    
+                    #destination = MLmodel.cryptonode_address
+                    destination = 'ca'
+                    message_id = MLmodel.master_address+'_'+str(MLmodel.message_counter)
+                    packet.update({'message_id': message_id})
+                    MLmodel.message_counter += 1
+                    size_bytes = asizeof.asizeof(dill.dumps(packet))
+                    MLmodel.display('COMMS_MASTER_SEND %s to %s, id = %s, bytes=%s' % (action, destination, message_id, str(size_bytes)), verbose=False)
+
+                    MLmodel.comms.send(packet, MLmodel.send_to[MLmodel.cryptonode_address])
+                    MLmodel.display(MLmodel.name + ' send_model_encr_bl to cryptonode')
+                except:
+                    raise
+                    '''
+                    print('ERROR AT MLC while_decrypt_modelM')
+                    import code
+                    code.interact(local=locals())
+                    pass
+                    '''
+                return
+
             def while_Exit(self, MLmodel):
                 #print('while_Exit')
                 return
@@ -443,36 +505,85 @@ class Kmeans_Master(Common_to_all_POMs):
 
             self.display('PROC_MASTER_START', verbose=False)
 
-            newC_encr = self.encrypter.encrypt(np.zeros((self.NC, self.NI)))
-            TotalP = np.zeros((self.NC, 1))
+            if self.aggregator is not None:
+                ##################################################################
+                # Adversarial Defenses
+                err_msg = '\n' + '=' * 80 + '\nAn error occurred while using the external aggregator ' + str(self.aggregator) + ': '
+                
+                try:
+                    C_inc_dict = {}
+                    N_inc_dict = {}
+                    TotalP = np.zeros((self.NC, 1))
+                    for waddr in self.workers_addresses:
+                        C_tmp_dict_encr = {}
+                        N_tmp_dict = {}
+                        for kc in range(self.NC):
+                            which = self.argmin_dict[waddr] == kc
+                            aux = self.X_encr_dict[waddr][which, :]
+                            Nselected = aux.shape[0]
+                            if Nselected > 1:
+                                TotalP[kc] += Nselected
+                                N_tmp_dict.update({kc: Nselected})   
+                                sumX_encr = np.sum(aux, axis=0)
+                                C_tmp_dict_encr.update({kc: sumX_encr.reshape((1, -1))})
 
-            #self.X_encr_dict
-            # self.argmin_dict
-            for waddr in self.workers_addresses:
+                        C_tmp_dict_decr = self.decrypt_modelM({'wM': C_tmp_dict_encr})['wM']
+                        for key in C_tmp_dict_decr.keys():
+                            C_tmp_dict_decr[key] = C_tmp_dict_decr[key].ravel()
+
+                        C_inc_dict.update({waddr: C_tmp_dict_decr})
+                        N_inc_dict.update({waddr: N_tmp_dict})                       
+                        
+                    self.C_old = self.C.copy()    
+                    updated_model = self.aggregator.aggregate(self.C, [C_inc_dict, N_inc_dict])
+
+                    if updated_model.shape == self.C.shape:
+                        self.C = np.copy(updated_model)
+                        self.display('======> Model updated using external aggregator: ', verbose=True)
+                        self.display(self.aggregator, verbose=True)
+                    else:
+                        err = 'Current and updated model parameters have different size: ' + str(self.C.shape) + ' vs ' + str(updated_model.shape)
+                        self.display(err_msg, verbose=True)
+                        raise ValueError(err_msg + err)
+
+                except Exception as err:
+                    self.display('=' * 80, verbose=True) 
+                    self.display(err_msg, verbose=True)
+                    self.display(err, verbose=True)
+                    self.display('=' * 80, verbose=True) 
+                    raise
+
+            else: # Model update without defenses
+                self.C_old = self.C.copy()
+                newC_encr = self.encrypter.encrypt(np.zeros((self.NC, self.NI)))
+                TotalP = np.zeros((self.NC, 1))
+
+                #self.X_encr_dict
+                # self.argmin_dict
+                for waddr in self.workers_addresses:
+                    for kc in range(0, self.NC):
+                        try:
+                            which = self.argmin_dict[waddr] == kc
+                            aux = self.X_encr_dict[waddr][which, :]
+                            # aux contains bias, removing it
+                            #aux = aux[:,1:]
+                            Nselected = aux.shape[0]
+                            newC_encr[kc, :] += np.sum(aux, axis=0)
+                            TotalP[kc] += Nselected
+                        except:
+                            pass
+                self.display('PROC_MASTER_END', verbose=False)
+                
+                # Decrypting the model
+                newC = self.decrypt_model({'C': newC_encr})['C']
+
+                self.display('PROC_MASTER_START', verbose=False)
+
                 for kc in range(0, self.NC):
-                    try:
-                        which = self.argmin_dict[waddr] == kc
-                        aux = self.X_encr_dict[waddr][which, :]
-                        # aux contains bias, removing it
-                        #aux = aux[:,1:]
-                        Nselected = aux.shape[0]
-                        newC_encr[kc, :] += np.sum(aux, axis=0)
-                        TotalP[kc] += Nselected
-                    except:
-                        pass
-            self.display('PROC_MASTER_END', verbose=False)
-            
-            # Decrypting the model
-            newC = self.decrypt_model({'C': newC_encr})['C']
+                    if TotalP[kc] > 0:
+                        newC[kc, :] = newC[kc, :] / TotalP[kc]
 
-            self.display('PROC_MASTER_START', verbose=False)
-
-            for kc in range(0, self.NC):
-                if TotalP[kc] > 0:
-                    newC[kc, :] = newC[kc, :] / TotalP[kc]
-
-            self.C_old = self.C.copy()
-            self.C = newC
+                self.C = newC
 
             self.display('---------------')
             l = [int(p) for p in list(TotalP.ravel())]
@@ -567,6 +678,10 @@ class Kmeans_Master(Common_to_all_POMs):
             if packet['action'] == 'ACK_sent_decr_bl_model':
                 self.model_decr_bl = packet['data']['model_decr_bl']
                 self.FSMmaster.done_decrypt_model(self)
+
+            if packet['action'] == 'ACK_sent_decr_bl_modelM':
+                self.model_decr_bl_dict = packet['data']['model_decr_bl_dict']
+                self.FSMmaster.done_decrypt_modelM(self)
 
             if packet['action'] == 'ACK_exp_bl':
                 self.exps_bl_encr_dict = packet['data']['exps_bl_dict']

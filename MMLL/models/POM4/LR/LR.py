@@ -643,55 +643,97 @@ class LR_Master(Common_to_all_POMs):
                     message += '%s: %.3f'%(waddr, self.dve.dve_dict[waddr]) + ', '
                 print(message)
 
-            if not self.dve_weight:
-                print('== NO DVE weighting ==')
-            else:
-                print('== DVE weighting ==')                       
+            if self.aggregator is not None:
+                ##################################################################
+                # Adversarial Defenses
+                err_msg = '\n' + '=' * 80 + '\nAn error occurred while using the external aggregator ' + str(self.aggregator) + ': '
+                try:
+                    self.w_old = np.copy(self.w)
 
-            if not self.dve_weight:
-                grad_encr = self.mu * grad_encr / len(self.workers_addresses)                  
-            else:
-                # recompute grad_encr with the dve_weights
-                grad_encr = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
-                for waddr in self.workers_addresses:
-                    grad_encr += grad_encr_dict[waddr] * self.dve.dve_dict[waddr]
+                    grads_dict = {}
+                    for waddr in self.workers_addresses:
+                        grad_decr = self.decrypt_model({'grad': grad_encr_dict[waddr]})['grad']
+                        grads_dict.update({waddr: grad_decr / len(self.workers_addresses)})
+                        
+                    updated_model = self.aggregator.aggregate(self.w, grads_dict)
+                    
+                    if updated_model.shape == self.w.shape:
+                        self.w = np.copy(updated_model)
+                        self.display('======> Model updated using external aggregator: ', verbose=True)
+                        self.display(self.aggregator, verbose=True)
+                    else:
+                        err = 'Current and updated model parameters have different size: ' + str(self.w.shape) + ' vs ' + str(updated_model.shape)
+                        self.display(err_msg, verbose=True)
+                        raise ValueError(err_msg + err)
 
-                grad_encr = self.mu * grad_encr
+                except Exception as err:
+                    self.display('=' * 80, verbose=True) 
+                    self.display(err_msg, verbose=True)
+                    self.display(err, verbose=True)
+                    self.display('=' * 80, verbose=True) 
+                    raise
+                ##################################################################
+                inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
+                # stopping
+                inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
+                # Stop if convergence is reached
+                if inc_w < self.conv_stop:
+                    self.stop_training = True
+                message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
+                print(message)
+                kiter += 1
 
-            # Moment update
-            momentum_term = self.momentum * self.grad_old
-            v_encr = momentum_term +  grad_encr
-            self.w_encr = self.w_encr - v_encr 
-            #self.w += self.mu * grad
-            self.grad_old = np.copy(grad_encr)
+            else: # Model update without defenses
 
-            # Decrypting the model
-            self.model_decr = self.decrypt_model({'w': self.w_encr})
-            #self.w = self.decrypter.decrypt(self.w_encr)
-            self.w = np.copy(self.model_decr['w'])
+                if not self.dve_weight:
+                    print('== NO DVE weighting ==')
+                else:
+                    print('== DVE weighting ==')                       
 
-            if check:
-                w_ok = self.decrypter.decrypt(self.w_encr)  ### this is not allowed
-                w_mal = self.model_decr['w']
-                print(np.linalg.norm(w_ok - w_mal))  # Not OK
+                if not self.dve_weight:
+                    grad_encr = self.mu * grad_encr / len(self.workers_addresses)                  
+                else:
+                    # recompute grad_encr with the dve_weights
+                    grad_encr = self.encrypter.encrypt(np.zeros((self.NI + 1, 1)))
+                    for waddr in self.workers_addresses:
+                        grad_encr += grad_encr_dict[waddr] * self.dve.dve_dict[waddr]
 
-            #self.w_encr = self.encrypter.encrypt(self.w)           
-            
-            # stopping
-            inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
-            # Stop if convergence is reached
-            if inc_w < 0.005:
-                self.stop_training = True
-            if kiter == self.Nmaxiter:
-                self.stop_training = True
-           
-            message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
-            #self.display(message, True)
-            print(message)
-            kiter += 1
-            self.w_old = self.w.copy()
-            self.display('PROC_MASTER_END', verbose=False)
-            self.display('MASTER_ITER_END', verbose=False)
+                    grad_encr = self.mu * grad_encr
+
+                # Moment update
+                momentum_term = self.momentum * self.grad_old
+                v_encr = momentum_term +  grad_encr
+                self.w_encr = self.w_encr - v_encr 
+                #self.w += self.mu * grad
+                self.grad_old = np.copy(grad_encr)
+
+                # Decrypting the model
+                self.model_decr = self.decrypt_model({'w': self.w_encr})
+                #self.w = self.decrypter.decrypt(self.w_encr)
+                self.w = np.copy(self.model_decr['w'])
+
+                if check:
+                    w_ok = self.decrypter.decrypt(self.w_encr)  ### this is not allowed
+                    w_mal = self.model_decr['w']
+                    print(np.linalg.norm(w_ok - w_mal))  # Not OK
+
+                #self.w_encr = self.encrypter.encrypt(self.w)           
+                
+                # stopping
+                inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
+                # Stop if convergence is reached
+                if inc_w < 0.005:
+                    self.stop_training = True
+                if kiter == self.Nmaxiter:
+                    self.stop_training = True
+               
+                message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
+                #self.display(message, True)
+                print(message)
+                kiter += 1
+                self.w_old = self.w.copy()
+                self.display('PROC_MASTER_END', verbose=False)
+                self.display('MASTER_ITER_END', verbose=False)
 
         self.model.w = self.w
         self.model.niter = kiter

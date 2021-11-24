@@ -634,6 +634,7 @@ class LC_Master(Common_to_all_POMs):
             self.display('PROC_MASTER_START', verbose=False)
 
             incs_dict = {}
+            grads_dict = {}
             grad = np.zeros((self.NI + 1, 1))
             NPtotal = 0
             for key in self.grads_dict:
@@ -643,94 +644,131 @@ class LC_Master(Common_to_all_POMs):
                 grad_decr = self.decrypter.decrypt(grad_encr)
                 grad += grad_decr
                 incs_dict.update({key: -grad_decr})
+                grads_dict.update({key: grad_decr})
                 #NPtotal += self.NP_dict[key]
 
             #grad = grad / self.Nworkers
             grad = self.mu * grad / len(self.workers_addresses)
 
-            if self.use_dve:
-                self.dve.update(self.model, incs_dict, 'incs')
+            if self.aggregator is not None:
+                ##################################################################
+                # Adversarial Defenses
+                err_msg = '\n' + '=' * 80 + '\nAn error occurred while using the external aggregator ' + str(self.aggregator) + ': '
+                try:
+                    self.w_old = np.copy(self.w)
+                        
+                    updated_model = self.aggregator.aggregate(self.w, grads_dict)
+                    
+                    if updated_model.shape == self.w.shape:
+                        self.w = np.copy(updated_model)
+                        self.display('======> Model updated using external aggregator: ', verbose=True)
+                        self.display(self.aggregator, verbose=True)
+                    else:
+                        err = 'Current and updated model parameters have different size: ' + str(self.w.shape) + ' vs ' + str(updated_model.shape)
+                        self.display(err_msg, verbose=True)
+                        raise ValueError(err_msg + err)
 
-                message = 'DVE = '
-                for waddr in self.workers_addresses:
-                    message += '%s: %.3f'%(waddr, self.dve.dve_dict[waddr]) + ', '
-                print(message)
-
-                if self.dve_weight:
-                    # we recompute the weighted gradient update
-                    grad = np.zeros((self.NI + 1, 1))
-                    for waddr in self.workers_addresses:
-                        grad += -incs_dict[waddr] * self.dve.dve_dict[waddr]
-
-                    grad = self.mu * grad
-
-            self.w_old = self.w.copy()
-            ceval_old = ceval
-
-            if not use_validation:  # A validation set is not used for training
-                self.w_old = self.w.copy()
-
-                # Moment update
-                momentum_term = self.momentum * self.grad_old
-                v = momentum_term +  grad
-                self.w = self.w - v 
-                #self.w += self.mu * grad
-                self.grad_old = np.copy(grad)
-
-                #self.w -= self.mu * grad
-                #del grad
+                except Exception as err:
+                    self.display('=' * 80, verbose=True) 
+                    self.display(err_msg, verbose=True)
+                    self.display(err, verbose=True)
+                    self.display('=' * 80, verbose=True) 
+                    raise
+                ##################################################################
+                inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
                 # stopping
                 inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
-
-                # stopping
-                inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
-                #print(0.001, inc_w)
                 # Stop if convergence is reached
                 if inc_w < self.conv_stop:
                     self.stop_training = True
-
                 message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
-                #self.display(message, verbose=True)
                 print(message)
 
-            else:
-                NIval = self.Xval.shape[1]
-                w_ = self.w[0: NIval + 1]
-                grad_acum_ = grad[0: NIval + 1]
+            else: # Model update without defenses
 
-                CE_val = []
-                mus = np.arange(0.01, 10.0, 0.01)
-                Xw = np.dot(self.add_bias(self.Xval), w_)
-                Xgrad = np.dot(self.add_bias(self.Xval), grad_acum_)
+                if self.use_dve:
+                    self.dve.update(self.model, incs_dict, 'incs')
 
-                for mu in mus:
-                    s_val = Xw - mu * Xgrad
-                    o_val = self.sigm(s_val).ravel()
-                    ce_val = np.mean(self.cross_entropy(o_val, self.yval, self.epsilon))
-                    CE_val.append(ce_val)
+                    message = 'DVE = '
+                    for waddr in self.workers_addresses:
+                        message += '%s: %.3f'%(waddr, self.dve.dve_dict[waddr]) + ', '
+                    print(message)
 
-                del Xw, Xgrad, s_val, o_val
+                    if self.dve_weight:
+                        # we recompute the weighted gradient update
+                        grad = np.zeros((self.NI + 1, 1))
+                        for waddr in self.workers_addresses:
+                            grad += -incs_dict[waddr] * self.dve.dve_dict[waddr]
 
-                min_pos = np.argmin(CE_val)
-                mu_opt = mus[min_pos]
-                del mus
-                self.w = self.w - mu_opt * grad
-                self.model.w = self.w
-                del grad
-                ceval = CE_val[min_pos]
-                del CE_val
-                print('Optimal mu = %f, CE val=%f' % (mu_opt, ceval))
+                        grad = self.mu * grad
 
-                # stopping
-                inc_ceval = np.linalg.norm(ceval - ceval_old) / np.linalg.norm(ceval_old)
+                self.w_old = self.w.copy()
+                ceval_old = ceval
 
-                # Stop if convergence is reached
-                if inc_ceval < self.conv_stop:
-                    self.stop_training = True
+                if not use_validation:  # A validation set is not used for training
+                    self.w_old = self.w.copy()
 
-                message = 'Maxiter = %d, iter = %d, inc_CE_val = %f' % (self.Nmaxiter, kiter, inc_ceval)
-                #self.display(message, verbose=True)
-                print(message)
+                    # Moment update
+                    momentum_term = self.momentum * self.grad_old
+                    v = momentum_term +  grad
+                    self.w = self.w - v 
+                    #self.w += self.mu * grad
+                    self.grad_old = np.copy(grad)
+
+                    #self.w -= self.mu * grad
+                    #del grad
+                    # stopping
+                    inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
+
+                    # stopping
+                    inc_w = np.linalg.norm(self.w - self.w_old) / np.linalg.norm(self.w_old)
+                    #print(0.001, inc_w)
+                    # Stop if convergence is reached
+                    if inc_w < self.conv_stop:
+                        self.stop_training = True
+
+                    message = 'Maxiter = %d, iter = %d, inc_w = %f' % (self.Nmaxiter, kiter, inc_w)
+                    #self.display(message, verbose=True)
+                    print(message)
+
+                else:
+                    NIval = self.Xval.shape[1]
+                    w_ = self.w[0: NIval + 1]
+                    grad_acum_ = grad[0: NIval + 1]
+
+                    CE_val = []
+                    mus = np.arange(0.01, 10.0, 0.01)
+                    Xw = np.dot(self.add_bias(self.Xval), w_)
+                    Xgrad = np.dot(self.add_bias(self.Xval), grad_acum_)
+
+                    for mu in mus:
+                        s_val = Xw - mu * Xgrad
+                        o_val = self.sigm(s_val).ravel()
+                        ce_val = np.mean(self.cross_entropy(o_val, self.yval, self.epsilon))
+                        CE_val.append(ce_val)
+
+                    del Xw, Xgrad, s_val, o_val
+
+                    min_pos = np.argmin(CE_val)
+                    mu_opt = mus[min_pos]
+                    del mus
+                    self.w = self.w - mu_opt * grad
+                    self.model.w = self.w
+                    del grad
+                    ceval = CE_val[min_pos]
+                    del CE_val
+                    print('Optimal mu = %f, CE val=%f' % (mu_opt, ceval))
+
+                    # stopping
+                    inc_ceval = np.linalg.norm(ceval - ceval_old) / np.linalg.norm(ceval_old)
+
+                    # Stop if convergence is reached
+                    if inc_ceval < self.conv_stop:
+                        self.stop_training = True
+
+                    message = 'Maxiter = %d, iter = %d, inc_CE_val = %f' % (self.Nmaxiter, kiter, inc_ceval)
+                    #self.display(message, verbose=True)
+                    print(message)
 
             if kiter == self.Nmaxiter:
                 self.stop_training = True
