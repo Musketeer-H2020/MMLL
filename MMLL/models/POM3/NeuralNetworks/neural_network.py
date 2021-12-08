@@ -18,11 +18,14 @@ set_random_seed(2)
 
 import numpy as np
 import tensorflow as tf
+import time
 
+from sklearn.utils import shuffle
 from MMLL.models.POM3.CommonML.POM3_CommonML import POM3_CommonML_Master, POM3_CommonML_Worker
 from MMLL.models.Common_to_models import Common_to_models
 
-
+RESUME = False
+TO_ADV_TRAIN = True
 
 class NN_model(Common_to_models):
     """
@@ -55,10 +58,19 @@ class NN_model(Common_to_models):
         self.supported_formats = ['h5', 'onnx', 'Tensorflow SavedModel']
         self.name = 'NN'
 
-        self.keras_model = tf.keras.models.model_from_json(model_architecture)        # Store the model architecture
-        self.keras_model.compile(optimizer=optimizer, loss=loss, metrics=[metric])    # Compile the model
+        if RESUME:
+            self.keras_model = tf.keras.models.load_model('results/models/tmp_worker_user_1')  # load a worker who last
+                                                                                               # had global model
+        else:
+            self.keras_model = tf.keras.models.model_from_json(model_architecture)  # Store the model architecture
+            self.keras_model.compile(optimizer=optimizer,
+                                     loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
+                                     metrics=[metric])  # Compile the model
 
-
+        self.pgd_params = {'random_start': True,
+                           'eta': 0.3,
+                           'steps': 40,
+                           'step_size': 0.01}
 
     def predict(self, X_b):
         """
@@ -77,6 +89,64 @@ class NN_model(Common_to_models):
         preds = self.keras_model.predict(X_b)
         return preds
 
+    def adv_step(self, x, y, loss_function):
+        with tf.GradientTape() as tape:
+            tape.watch(x)
+            y_pred = self.keras_model(x, training=False)
+            loss = loss_function(y, y_pred)
+        return tape.gradient(loss, x)
+
+    def make_adversarial_example(self, x, y):
+        clip_min_value = x - self.pgd_params['eta']
+        clip_max_value = x + self.pgd_params['eta']
+
+        if self.pgd_params['random_start']:
+            x = x + tf.random.uniform(x.shape, minval=-self.pgd_params['eta'], maxval=self.pgd_params['eta'], dtype='float64')
+            x = tf.clip_by_value(x, 0, 1)  # ensure valid pixel range
+
+        lf = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
+        for _ in range(self.pgd_params['steps']):
+            grads = self.adv_step(x, y, lf)
+
+            x += self.pgd_params['step_size'] * tf.math.sign(grads)
+
+            x = tf.clip_by_value(x, clip_min_value, clip_max_value)
+            x = tf.clip_by_value(x, 0, 1)
+
+        return x
+
+    def adversarial_training(self, x, y, epochs, batch_size):
+        loss_list = []
+        acc_list = []
+        adv_loss_list = []
+        adv_acc_list = []
+        num_of_batches = int(len(x) / batch_size)
+
+        x, y = shuffle(x, y)
+
+        for _ in range(epochs):
+            for bnum in range(num_of_batches):
+
+                x_batch = np.copy(x[bnum * batch_size:(bnum + 1) * batch_size])
+                y_batch = np.copy(y[bnum * batch_size:(bnum + 1) * batch_size])
+
+                start = time.time()
+
+                loss, acc = self.keras_model.test_on_batch(x_batch, y_batch)
+                loss_list.append(loss)
+                acc_list.append(acc)
+
+                adv_data = self.make_adversarial_example(x_batch, y_batch)
+
+                adv_loss, adv_acc = self.keras_model.train_on_batch(adv_data, y_batch)
+                adv_loss_list.append(adv_loss)
+                adv_acc_list.append(adv_acc)
+                end = time.time()
+                if bnum % 10 == 0:
+                    print('Batch {}. Loss {}. Acc {}. Adv Loss {}. Adv Acc {}. taking {}'.format(
+                        bnum, loss, acc, adv_loss, adv_acc, end - start))
+        print('Batch {}. Loss {}. Acc {}. Adv Loss {}. Adv Acc {}. taking {}'.format(bnum, loss, acc, adv_loss, adv_acc,
+                                                                                     end - start))
 
 
 
@@ -134,16 +204,21 @@ class NN_Master(POM3_CommonML_Master):
         self.loss = loss
         self.metric = metric
         self.batch_size = batch_size
-        self.num_epochs = num_epochs           
+        self.num_epochs = num_epochs
 
         super().__init__(comms, logger, verbose)                     # Initialize common class for POM3
         self.name = 'POM3_NN_Master'                                 # Name of the class
         #self.Init_Environment()                                     # Send initialization messages common to all algorithms
-        ml_model = NN_model(logger, model_architecture, self.optimizer, self.loss, self.metric)      # Keras model initialization
+        ml_model = NN_model(logger, model_architecture, self.optimizer, self.loss, self.metric)   # Keras model initialization
+        self.model_weights = ml_model.keras_model.get_weights()      # Model weights
         self.display(self.name + ': Model architecture:')
-        ml_model.keras_model.summary(print_fn=self.display)          # Print the model architecture
-        self.model_weights = ml_model.keras_model.get_weights()      # Weights of the initial model
-        self.iter = 0                                                # Number of iterations already executed
+        ml_model.keras_model.summary(print_fn=self.display)
+        self.model = ml_model
+        self.iter = 0
+
+
+        self.display(self.name + ': Model architecture:')
+        self.model.keras_model.summary(print_fn=self.display)  # Print model architecture
         self.is_trained = False                                      # Flag to know if the model has been trained
 
 
@@ -158,7 +233,7 @@ class NN_Master(POM3_CommonML_Master):
         """        
         ml_model = NN_model(self.logger, self.model_architecture, self.optimizer, self.loss, self.metric)
         self.model_weights = ml_model.keras_model.get_weights()
-        self.iter = 0
+        # self.iter = 0
         self.is_trained = False
 
         self.Init_Environment() 
@@ -411,7 +486,14 @@ class NN_Worker(POM3_CommonML_Worker):
             loss = packet['data']['loss']
             metric = packet['data']['metric']
             # Compile the model
-            self.model.keras_model.compile(loss=loss, optimizer=optimizer, metrics=[metric])
+
+            if RESUME:
+                self.model.keras_model = tf.keras.models.load_model('results/models/tmp_worker_' + self.worker_address)
+            else:
+                self.model.keras_model.compile(loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
+                                               optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
+                                               metrics=[metric])
+
             action = 'ACK_COMPILE_INIT'
             packet = {'action': action}
             self.comms.send(packet, self.master_address)
@@ -430,8 +512,16 @@ class NN_Worker(POM3_CommonML_Worker):
             self.display(self.name + ' %s: Updating model locally' %self.worker_address)
             # Unencrypt received weights
             model_weights = self.decrypt_list(packet['data']['model_weights'])
+
             self.model.keras_model.set_weights(model_weights)
-            self.model.keras_model.fit(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size, verbose=1)
+
+            if TO_ADV_TRAIN:
+                self.model.adversarial_training(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size)
+            else:
+                self.model.keras_model.fit(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size, verbose=1)
+
+            self.model.keras_model.save('results/models/tmp_worker_' + self.worker_address)
+
             # Encrypt weights
             encrypted_weights = self.encrypt_list_rvalues(self.model.keras_model.get_weights())
             action = 'LOCAL_UPDATE'
