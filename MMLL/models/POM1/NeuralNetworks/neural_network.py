@@ -530,8 +530,8 @@ class NN_Worker(POM1_CommonML_Worker):
             if self.worker_operations is not None:
                 self.worker_operations.process(self.model, weights, self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size)
             else:
+                self.model.keras_model.set_weights(weights)
                 if TO_ADV_TRAIN:
-                    self.model.keras_model.set_weights(weights)
                     self.model.adversarial_training(self.Xtr_b, self.ytr, epochs=self.num_epochs, batch_size=self.batch_size)
                     self.model.keras_model.save('results/models/tmp_worker_' + self.worker_address)
                 else:
